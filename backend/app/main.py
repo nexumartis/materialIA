@@ -8,6 +8,7 @@ segura del canal, no por este parámetro.
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from .agent import orchestrator
 from .config import settings
@@ -22,6 +23,15 @@ SANDBOX_TENANTS = {
 }
 
 app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
+
+# CORS abierto SÓLO para el sandbox local (la UI se abre como file:// => origin "null").
+# En producción restringir a los orígenes del panel autenticado.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _resolve_tenant(company: str) -> str:

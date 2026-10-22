@@ -46,5 +46,6 @@ def estimate_quote(ctx: ToolContext, requirements: QuoteRequirements) -> QuoteEs
 
 def create_or_update_opportunity(ctx: ToolContext, data: OpportunityInput) -> OpportunitySummary:
     # El conversation_id autorizado también se fuerza desde el contexto.
+    # upsert => una sola oportunidad por conversación (acumula, no duplica).
     data = data.model_copy(update={"conversation_id": ctx.conversation_id})
-    return opportunities.create_or_update_opportunity(ctx.tenant_id, data)
+    return opportunities.upsert_opportunity(ctx.tenant_id, data)

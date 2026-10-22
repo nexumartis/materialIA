@@ -31,7 +31,8 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
     ctx = tools.ToolContext(tenant_id=tenant_id, conversation_id=conversation_id)
     company = _tenant_name(tenant_id)
 
-    understanding = provider.understand(message, history=[])
+    history = opportunities.get_recent_messages(tenant_id, conversation_id)
+    understanding = provider.understand(message, history=history)
 
     # --- Mensaje adversarial: denegar sin filtrar nada de otra empresa ---
     if understanding.adversarial:
@@ -45,14 +46,21 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
             requires_human=True, model_used=understanding.model_used, mode=understanding.mode,
         )
 
-    req = understanding.requirements
-    filters = {k: req[k] for k in ("category", "tipo", "color", "material", "ancho_mm") if req.get(k)}
+    # --- Memoria del chat: acumular requisitos de turnos previos de esta conversación ---
+    prior = opportunities.get_conversation_requirements(tenant_id, conversation_id)
+    new_req = {k: v for k, v in understanding.requirements.items() if v is not None}
+    merged = {**prior, **new_req}
+    if understanding.customer_name:
+        merged["customer_name"] = understanding.customer_name
+
+    filters = {k: merged[k] for k in ("category", "tipo", "color", "material", "ancho_mm") if merged.get(k)}
     products = tools.search_products(ctx, query="", filters=filters) if filters else []
 
-    quote_req = QuoteRequirements(**{k: v for k, v in req.items() if k in _QUOTE_FIELDS})
+    quote_req = QuoteRequirements(**{k: v for k, v in merged.items() if k in _QUOTE_FIELDS})
     estimate = tools.estimate_quote(ctx, quote_req)
 
-    asked_for_product = understanding.intent == "quote_request"
+    # Hay intención de cotizar si en ALGÚN turno se nombró producto/tipo.
+    asked_for_product = bool(merged.get("category") or merged.get("tipo")) or understanding.intent == "quote_request"
     no_match = asked_for_product and bool(filters) and not products
 
     # --- Construir la decisión de negocio para la redacción ---
@@ -73,9 +81,7 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
 
     # --- Persistir oportunidad (si hubo intención de cotizar) ---
     opportunity_id: Optional[str] = None
-    collected = dict(req)
-    if understanding.customer_name:
-        collected["customer_name"] = understanding.customer_name
+    collected = merged
 
     if asked_for_product:
         if estimate.status == "missing_fields":

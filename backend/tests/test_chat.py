@@ -31,6 +31,20 @@ def test_opportunity_persists_in_postgres_across_connection():
     assert reread.requirements.get("localidad") == "Tigre"
 
 
+def test_conversation_accumulates_requirements_across_turns():
+    """Memoria: lo dicho en el turno 1 se recuerda en el turno 2 y es la MISMA oportunidad."""
+    r1 = orchestrator.handle_chat(TENANT_A, "Hola, quiero una mampara corrediza negra")
+    conv = r1.conversation_id
+    assert "localidad" in r1.missing_fields
+    r2 = orchestrator.handle_chat(TENANT_A, "Mide 1,60 x 1,90 y estoy en Tigre",
+                                  conversation_id=conv)
+    assert r2.collected_requirements.get("tipo") == "corrediza"   # recordado del turno 1
+    assert r2.collected_requirements.get("color") == "negro"      # recordado del turno 1
+    assert r2.collected_requirements.get("localidad") == "Tigre"  # nuevo en el turno 2
+    assert not r2.missing_fields
+    assert r2.opportunity_id == r1.opportunity_id                 # no duplica el lead
+
+
 def test_nonexistent_product_is_admitted():
     """Escenario 3: a la Empresa A le piden una ventana (no la trabaja) -> lo admite."""
     res = orchestrator.handle_chat(TENANT_A, "Necesito una ventana corrediza blanca")

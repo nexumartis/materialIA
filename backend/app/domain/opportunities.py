@@ -26,6 +26,20 @@ def ensure_conversation(tenant_id: str, conversation_id: Optional[str]) -> str:
         return str(cur.fetchone()["id"])
 
 
+def get_recent_messages(tenant_id: str, conversation_id: str, limit: int = 8) -> list[dict[str, str]]:
+    """Historial reciente como [{role, content}] (para el LLM en modo live)."""
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "select direction, content from messages "
+            "where tenant_id = %s and conversation_id = %s "
+            "order by created_at desc limit %s",
+            (tenant_id, conversation_id, limit),
+        )
+        rows = cur.fetchall()
+    role = {"inbound": "user", "outbound": "assistant"}
+    return [{"role": role.get(r["direction"], "user"), "content": r["content"]} for r in reversed(rows)]
+
+
 def add_message(tenant_id: str, conversation_id: str, direction: str, content: str) -> None:
     with tenant_tx(tenant_id) as cur:
         cur.execute(
@@ -42,6 +56,55 @@ def add_message(tenant_id: str, conversation_id: str, direction: str, content: s
 
 
 # --- Oportunidades --------------------------------------------------------
+def get_conversation_requirements(tenant_id: str, conversation_id: Optional[str]) -> dict[str, Any]:
+    """Requisitos ya acumulados para esta conversación (memoria del chat)."""
+    if not conversation_id:
+        return {}
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "select requirements_json from opportunities "
+            "where tenant_id = %s and conversation_id = %s "
+            "order by created_at desc limit 1",
+            (tenant_id, conversation_id),
+        )
+        row = cur.fetchone()
+    return (row["requirements_json"] or {}) if row else {}
+
+
+def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySummary:
+    """Una oportunidad por conversación: inserta la primera vez, luego actualiza la
+    misma (acumula requisitos en vez de duplicar leads)."""
+    with tenant_tx(tenant_id) as cur:
+        existing_id = None
+        if data.conversation_id:
+            cur.execute(
+                "select id from opportunities where tenant_id = %s and conversation_id = %s "
+                "order by created_at desc limit 1",
+                (tenant_id, data.conversation_id),
+            )
+            r = cur.fetchone()
+            existing_id = str(r["id"]) if r else None
+
+        if existing_id:
+            cur.execute(
+                """
+                update opportunities set
+                    requirements_json = %s::jsonb, stage = %s, requires_human_quote = %s,
+                    estimated_amount = %s, price_snapshot_json = %s::jsonb, updated_at = now()
+                where tenant_id = %s and id = %s
+                returning id, stage, requires_human_quote, estimated_amount,
+                          requirements_json, created_at
+                """,
+                (json.dumps(data.requirements), data.stage, data.requires_human_quote,
+                 data.estimated_amount,
+                 json.dumps(data.price_snapshot) if data.price_snapshot else None,
+                 tenant_id, existing_id),
+            )
+            return _row_to_opp(cur.fetchone())
+    # sin conversación o sin oportunidad previa -> insertar
+    return create_or_update_opportunity(tenant_id, data)
+
+
 def create_or_update_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySummary:
     with tenant_tx(tenant_id) as cur:
         cur.execute(
