@@ -1,0 +1,62 @@
+"""API del simulador (sandbox). Sólo servidor, sin WhatsApp ni envíos a clientes.
+
+Resolución de empresa: NO se confía un tenant_id arbitrario del cliente. El sandbox
+expone un allowlist fijo de empresas demo (A/B) mapeado en el servidor a UUIDs del
+seed. En producción el tenant se resolverá por autenticación del panel o asignación
+segura del canal, no por este parámetro.
+"""
+from __future__ import annotations
+
+from fastapi import FastAPI, HTTPException, Query
+
+from .agent import orchestrator
+from .config import settings
+from .db import db_healthcheck
+from .domain import catalog, opportunities
+from .schemas import ChatRequest, ChatResponse, OpportunitySummary, ProductSummary
+
+# Allowlist de empresas demo (sandbox). Coinciden con supabase/seed.sql.
+SANDBOX_TENANTS = {
+    "A": "0000000a-0000-0000-0000-00000000000a",
+    "B": "0000000b-0000-0000-0000-00000000000b",
+}
+
+app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
+
+
+def _resolve_tenant(company: str) -> str:
+    tenant = SANDBOX_TENANTS.get(company.upper())
+    if not tenant:
+        raise HTTPException(status_code=400, detail="Empresa demo inválida (usar A o B).")
+    return tenant
+
+
+@app.get("/health")
+def health() -> dict:
+    ok, detail = db_healthcheck()
+    return {
+        "status": "ok" if ok else "degraded",
+        "db": {"reachable": ok, "detail": detail},
+        "app_env": settings.app_env,
+        "llm": {"mode": "live" if settings.llm_is_live else "mock",
+                "model": settings.llm_model if settings.llm_is_live else "mock-rules-v1"},
+        # Nunca exponemos credenciales ni la URL completa de la base.
+    }
+
+
+@app.get("/sandbox/products", response_model=list[ProductSummary])
+def products(company: str = Query("A"), q: str = Query("")) -> list[ProductSummary]:
+    tenant = _resolve_tenant(company)
+    return catalog.search_products(tenant, query=q)
+
+
+@app.post("/sandbox/chat", response_model=ChatResponse)
+def chat(req: ChatRequest, company: str = Query("A")) -> ChatResponse:
+    tenant = _resolve_tenant(company)
+    return orchestrator.handle_chat(tenant, req.message, req.conversation_id)
+
+
+@app.get("/sandbox/opportunities", response_model=list[OpportunitySummary])
+def opps(company: str = Query("A")) -> list[OpportunitySummary]:
+    tenant = _resolve_tenant(company)
+    return opportunities.list_opportunities(tenant)
