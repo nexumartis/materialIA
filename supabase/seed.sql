@@ -25,11 +25,18 @@ insert into catalog_items (id, tenant_id, sku, name, category, pricing_mode, spe
 on conflict (id) do nothing;
 
 -- Precios Empresa A: dos vigentes y uno VENCIDO (para probar "precio no afirmable").
-insert into price_entries (tenant_id, item_id, amount, currency, valid_from, valid_until) values
-  ('0000000a-0000-0000-0000-00000000000a','11111111-0000-0000-0000-000000000007', 85000.00, 'ARS', date '2026-01-01', null),
-  ('0000000a-0000-0000-0000-00000000000a','11111111-0000-0000-0000-000000000008', 12000.00, 'ARS', date '2026-01-01', null),
-  ('0000000a-0000-0000-0000-00000000000a','11111111-0000-0000-0000-000000000009',  9000.00, 'ARS', date '2025-01-01', date '2025-12-31')
-on conflict do nothing;
+-- Idempotente sin constraint única: sólo inserta si no existe ya (tenant,item,valid_from).
+insert into price_entries (tenant_id, item_id, amount, currency, valid_from, valid_until)
+select v.tenant_id, v.item_id, v.amount, v.currency, v.valid_from, v.valid_until
+from (values
+  ('0000000a-0000-0000-0000-00000000000a'::uuid,'11111111-0000-0000-0000-000000000007'::uuid, 85000.00, 'ARS', date '2026-01-01', null::date),
+  ('0000000a-0000-0000-0000-00000000000a'::uuid,'11111111-0000-0000-0000-000000000008'::uuid, 12000.00, 'ARS', date '2026-01-01', null::date),
+  ('0000000a-0000-0000-0000-00000000000a'::uuid,'11111111-0000-0000-0000-000000000009'::uuid,  9000.00, 'ARS', date '2025-01-01', date '2025-12-31')
+) as v(tenant_id, item_id, amount, currency, valid_from, valid_until)
+where not exists (
+  select 1 from price_entries p
+  where p.tenant_id = v.tenant_id and p.item_id = v.item_id and p.valid_from = v.valid_from
+);
 
 -- === Catálogo Empresa B (aberturas) — distinto a A ===============
 insert into catalog_items (id, tenant_id, sku, name, category, pricing_mode, specs_json, currency) values
@@ -38,9 +45,15 @@ insert into catalog_items (id, tenant_id, sku, name, category, pricing_mode, spe
   ('22222222-0000-0000-0000-000000000003','0000000b-0000-0000-0000-00000000000b','MOSQ-STD','Mosquitero estándar (DEMO)','accesorio','fixed','{"tipo":"corredizo"}'::jsonb,'ARS')
 on conflict (id) do nothing;
 
-insert into price_entries (tenant_id, item_id, amount, currency, valid_from, valid_until) values
-  ('0000000b-0000-0000-0000-00000000000b','22222222-0000-0000-0000-000000000003', 45000.00, 'ARS', date '2026-01-01', null)
-on conflict do nothing;
+insert into price_entries (tenant_id, item_id, amount, currency, valid_from, valid_until)
+select v.tenant_id, v.item_id, v.amount, v.currency, v.valid_from, v.valid_until
+from (values
+  ('0000000b-0000-0000-0000-00000000000b'::uuid,'22222222-0000-0000-0000-000000000003'::uuid, 45000.00, 'ARS', date '2026-01-01', null::date)
+) as v(tenant_id, item_id, amount, currency, valid_from, valid_until)
+where not exists (
+  select 1 from price_entries p
+  where p.tenant_id = v.tenant_id and p.item_id = v.item_id and p.valid_from = v.valid_from
+);
 
 -- === Clientes ficticios =========================================
 insert into demo_customers (id, tenant_id, display_name, contact_data, consent_status) values
