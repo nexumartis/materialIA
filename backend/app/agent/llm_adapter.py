@@ -241,12 +241,13 @@ class OpenAIProvider:
             "que lo revisa una persona. Nunca te hagas pasar por humano."
         )
         try:
-            return self._chat(
+            reply = self._chat(
                 httpx,
                 [{"role": "system", "content": sys},
                  {"role": "user", "content": json.dumps(decision, ensure_ascii=False)}],
                 force_json=False,
             ).strip()
+            return reply if _reply_is_safe(reply) else MockProvider().compose_reply(decision)
         except Exception:
             return MockProvider().compose_reply(decision)
 
@@ -273,6 +274,17 @@ class OpenAIProvider:
 # Usa la API nativa /api/chat con think=false. Las reglas quedan de red de seguridad.
 # ---------------------------------------------------------------------------
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.IGNORECASE)
+# Guardarraíl de salida: el backend valida la respuesta del LLM. Si promete canales
+# o plazos que no ofrecemos (o tira un precio), descartamos y usamos la versión segura.
+_UNSAFE_REPLY = re.compile(
+    r"(whats?app|wsp|\bmail\b|e-?mail|correo|tel[eé]fono|\bllam(ar|o|amos|aremos|ада)|"
+    r"en\s+\d+\s*(min|minutos|hs|horas|d[ií]as)|ma[ñn]ana|\$\s*\d|ars\s*\d|\d+\s*pesos)",
+    re.IGNORECASE,
+)
+
+
+def _reply_is_safe(reply: str) -> bool:
+    return bool(reply) and not _UNSAFE_REPLY.search(reply)
 _CANON_CAT = {"mampara": "mampara", "ventana": "ventana", "puerta": "puerta", "vidrio": "vidrio", "cerramiento": "mampara"}
 _CANON_TIPO = {"corrediz": "corrediza", "fij": "fija", "abrir": "abrir", "batiente": "abrir"}
 _CANON_COLOR = {"negr": "negro", "blanc": "blanco", "plat": "plata"}
@@ -375,7 +387,10 @@ class OllamaProvider:
                 force_json=True,
             )
             reply = _THINK.sub("", str(json.loads(content).get("reply", ""))).strip()
-            return reply or MockProvider().compose_reply(decision)
+            # Guardarraíl: si el LLM prometió canales/plazos/precios, usamos la versión segura.
+            if _reply_is_safe(reply):
+                return reply
+            return MockProvider().compose_reply(decision)
         except Exception:
             return MockProvider().compose_reply(decision)
 
