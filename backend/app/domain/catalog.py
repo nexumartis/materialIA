@@ -1,6 +1,7 @@
 """Consultas de catálogo y precios. Todas reciben tenant_id resuelto en servidor."""
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 from ..db import tenant_tx
@@ -56,6 +57,35 @@ def search_products(
         cur.execute("\n".join(sql), params)
         rows = cur.fetchall()
     return [_row_to_summary(r) for r in rows]
+
+
+def import_items(tenant_id: str, items: list[dict[str, Any]]) -> tuple[int, list[dict[str, Any]]]:
+    """Alta/actualización masiva de catálogo por empresa (upsert por sku). Devuelve
+    (importados, errores). Valida campos mínimos y pricing_mode; no toca otras empresas."""
+    imported, errors = 0, []
+    with tenant_tx(tenant_id) as cur:
+        for it in items:
+            sku, name, category = it.get("sku"), it.get("name"), it.get("category")
+            mode = it.get("pricing_mode", "custom_quote")
+            if not sku or not name or not category:
+                errors.append({"sku": sku, "error": "faltan sku/name/category"})
+                continue
+            if mode not in ("fixed", "custom_quote"):
+                errors.append({"sku": sku, "error": f"pricing_mode inválido: {mode}"})
+                continue
+            cur.execute(
+                "insert into catalog_items "
+                "(tenant_id, sku, name, category, pricing_mode, specs_json, currency, active) "
+                "values (%s, %s, %s, %s, %s, %s::jsonb, %s, %s) "
+                "on conflict (tenant_id, sku) do update set "
+                "name = excluded.name, category = excluded.category, "
+                "pricing_mode = excluded.pricing_mode, specs_json = excluded.specs_json, "
+                "currency = excluded.currency, active = excluded.active, updated_at = now()",
+                (tenant_id, sku, name, category, mode, json.dumps(it.get("specs") or {}),
+                 it.get("currency", "ARS"), it.get("active", True)),
+            )
+            imported += 1
+    return imported, errors
 
 
 def get_product_details(tenant_id: str, product_id: str) -> Optional[ProductSummary]:

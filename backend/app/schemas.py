@@ -17,6 +17,25 @@ class ProductSummary(BaseModel):
     currency: str
 
 
+class CatalogItemIn(BaseModel):
+    sku: str
+    name: str
+    category: str
+    pricing_mode: Literal["fixed", "custom_quote"] = "custom_quote"
+    specs: dict[str, Any] = Field(default_factory=dict)
+    currency: str = "ARS"
+    active: bool = True
+
+
+class CatalogImportRequest(BaseModel):
+    items: list[CatalogItemIn]
+
+
+class CatalogImportResult(BaseModel):
+    imported: int
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class PriceResult(BaseModel):
     product_id: str
     status: Literal["ok", "requires_human_quote", "no_price", "expired"]

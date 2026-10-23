@@ -73,6 +73,8 @@ uvicorn app.main:app --port 8077 --reload
 | GET  | `/sandbox/products?company=A` | Catálogo autorizado de la empresa demo. |
 | POST | `/sandbox/chat?company=A` | `{message, conversation_id?}` → respuesta + oportunidad. |
 | GET  | `/sandbox/opportunities?company=A` | Oportunidades de la empresa. |
+| PATCH | `/sandbox/opportunities/{id}?company=A` | Vendedor: cambia estado, importe y fecha de seguimiento. |
+| POST | `/sandbox/catalog/import?company=A` | Alta/actualización masiva de catálogo (upsert por sku). |
 
 `company` es un **allowlist fijo** (A/B) mapeado en el servidor a UUIDs del seed; no se
 confía un `tenant_id` arbitrario del cliente.

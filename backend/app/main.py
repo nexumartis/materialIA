@@ -15,6 +15,8 @@ from .config import settings
 from .db import db_healthcheck
 from .domain import catalog, opportunities
 from .schemas import (
+    CatalogImportRequest,
+    CatalogImportResult,
     ChatRequest,
     ChatResponse,
     OpportunitySummary,
@@ -63,6 +65,13 @@ def health() -> dict:
 def products(company: str = Query("A"), q: str = Query("")) -> list[ProductSummary]:
     tenant = _resolve_tenant(company)
     return catalog.search_products(tenant, query=q)
+
+
+@app.post("/sandbox/catalog/import", response_model=CatalogImportResult)
+def import_catalog(body: CatalogImportRequest, company: str = Query("A")) -> CatalogImportResult:
+    tenant = _resolve_tenant(company)
+    imported, errors = catalog.import_items(tenant, [i.model_dump() for i in body.items])
+    return CatalogImportResult(imported=imported, errors=errors)
 
 
 @app.post("/sandbox/chat", response_model=ChatResponse)

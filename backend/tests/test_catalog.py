@@ -35,6 +35,20 @@ def test_custom_product_requires_human():
     assert price.amount is None
 
 
+def test_catalog_import_adds_and_validates():
+    n, errs = catalog.import_items(TENANT_A, [
+        {"sku": "TEST-IMP-1", "name": "Mampara test importada", "category": "mampara",
+         "pricing_mode": "custom_quote", "specs": {"tipo": "corrediza", "color": "negro"}},
+    ])
+    assert n == 1 and not errs
+    found = catalog.search_products(TENANT_A, query="TEST-IMP-1")
+    assert any(p.sku == "TEST-IMP-1" for p in found)
+    # pricing_mode inválido -> error, no se inserta
+    n2, errs2 = catalog.import_items(TENANT_A, [
+        {"sku": "TEST-IMP-BAD", "name": "x", "category": "mampara", "pricing_mode": "raro"}])
+    assert n2 == 0 and errs2
+
+
 def test_nonexistent_product_is_not_invented():
     price = catalog.get_price(TENANT_A, MISSING_ID)
     assert price.status == "no_price"
