@@ -29,9 +29,10 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_timeout_s: float = 60.0
     llm_max_output_tokens: int = 500
-    # Ollama (modelo local, sin API key ni costo)
+    # Ollama (local sin key, o Ollama Cloud con key en OLLAMA_API_KEY/LLM_API_KEY)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
+    ollama_api_key: str | None = None
 
     @property
     def llm_is_live(self) -> bool:

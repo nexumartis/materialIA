@@ -309,6 +309,12 @@ def _situacion(decision: dict[str, Any]) -> str:
     return " ".join(partes)
 
 
+def _extract_json(s: str) -> str:
+    """Devuelve el primer objeto {...} (tolera ```json ... ``` y texto previo)."""
+    m = re.search(r"\{.*\}", s, re.S)
+    return m.group(0) if m else s
+
+
 def _canon(value, table) -> Optional[str]:
     if not value:
         return None
@@ -339,10 +345,10 @@ class OllamaProvider:
         base, _, base_name = _parse_requirements(message)
         adversarial = bool(_ADVERSARIAL.search(message))
         try:
-            raw = json.loads(self._chat(
+            raw = json.loads(_extract_json(self._chat(
                 [{"role": "system", "content": sys}, {"role": "user", "content": message}],
                 force_json=True,
-            ))
+            )))
         except Exception:
             # Si el modelo local falla, caemos a reglas (sigue andando).
             return MockProvider().understand(message, history)
@@ -386,7 +392,7 @@ class OllamaProvider:
                  {"role": "user", "content": _situacion(decision)}],
                 force_json=True,
             )
-            reply = _THINK.sub("", str(json.loads(content).get("reply", ""))).strip()
+            reply = _THINK.sub("", str(json.loads(_extract_json(content)).get("reply", ""))).strip()
             # Guardarraíl: si el LLM prometió canales/plazos/precios, usamos la versión segura.
             if _reply_is_safe(reply):
                 return reply
@@ -405,8 +411,13 @@ class OllamaProvider:
         }
         if force_json:
             payload["format"] = "json"
+        headers = {}
+        key = settings.ollama_api_key or settings.llm_api_key  # Ollama Cloud usa Bearer
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
         resp = httpx.post(
-            f"{settings.ollama_base_url}/api/chat", json=payload, timeout=settings.llm_timeout_s
+            f"{settings.ollama_base_url}/api/chat", json=payload,
+            headers=headers, timeout=settings.llm_timeout_s,
         )
         resp.raise_for_status()
         return resp.json()["message"]["content"]
