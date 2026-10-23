@@ -3,133 +3,128 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Panel de vendedor — Presupuesto Vivo</title>
-<style>
-  :root {
-    --bg:#0f172a; --panel:#1e293b; --panel-2:#273449; --ink:#e2e8f0; --muted:#94a3b8;
-    --accent:#38bdf8; --line:#334155; --ok:#34d399; --warn:#fbbf24; --input:#0b1220;
-    --radius:10px; --space:16px;
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-         background:var(--bg); color:var(--ink); line-height:1.4; }
-  a { color:var(--accent); }
-  header { padding:var(--space) 20px; border-bottom:1px solid var(--line);
-           display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  h1 { font-size:17px; margin:0; font-weight:650; }
-  .sub { font-size:12px; color:var(--muted); }
-  .spacer { flex:1; }
-  main { max-width:1040px; margin:0 auto; padding:20px 16px; }
-  label { font-size:12px; color:var(--muted); }
-  select, input, button { font:inherit; color:var(--ink); }
-  select, input[type=number] { background:var(--input); border:1px solid var(--line);
-    border-radius:8px; padding:7px 9px; }
-  button { cursor:pointer; border-radius:8px; border:1px solid var(--line);
-           background:var(--panel-2); padding:7px 12px; }
-  button.primary { background:var(--accent); color:#06283a; border:none; font-weight:650; }
-  button:focus-visible, select:focus-visible, input:focus-visible {
-    outline:2px solid var(--accent); outline-offset:2px; }
-  button[disabled] { opacity:.5; cursor:default; }
-
-  /* KPIs */
-  .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin:0 0 18px; }
-  @media (min-width:640px){ .kpis { grid-template-columns:repeat(4,1fr); } }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-         padding:12px 14px; }
-  .kpi .n { font-size:22px; font-weight:700; }
-  .kpi .l { font-size:12px; color:var(--muted); }
-
-  /* Tabla */
-  .tablewrap { background:var(--panel); border:1px solid var(--line);
-               border-radius:var(--radius); overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; min-width:720px; }
-  caption { text-align:left; padding:12px 14px; font-size:13px; color:var(--muted); }
-  th, td { text-align:left; padding:10px 14px; border-top:1px solid var(--line);
-           vertical-align:middle; font-size:14px; }
-  th { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase;
-       letter-spacing:.03em; }
-  tbody tr:hover { background:var(--panel-2); }
-  tr.saved { animation:flash 1.2s ease; }
-  @keyframes flash { 0%{ background:rgba(52,211,153,.25);} 100%{ background:transparent; } }
-  .pedido { font-weight:600; }
-  .pedido small { display:block; color:var(--muted); font-weight:400; font-size:12px; }
-
-  /* Chip de estado (texto + punto, no solo color) */
-  .dot { display:inline-block; width:8px; height:8px; border-radius:50%;
-         margin-right:6px; vertical-align:middle; }
-
-  /* Estados */
-  .state { text-align:center; padding:48px 16px; color:var(--muted); }
-  .skel { height:44px; border-top:1px solid var(--line); background:
-    linear-gradient(90deg,var(--panel) 25%,var(--panel-2) 37%,var(--panel) 63%);
-    background-size:400% 100%; animation:sh 1.3s ease infinite; }
-  @keyframes sh { 0%{background-position:100% 0;} 100%{background-position:0 0;} }
-  .err { color:#fca5a5; }
-  .rowmsg { font-size:12px; color:var(--ok); }
-  .amount-cell { white-space:nowrap; }
-  .amount-cell input { width:110px; }
-  .seg-cell { white-space:nowrap; }
-  .seg-cell input { width:140px; }
-  .badge-over { display:inline-block; margin-left:6px; font-size:11px; font-weight:700;
-    color:#7f1d1d; background:#fca5a5; border-radius:6px; padding:1px 6px; }
-  tr.overdue td:first-child { box-shadow:inset 3px 0 0 #f87171; }
-</style>
+<title>Oportunidades — Presupuesto Vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/pv.css" />
 </head>
 <body>
-<header>
-  <div>
-    <h1>Panel de vendedor</h1>
-    <div class="sub">Presupuesto Vivo · oportunidades por empresa</div>
-  </div>
-  <div class="spacer"></div>
-  <label>Empresa
-    <select id="company" aria-label="Elegir empresa">
-      <option value="A">A — Cristalería</option>
-      <option value="B">B — Aberturas</option>
-    </select>
-  </label>
-  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-    <input type="checkbox" id="onlyover" /> Solo vencidos
-  </label>
-  <button id="refresh" type="button" aria-label="Actualizar lista">↻ Actualizar</button>
-</header>
 
-<main>
-  <section class="kpis" id="kpis" aria-label="Resumen"></section>
+<div class="scrim"></div>
 
-  <div class="tablewrap">
-    <table>
-      <caption id="caption">Oportunidades</caption>
-      <thead>
-        <tr>
-          <th scope="col">Fecha</th>
-          <th scope="col">Pedido</th>
-          <th scope="col">Estado</th>
-          <th scope="col">Importe (ARS)</th>
-          <th scope="col">Seguimiento</th>
-          <th scope="col"><span class="sr">Acciones</span>Guardar</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
-  <p class="sub" id="status" role="status" aria-live="polite" style="margin-top:10px"></p>
-</main>
+<div class="topbar">
+  <button class="menu" type="button" aria-label="Abrir menú">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+  </button>
+  <b>Oportunidades</b>
+</div>
 
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color:var(--accent)" aria-hidden="true">
+        <rect x="2.5" y="3.5" width="19" height="17" rx="2" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="12" y1="3.5" x2="12" y2="20.5" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="7.2" y1="7.2" x2="7.2" y2="16.8" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="16.8" y1="7.2" x2="16.8" y2="16.8" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      <div><b>Presupuesto Vivo</b><span>Cerramientos a medida</span></div>
+    </div>
+
+    <div class="scope">
+      <label for="company">Empresa</label>
+      <select id="company" aria-label="Elegir empresa">
+        <option value="A">A · Cristalería</option>
+        <option value="B">B · Aberturas</option>
+      </select>
+    </div>
+
+    <nav class="nav" aria-label="Secciones">
+      <a class="active" href="vendedor.html" aria-current="page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Oportunidades
+      </a>
+      <a href="sandbox_ui.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v10H9l-5 4V5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        Chat demo
+      </a>
+      <a href="http://127.0.0.1:8077/docs" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        API · Swagger
+      </a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <span class="pill-demo">datos demo / sintéticos</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="sheet">
+      <div class="titlebar">
+        <div>
+          <h1>Oportunidades</h1>
+          <p class="finding" id="finding">Cargando…</p>
+        </div>
+        <div class="right">
+          <span class="stamp" id="stamp"></span>
+          <button class="btn ghost sm" id="refresh" type="button">Actualizar</button>
+        </div>
+      </div>
+
+      <section class="kpis" id="kpis" aria-label="Resumen"></section>
+
+      <div class="tabs" role="tablist" aria-label="Filtrar">
+        <button role="tab" id="tab-todas" aria-selected="true" type="button">Todas</button>
+        <button role="tab" id="tab-vencidos" aria-selected="false" type="button">Vencidos</button>
+      </div>
+
+      <div class="toolbar">
+        <span class="count" id="caption">Empresa A</span>
+        <span class="right count" id="total"></span>
+      </div>
+
+      <div class="tablewrap">
+        <table>
+          <caption class="sr">Oportunidades por empresa</caption>
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Pedido</th>
+              <th scope="col">Estado</th>
+              <th scope="col" class="num">Importe (ARS)</th>
+              <th scope="col">Seguimiento</th>
+              <th scope="col" class="num">Guardar</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="note" id="status" role="status" aria-live="polite"></p>
+    </div>
+  </main>
+</div>
+
+<script src="assets/pv-shell.js"></script>
 <script>
   const API = (localStorage.getItem("pv_api") || "http://127.0.0.1:8077");
+  // claves + etiquetas de etapa (sin color: el color se reserva para lo que pide decisión)
   const STAGES = [
-    ["nueva", "Nueva", "#60a5fa"],
-    ["datos_incompletos", "Datos incompletos", "#fbbf24"],
-    ["para_cotizar", "Para cotizar", "#38bdf8"],
-    ["cotizada", "Cotizada", "#a78bfa"],
-    ["seguimiento", "Seguimiento", "#f472b6"],
-    ["cerrada", "Cerrada", "#34d399"],
+    ["nueva", "Nueva"],
+    ["datos_incompletos", "Datos incompletos"],
+    ["para_cotizar", "Para cotizar"],
+    ["cotizada", "Cotizada"],
+    ["seguimiento", "Seguimiento"],
+    ["cerrada", "Cerrada"],
   ];
-  const STAGE_COLOR = Object.fromEntries(STAGES.map(([k,,c]) => [k, c]));
+  const STAGE_LABEL = Object.fromEntries(STAGES);
   const $ = (id) => document.getElementById(id);
   const company = () => $("company").value;
+  let onlyOver = false;
+  let lastList = [];
 
+  const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
   function fmtDate(iso){ try { return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}); } catch { return "—"; } }
   function dateOnly(iso){ return iso ? String(iso).slice(0,10) : ""; }
   function isOverdue(o){
@@ -137,41 +132,41 @@
     const d = new Date(dateOnly(o.next_action_at) + "T23:59:59");
     return d < new Date();
   }
-
   function pedidoText(req){
-    if(!req || !Object.keys(req).length) return "Consulta general";
+    if(!req || !Object.keys(req).length) return { main:"Consulta general", sub:"" };
     const cat = req.category || "pedido";
-    const tc = [req.tipo, req.color].filter(Boolean).join(" ");
+    const tc  = [req.tipo, req.color].filter(Boolean).join(" ");
     const med = (req.ancho_mm && req.alto_mm) ? `${req.ancho_mm}×${req.alto_mm} mm` : "";
     const extra = [req.localidad, req.customer_name].filter(Boolean).join(" · ");
     return { main: `${cap(cat)} ${tc}`.trim(), sub: [med, extra].filter(Boolean).join(" · ") };
   }
-  const cap = (s) => s ? s[0].toUpperCase()+s.slice(1) : s;
 
   function skeleton(){
-    $("rows").innerHTML = "";
     $("kpis").innerHTML = "";
-    const wrap = document.createElement("tr");
-    wrap.innerHTML = `<td colspan="6" style="padding:0">${'<div class="skel"></div>'.repeat(4)}</td>`;
-    $("rows").appendChild(wrap);
+    $("rows").innerHTML = `<tr><td colspan="6" style="padding:0">${'<div class="skel"></div>'.repeat(5)}</td></tr>`;
   }
 
   function renderKpis(list){
-    const counts = {};
-    list.forEach(o => counts[o.stage] = (counts[o.stage]||0)+1);
+    const count = (s) => list.filter(o => o.stage === s).length;
     const overdue = list.filter(isOverdue).length;
-    const tiles = [["Total", list.length], ["Seguimiento vencido", overdue]].concat(
-      STAGES.filter(([k]) => counts[k]).map(([k,label]) => [label, counts[k]]));
-    $("kpis").innerHTML = tiles.slice(0,4).map(([l,n]) =>
-      `<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+    const tiles = [
+      ["Total", list.length, false],
+      ["Vencidas", overdue, overdue > 0],
+      ["Para cotizar", count("para_cotizar"), false],
+      ["Cerradas", count("cerrada"), false],
+    ];
+    $("kpis").innerHTML = tiles.map(([l,n,neg]) =>
+      `<div class="kpi"><div class="l">${l}</div><div class="n num${neg?' neg':''}">${n}</div></div>`).join("");
   }
 
   function renderRows(list){
     const tb = $("rows");
     tb.innerHTML = "";
     if(!list.length){
-      tb.innerHTML = `<tr><td colspan="6"><div class="state" role="status">
-        Todavía no hay oportunidades para esta empresa. Generá una desde el chat (sandbox_ui.html).</div></td></tr>`;
+      const msg = onlyOver
+        ? "No hay oportunidades con seguimiento vencido."
+        : "Todavía no hay oportunidades para esta empresa. Generá una desde el Chat demo.";
+      tb.innerHTML = `<tr><td colspan="6"><div class="state" role="status">${msg}</div></td></tr>`;
       return;
     }
     for(const o of list){
@@ -181,62 +176,67 @@
       const opts = STAGES.map(([k,label]) =>
         `<option value="${k}" ${k===o.stage?"selected":""}>${label}</option>`).join("");
       tr.innerHTML = `
-        <td>${fmtDate(o.created_at)}</td>
-        <td class="pedido">${p.main || "Consulta"}<small>${p.sub || ""}</small></td>
+        <td class="num">${fmtDate(o.created_at)}</td>
+        <td class="pedido"><b>${p.main || "Consulta"}</b><small>${p.sub || ""}</small></td>
+        <td><select class="stage-select" aria-label="Estado de la oportunidad">${opts}</select></td>
+        <td class="num"><input class="amount-input num" type="number" min="0" step="1000" placeholder="—"
+               value="${o.estimated_amount ?? ""}" aria-label="Importe estimado en pesos" /></td>
         <td>
-          <span class="dot" style="background:${STAGE_COLOR[o.stage]||'#64748b'}"></span>
-          <select aria-label="Estado de la oportunidad">${opts}</select>
+          <input class="date-input" type="date" value="${dateOnly(o.next_action_at)}" aria-label="Fecha de seguimiento" />
+          ${isOverdue(o) ? '<span class="pill neg">Vencido</span>' : ''}
         </td>
-        <td class="amount-cell">
-          <input type="number" min="0" step="1000" placeholder="—"
-                 value="${o.estimated_amount ?? ""}" aria-label="Importe estimado en pesos" />
-        </td>
-        <td class="seg-cell">
-          <input type="date" value="${dateOnly(o.next_action_at)}" aria-label="Fecha de seguimiento" />
-          ${isOverdue(o) ? '<span class="badge-over">vencido</span>' : ''}
-        </td>
-        <td>
-          <button type="button" class="primary">Guardar</button>
+        <td class="actions-cell">
+          <button class="btn sm" type="button">Guardar</button>
           <span class="rowmsg" aria-live="polite"></span>
         </td>`;
       if (isOverdue(o)) tr.classList.add("overdue");
-      const sel = tr.querySelector("select");
-      sel.addEventListener("change", () =>
-        tr.querySelector(".dot").style.background = STAGE_COLOR[sel.value] || "#64748b");
       tr.querySelector("button").addEventListener("click", () => saveRow(tr, o.id));
       tb.appendChild(tr);
     }
   }
 
+  function renderView(){
+    renderKpis(lastList);
+    const overdue = lastList.filter(isOverdue).length;
+    $("finding").innerHTML = overdue
+      ? `<b>${overdue}</b> ${overdue===1?'oportunidad necesita':'oportunidades necesitan'} seguimiento hoy. Su fecha ya venció.`
+      : "Ningún seguimiento vencido. Todo al día.";
+    $("tab-vencidos").textContent = `Vencidos ${overdue ? overdue : ""}`.trim();
+    $("tab-todas").setAttribute("aria-selected", String(!onlyOver));
+    $("tab-vencidos").setAttribute("aria-selected", String(onlyOver));
+    const list = onlyOver ? lastList.filter(isOverdue) : lastList;
+    $("total").textContent = `${list.length} ${list.length===1?'oportunidad':'oportunidades'}`;
+    renderRows(list);
+  }
+
   async function load(){
     skeleton();
     $("status").textContent = "";
-    $("caption").textContent = `Oportunidades · Empresa ${company()}`;
+    $("caption").textContent = "Empresa " + $("company").selectedOptions[0].textContent.replace(/^./, c=>c);
     try {
       const r = await fetch(`${API}/sandbox/opportunities?company=${company()}`);
       if(!r.ok) throw new Error("HTTP "+r.status);
-      const full = await r.json();
-      renderKpis(full);
-      const list = $("onlyover").checked ? full.filter(isOverdue) : full;
-      renderRows(list);
-      if($("onlyover").checked && !list.length){
-        $("rows").innerHTML = `<tr><td colspan="6"><div class="state" role="status">
-          No hay oportunidades con seguimiento vencido. 🎉</div></td></tr>`;
-      }
+      lastList = await r.json();
+      renderView();
+      $("stamp").textContent = "Actualizado " + new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
     } catch(e){
+      lastList = [];
       $("kpis").innerHTML = "";
+      $("finding").textContent = "Sin conexión con la API.";
+      $("total").textContent = "";
       $("rows").innerHTML = `<tr><td colspan="6"><div class="state err" role="alert">
+        <span class="pill neg">Sin conexión</span><br>
         No pude conectar con la API (${API}). ¿Está corriendo el server?
-        <br><button type="button" onclick="load()" style="margin-top:12px">Reintentar</button></div></td></tr>`;
+        <br><button class="btn sm" type="button" style="margin-top:12px" onclick="load()">Reintentar</button></div></td></tr>`;
     }
   }
 
   async function saveRow(tr, id){
     const stage = tr.querySelector("select").value;
-    const amountRaw = tr.querySelector("input").value;
+    const amountRaw = tr.querySelector(".amount-input").value;
+    const segRaw = tr.querySelector('input[type=date]').value;
     const btn = tr.querySelector("button");
     const msg = tr.querySelector(".rowmsg");
-    const segRaw = tr.querySelector('input[type=date]').value;
     const body = { stage };
     if(amountRaw !== "") body.estimated_amount = Number(amountRaw);
     if(segRaw !== "") body.next_action_at = segRaw;
@@ -246,19 +246,19 @@
         method: "PATCH", headers: {"content-type":"application/json"}, body: JSON.stringify(body),
       });
       if(!r.ok) throw new Error("HTTP "+r.status);
-      msg.textContent = "✓ Guardado"; msg.style.color = "var(--ok)";
+      msg.textContent = "Guardado"; msg.style.color = "var(--positive)";
       tr.classList.remove("saved"); void tr.offsetWidth; tr.classList.add("saved");
-      load().then(() => $("status").textContent = `Oportunidad actualizada (${stage}).`);
+      load().then(() => $("status").textContent = `Oportunidad actualizada (${STAGE_LABEL[stage]||stage}).`);
     } catch(e){
-      msg.textContent = "✗ Error"; msg.style.color = "#fca5a5";
+      msg.textContent = "Error"; msg.style.color = "var(--negative)";
     } finally { btn.disabled = false; }
   }
 
   $("company").addEventListener("change", load);
-  $("onlyover").addEventListener("change", load);
   $("refresh").addEventListener("click", load);
+  $("tab-todas").addEventListener("click", () => { onlyOver = false; renderView(); });
+  $("tab-vencidos").addEventListener("click", () => { onlyOver = true; renderView(); });
   load();
 </script>
-<style>.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}</style>
 </body>
 </html>
