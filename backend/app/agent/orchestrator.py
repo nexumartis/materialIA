@@ -66,10 +66,10 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
     if understanding.customer_name:
         merged["customer_name"] = understanding.customer_name
 
-    # El catálogo se matchea por categoría/tipo/color, NO por medida: un producto a
-    # medida se trabaja en cualquier ancho/alto (la medida es dato para cotizar, no
-    # para decidir si existe). Evita el falso "no trabajamos ese producto".
-    filters = {k: merged[k] for k in ("category", "tipo", "color", "material") if merged.get(k)}
+    # El catálogo se matchea por categoría/tipo para decidir si se trabaja ese producto.
+    # Color, material y medida son datos de cotización (producto a medida), NO filtros de
+    # existencia: evita el falso "no trabajamos" por un color o una medida fuera de lista.
+    filters = {k: merged[k] for k in ("category", "tipo") if merged.get(k)}
     products = tools.search_products(ctx, query="", filters=filters) if filters else []
 
     quote_req = QuoteRequirements(**{k: v for k, v in merged.items() if k in _QUOTE_FIELDS})
