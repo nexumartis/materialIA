@@ -19,11 +19,21 @@ source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --port 8077   # API en http://127.0.0.1:8077
 ```
 
-Abrí en el navegador:
-- **Chat demo:** `sandbox_ui.html`
-- **Panel de vendedor:** `vendedor.html`
+Frontend (React + TypeScript, en `web/`):
+
+```bash
+cd web
+npm install          # sólo la primera vez
+npm run dev          # http://localhost:5173
+```
+
+- **Oportunidades:** http://localhost:5173/#/oportunidades
+- **Chat demo:** http://localhost:5173/#/chat
 - **Swagger (API):** http://127.0.0.1:8077/docs
 - **Studio (ver la base):** http://127.0.0.1:54323
+
+> El frontend viejo (HTML estático) quedó archivado en `legacy/`
+> (`legacy/vendedor.html`, `legacy/sandbox_ui.html`). El vigente es la app React de `web/`.
 
 ## 2. Apagar
 
