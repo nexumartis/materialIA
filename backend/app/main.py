@@ -48,8 +48,7 @@ def health() -> dict:
         "status": "ok" if ok else "degraded",
         "db": {"reachable": ok, "detail": detail},
         "app_env": settings.app_env,
-        "llm": {"mode": "live" if settings.llm_is_live else "mock",
-                "model": settings.llm_model if settings.llm_is_live else "mock-rules-v1"},
+        "llm": {"mode": settings.llm_mode_label, "model": settings.llm_model_label},
         # Nunca exponemos credenciales ni la URL completa de la base.
     }
 

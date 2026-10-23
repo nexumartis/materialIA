@@ -23,6 +23,13 @@ MISSING_ID = "99999999-9999-9999-9999-999999999999"
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _force_mock_llm():
+    """Los tests corren en modo mock (deterministas y rápidos), sin importar el .env."""
+    from app.config import settings
+    settings.llm_provider = "mock"
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _require_db():
     ok, detail = db_healthcheck()
     if not ok:

@@ -22,17 +22,34 @@ class Settings(BaseSettings):
     # Empresa por defecto del simulador (Empresa A sintética del seed).
     demo_default_tenant: str = "0000000a-0000-0000-0000-00000000000a"
 
-    # --- LLM (intercambiable). Sin api key => modo mock explícito. ---
-    llm_provider: str = "mock"           # "mock" | "openai"
+    # --- LLM (intercambiable). "mock" (reglas) | "ollama" (local, gratis) | "openai" (API). ---
+    llm_provider: str = "mock"
     llm_model: str = "gpt-6-luna"
     llm_api_key: str | None = None
     llm_base_url: str = "https://api.openai.com/v1"
-    llm_timeout_s: float = 20.0
+    llm_timeout_s: float = 60.0
     llm_max_output_tokens: int = 500
+    # Ollama (modelo local, sin API key ni costo)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3:4b"
 
     @property
     def llm_is_live(self) -> bool:
+        if self.llm_provider == "ollama":
+            return True
         return self.llm_provider == "openai" and bool(self.llm_api_key)
+
+    @property
+    def llm_mode_label(self) -> str:
+        return "live" if self.llm_is_live else "mock"
+
+    @property
+    def llm_model_label(self) -> str:
+        if self.llm_provider == "ollama":
+            return f"{self.ollama_model} (ollama)"
+        if self.llm_is_live:
+            return self.llm_model
+        return "mock-rules-v1"
 
 
 settings = Settings()
