@@ -45,6 +45,17 @@ def test_conversation_accumulates_requirements_across_turns():
     assert r2.opportunity_id == r1.opportunity_id                 # no duplica el lead
 
 
+def test_odd_dimensions_still_match_custom_product():
+    """Bug fix: una mampara corrediza negra con medida rara NO debe dar 'no trabajamos'
+    (es a medida: el ancho es dato para cotizar, no filtro de existencia)."""
+    r = orchestrator.handle_chat(
+        TENANT_A, "necesito una mampara corrediza negra de 200mm x 400mm en Recoleta")
+    assert r.products_referenced, "debe encontrar las mamparas corredizas negras"
+    low = r.reply.lower()
+    assert "no trabajamos" not in low and "no tengo ese producto" not in low
+    assert r.opportunity_id is not None
+
+
 def test_nonexistent_product_is_admitted():
     """Escenario 3: a la Empresa A le piden una ventana (no la trabaja) -> lo admite."""
     res = orchestrator.handle_chat(TENANT_A, "Necesito una ventana corrediza blanca")

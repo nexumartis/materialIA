@@ -313,6 +313,11 @@ def _situacion(decision: dict[str, Any]) -> str:
         partes.append("El negocio NO trabaja el producto que pidió el cliente.")
     elif decision.get("missing_fields"):
         leg = ", ".join(_READABLE.get(m, m) for m in decision["missing_fields"])
+        prod = decision.get("producto")
+        if prod:
+            partes.append(f"El cliente pregunta por: {prod}. Nombralo así, no inventes otro producto.")
+        else:
+            partes.append("Todavía no sabés qué producto quiere; no inventes uno (no digas 'puerta' ni 'vidrio').")
         if decision.get("trabajamos_text"):
             partes.append("Sí trabajan ese tipo de producto.")
         partes.append(f"Faltan estos datos del cliente: {leg}. Pedíselos amablemente.")
