@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Panel de vendedor — Presupuesto Vivo</title>
+<style>
+  :root {
+    --bg:#0f172a; --panel:#1e293b; --panel-2:#273449; --ink:#e2e8f0; --muted:#94a3b8;
+    --accent:#38bdf8; --line:#334155; --ok:#34d399; --warn:#fbbf24; --input:#0b1220;
+    --radius:10px; --space:16px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--ink); line-height:1.4; }
+  a { color:var(--accent); }
+  header { padding:var(--space) 20px; border-bottom:1px solid var(--line);
+           display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0; font-weight:650; }
+  .sub { font-size:12px; color:var(--muted); }
+  .spacer { flex:1; }
+  main { max-width:1040px; margin:0 auto; padding:20px 16px; }
+  label { font-size:12px; color:var(--muted); }
+  select, input, button { font:inherit; color:var(--ink); }
+  select, input[type=number] { background:var(--input); border:1px solid var(--line);
+    border-radius:8px; padding:7px 9px; }
+  button { cursor:pointer; border-radius:8px; border:1px solid var(--line);
+           background:var(--panel-2); padding:7px 12px; }
+  button.primary { background:var(--accent); color:#06283a; border:none; font-weight:650; }
+  button:focus-visible, select:focus-visible, input:focus-visible {
+    outline:2px solid var(--accent); outline-offset:2px; }
+  button[disabled] { opacity:.5; cursor:default; }
+
+  /* KPIs */
+  .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin:0 0 18px; }
+  @media (min-width:640px){ .kpis { grid-template-columns:repeat(4,1fr); } }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+         padding:12px 14px; }
+  .kpi .n { font-size:22px; font-weight:700; }
+  .kpi .l { font-size:12px; color:var(--muted); }
+
+  /* Tabla */
+  .tablewrap { background:var(--panel); border:1px solid var(--line);
+               border-radius:var(--radius); overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:720px; }
+  caption { text-align:left; padding:12px 14px; font-size:13px; color:var(--muted); }
+  th, td { text-align:left; padding:10px 14px; border-top:1px solid var(--line);
+           vertical-align:middle; font-size:14px; }
+  th { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase;
+       letter-spacing:.03em; }
+  tbody tr:hover { background:var(--panel-2); }
+  tr.saved { animation:flash 1.2s ease; }
+  @keyframes flash { 0%{ background:rgba(52,211,153,.25);} 100%{ background:transparent; } }
+  .pedido { font-weight:600; }
+  .pedido small { display:block; color:var(--muted); font-weight:400; font-size:12px; }
+
+  /* Chip de estado (texto + punto, no solo color) */
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+         margin-right:6px; vertical-align:middle; }
+
+  /* Estados */
+  .state { text-align:center; padding:48px 16px; color:var(--muted); }
+  .skel { height:44px; border-top:1px solid var(--line); background:
+    linear-gradient(90deg,var(--panel) 25%,var(--panel-2) 37%,var(--panel) 63%);
+    background-size:400% 100%; animation:sh 1.3s ease infinite; }
+  @keyframes sh { 0%{background-position:100% 0;} 100%{background-position:0 0;} }
+  .err { color:#fca5a5; }
+  .rowmsg { font-size:12px; color:var(--ok); }
+  .amount-cell { white-space:nowrap; }
+  .amount-cell input { width:110px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Panel de vendedor</h1>
+    <div class="sub">Presupuesto Vivo · oportunidades por empresa</div>
+  </div>
+  <div class="spacer"></div>
+  <label>Empresa
+    <select id="company" aria-label="Elegir empresa">
+      <option value="A">A — Cristalería</option>
+      <option value="B">B — Aberturas</option>
+    </select>
+  </label>
+  <button id="refresh" type="button" aria-label="Actualizar lista">↻ Actualizar</button>
+</header>
+
+<main>
+  <section class="kpis" id="kpis" aria-label="Resumen"></section>
+
+  <div class="tablewrap">
+    <table>
+      <caption id="caption">Oportunidades</caption>
+      <thead>
+        <tr>
+          <th scope="col">Fecha</th>
+          <th scope="col">Pedido</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Importe (ARS)</th>
+          <th scope="col"><span class="sr">Acciones</span>Guardar</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="sub" id="status" role="status" aria-live="polite" style="margin-top:10px"></p>
+</main>
+
+<script>
+  const API = (localStorage.getItem("pv_api") || "http://127.0.0.1:8077");
+  const STAGES = [
+    ["nueva", "Nueva", "#60a5fa"],
+    ["datos_incompletos", "Datos incompletos", "#fbbf24"],
+    ["para_cotizar", "Para cotizar", "#38bdf8"],
+    ["cotizada", "Cotizada", "#a78bfa"],
+    ["seguimiento", "Seguimiento", "#f472b6"],
+    ["cerrada", "Cerrada", "#34d399"],
+  ];
+  const STAGE_COLOR = Object.fromEntries(STAGES.map(([k,,c]) => [k, c]));
+  const $ = (id) => document.getElementById(id);
+  const company = () => $("company").value;
+
+  function fmtDate(iso){ try { return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}); } catch { return "—"; } }
+
+  function pedidoText(req){
+    if(!req || !Object.keys(req).length) return "Consulta general";
+    const cat = req.category || "pedido";
+    const tc = [req.tipo, req.color].filter(Boolean).join(" ");
+    const med = (req.ancho_mm && req.alto_mm) ? `${req.ancho_mm}×${req.alto_mm} mm` : "";
+    const extra = [req.localidad, req.customer_name].filter(Boolean).join(" · ");
+    return { main: `${cap(cat)} ${tc}`.trim(), sub: [med, extra].filter(Boolean).join(" · ") };
+  }
+  const cap = (s) => s ? s[0].toUpperCase()+s.slice(1) : s;
+
+  function skeleton(){
+    $("rows").innerHTML = "";
+    $("kpis").innerHTML = "";
+    const wrap = document.createElement("tr");
+    wrap.innerHTML = `<td colspan="5" style="padding:0">${'<div class="skel"></div>'.repeat(4)}</td>`;
+    $("rows").appendChild(wrap);
+  }
+
+  function renderKpis(list){
+    const counts = {};
+    list.forEach(o => counts[o.stage] = (counts[o.stage]||0)+1);
+    const tiles = [["Total", list.length]].concat(
+      STAGES.filter(([k]) => counts[k]).map(([k,label]) => [label, counts[k]]));
+    $("kpis").innerHTML = tiles.slice(0,4).map(([l,n]) =>
+      `<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  }
+
+  function renderRows(list){
+    const tb = $("rows");
+    tb.innerHTML = "";
+    if(!list.length){
+      tb.innerHTML = `<tr><td colspan="5"><div class="state" role="status">
+        Todavía no hay oportunidades para esta empresa. Generá una desde el chat (sandbox_ui.html).</div></td></tr>`;
+      return;
+    }
+    for(const o of list){
+      const p = pedidoText(o.requirements);
+      const tr = document.createElement("tr");
+      tr.dataset.id = o.id;
+      const opts = STAGES.map(([k,label]) =>
+        `<option value="${k}" ${k===o.stage?"selected":""}>${label}</option>`).join("");
+      tr.innerHTML = `
+        <td>${fmtDate(o.created_at)}</td>
+        <td class="pedido">${p.main || "Consulta"}<small>${p.sub || ""}</small></td>
+        <td>
+          <span class="dot" style="background:${STAGE_COLOR[o.stage]||'#64748b'}"></span>
+          <select aria-label="Estado de la oportunidad">${opts}</select>
+        </td>
+        <td class="amount-cell">
+          <input type="number" min="0" step="1000" placeholder="—"
+                 value="${o.estimated_amount ?? ""}" aria-label="Importe estimado en pesos" />
+        </td>
+        <td>
+          <button type="button" class="primary">Guardar</button>
+          <span class="rowmsg" aria-live="polite"></span>
+        </td>`;
+      const sel = tr.querySelector("select");
+      sel.addEventListener("change", () =>
+        tr.querySelector(".dot").style.background = STAGE_COLOR[sel.value] || "#64748b");
+      tr.querySelector("button").addEventListener("click", () => saveRow(tr, o.id));
+      tb.appendChild(tr);
+    }
+  }
+
+  async function load(){
+    skeleton();
+    $("status").textContent = "";
+    $("caption").textContent = `Oportunidades · Empresa ${company()}`;
+    try {
+      const r = await fetch(`${API}/sandbox/opportunities?company=${company()}`);
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const list = await r.json();
+      renderKpis(list);
+      renderRows(list);
+    } catch(e){
+      $("kpis").innerHTML = "";
+      $("rows").innerHTML = `<tr><td colspan="5"><div class="state err" role="alert">
+        No pude conectar con la API (${API}). ¿Está corriendo el server?
+        <br><button type="button" onclick="load()" style="margin-top:12px">Reintentar</button></div></td></tr>`;
+    }
+  }
+
+  async function saveRow(tr, id){
+    const stage = tr.querySelector("select").value;
+    const amountRaw = tr.querySelector("input").value;
+    const btn = tr.querySelector("button");
+    const msg = tr.querySelector(".rowmsg");
+    const body = { stage };
+    if(amountRaw !== "") body.estimated_amount = Number(amountRaw);
+    btn.disabled = true; msg.textContent = "Guardando…"; msg.style.color = "var(--muted)";
+    try {
+      const r = await fetch(`${API}/sandbox/opportunities/${id}?company=${company()}`, {
+        method: "PATCH", headers: {"content-type":"application/json"}, body: JSON.stringify(body),
+      });
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      msg.textContent = "✓ Guardado"; msg.style.color = "var(--ok)";
+      tr.classList.remove("saved"); void tr.offsetWidth; tr.classList.add("saved");
+      load().then(() => $("status").textContent = `Oportunidad actualizada (${stage}).`);
+    } catch(e){
+      msg.textContent = "✗ Error"; msg.style.color = "#fca5a5";
+    } finally { btn.disabled = false; }
+  }
+
+  $("company").addEventListener("change", load);
+  $("refresh").addEventListener("click", load);
+  load();
+</script>
+<style>.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}</style>
+</body>
+</html>

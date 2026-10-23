@@ -61,6 +61,11 @@ class OpportunityInput(BaseModel):
     price_snapshot: Optional[dict[str, Any]] = None
 
 
+class OpportunityUpdate(BaseModel):
+    stage: Optional[str] = None
+    estimated_amount: Optional[float] = None
+
+
 class OpportunitySummary(BaseModel):
     id: str
     stage: str

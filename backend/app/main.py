@@ -14,7 +14,13 @@ from .agent import orchestrator
 from .config import settings
 from .db import db_healthcheck
 from .domain import catalog, opportunities
-from .schemas import ChatRequest, ChatResponse, OpportunitySummary, ProductSummary
+from .schemas import (
+    ChatRequest,
+    ChatResponse,
+    OpportunitySummary,
+    OpportunityUpdate,
+    ProductSummary,
+)
 
 # Allowlist de empresas demo (sandbox). Coinciden con supabase/seed.sql.
 SANDBOX_TENANTS = {
@@ -69,3 +75,17 @@ def chat(req: ChatRequest, company: str = Query("A")) -> ChatResponse:
 def opps(company: str = Query("A")) -> list[OpportunitySummary]:
     tenant = _resolve_tenant(company)
     return opportunities.list_opportunities(tenant)
+
+
+@app.patch("/sandbox/opportunities/{opportunity_id}", response_model=OpportunitySummary)
+def update_opp(opportunity_id: str, body: OpportunityUpdate,
+               company: str = Query("A")) -> OpportunitySummary:
+    tenant = _resolve_tenant(company)
+    try:
+        updated = opportunities.update_opportunity(
+            tenant, opportunity_id, stage=body.stage, estimated_amount=body.estimated_amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
+    return updated

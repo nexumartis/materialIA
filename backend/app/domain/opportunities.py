@@ -152,6 +152,36 @@ def get_opportunity(tenant_id: str, opportunity_id: str) -> Optional[Opportunity
     return _row_to_opp(row) if row else None
 
 
+ALLOWED_STAGES = {"nueva", "datos_incompletos", "para_cotizar", "cotizada", "seguimiento", "cerrada"}
+
+
+def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str] = None,
+                       estimated_amount: Optional[float] = None) -> Optional[OpportunitySummary]:
+    """Actualiza estado y/o importe de una oportunidad de ESTA empresa (panel vendedor)."""
+    sets, params = [], {"tenant": tenant_id, "id": opportunity_id}
+    if stage is not None:
+        if stage not in ALLOWED_STAGES:
+            raise ValueError(f"stage inválido: {stage}")
+        sets.append("stage = %(stage)s")
+        params["stage"] = stage
+    if estimated_amount is not None:
+        sets.append("estimated_amount = %(amount)s")
+        params["amount"] = estimated_amount
+    if not sets:
+        return get_opportunity(tenant_id, opportunity_id)
+    sets.append("updated_at = now()")
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            f"update opportunities set {', '.join(sets)} "
+            "where tenant_id = %(tenant)s and id = %(id)s "
+            "returning id, stage, requires_human_quote, estimated_amount, "
+            "requirements_json, created_at",
+            params,
+        )
+        row = cur.fetchone()
+    return _row_to_opp(row) if row else None
+
+
 def _row_to_opp(row: dict[str, Any]) -> OpportunitySummary:
     return OpportunitySummary(
         id=str(row["id"]),

@@ -160,6 +160,9 @@ class MockProvider:
                     "este comercio; no puedo mostrarte datos ni precios de otras empresas. "
                     "¿Seguimos con tu consulta?")
 
+        if decision.get("closing"):
+            return "¡Gracias a vos! Cualquier cosa que necesites, escribime y seguimos. 👋"
+
         if decision.get("no_match"):
             return (f"{hello} Por ahora no tengo ese producto en nuestro catálogo, así que no "
                     "te lo puedo ofrecer sin inventar. ¿Querés que veamos una opción que sí trabajamos?")
@@ -277,8 +280,16 @@ _THINK = re.compile(r"<think>.*?</think>", re.S | re.IGNORECASE)
 # Guardarraíl de salida: el backend valida la respuesta del LLM. Si promete canales
 # o plazos que no ofrecemos (o tira un precio), descartamos y usamos la versión segura.
 _UNSAFE_REPLY = re.compile(
-    r"(whats?app|wsp|\bmail\b|e-?mail|correo|tel[eé]fono|\bllam(ar|o|amos|aremos|ада)|"
+    r"(whats?app|wsp|\bmail\b|e-?mail|correo|tel[eé]fono|\bllam(ar|o|amos|aremos)|"
+    r"contactar[eé]|contactaremos|(?:te|nos|los|lo)\s+contact|"
+    r"en\s+breve|a\s+la\s+brevedad|"
     r"en\s+\d+\s*(min|minutos|hs|horas|d[ií]as)|ma[ñn]ana|\$\s*\d|ars\s*\d|\d+\s*pesos)",
+    re.IGNORECASE,
+)
+# Saludos de cierre/cortesía (sin pedido): se responde corto, sin re-registrar nada.
+_CLOSING = re.compile(
+    r"\b(gracias|chau|chao|listo|perfecto|dale|genial|buen[ií]simo|de\s+nada|"
+    r"nos\s+vemos|hasta\s+luego|saludos|ok(ay)?|barbaro|b[aá]rbaro)\b",
     re.IGNORECASE,
 )
 
@@ -293,6 +304,10 @@ _CANON_COLOR = {"negr": "negro", "blanc": "blanco", "plat": "plata"}
 def _situacion(decision: dict[str, Any]) -> str:
     """Describe la situación en lenguaje natural para que el LLM redacte (no copie JSON)."""
     company = decision.get("company_name", "el negocio")
+    if decision.get("closing"):
+        return ('El cliente agradeció o se despidió. Respondé un cierre breve y cordial (una '
+                "oración), sin registrar nada nuevo ni prometer contactos, plazos ni canales. "
+                'Devolvelo como {"reply": "<texto>"}.')
     partes = [f"Sos el asistente de {company}."]
     if decision.get("no_match"):
         partes.append("El negocio NO trabaja el producto que pidió el cliente.")

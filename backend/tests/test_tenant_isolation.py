@@ -2,6 +2,8 @@
 ni modificar productos ni oportunidades de la Empresa A, aunque pase IDs de A."""
 from __future__ import annotations
 
+import pytest
+
 from app.domain import catalog, opportunities
 from app.schemas import OpportunityInput
 
@@ -32,3 +34,22 @@ def test_b_cannot_read_a_opportunity():
     assert opportunities.get_opportunity(TENANT_B, opp_a.id) is None
     # A sí la ve.
     assert opportunities.get_opportunity(TENANT_A, opp_a.id) is not None
+
+
+def test_b_cannot_update_a_opportunity():
+    opp = opportunities.create_or_update_opportunity(
+        TENANT_A, OpportunityInput(requirements={"x": 1}, stage="nueva"))
+    # B intenta mover el estado de la oportunidad de A -> no la encuentra.
+    assert opportunities.update_opportunity(TENANT_B, opp.id, stage="cotizada") is None
+    assert opportunities.get_opportunity(TENANT_A, opp.id).stage == "nueva"
+    # A sí puede actualizar estado + importe.
+    updated = opportunities.update_opportunity(
+        TENANT_A, opp.id, stage="cotizada", estimated_amount=123000)
+    assert updated.stage == "cotizada" and updated.estimated_amount == 123000
+
+
+def test_update_rejects_invalid_stage():
+    opp = opportunities.create_or_update_opportunity(
+        TENANT_A, OpportunityInput(requirements={}, stage="nueva"))
+    with pytest.raises(ValueError):
+        opportunities.update_opportunity(TENANT_A, opp.id, stage="inventado")

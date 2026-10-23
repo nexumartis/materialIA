@@ -52,6 +52,25 @@ def test_nonexistent_product_is_admitted():
     assert "no" in low and ("catálogo" in low or "ofrecer" in low)
 
 
+def test_closing_message_does_not_reregister():
+    """Un 'gracias'/cierre responde corto y NO vuelve a registrar la oportunidad."""
+    r1 = orchestrator.handle_chat(
+        TENANT_A, "Hola, quiero una mampara corrediza negra de 1,60 x 1,90 en Tigre")
+    assert r1.opportunity_id is not None
+    r2 = orchestrator.handle_chat(TENANT_A, "gracias", conversation_id=r1.conversation_id)
+    assert r2.opportunity_id is None
+    assert not r2.requires_human
+    assert "gracias" in r2.reply.lower()
+
+
+def test_guardrail_filters_contact_and_time_promises():
+    from app.agent.llm_adapter import _reply_is_safe
+    assert not _reply_is_safe("Te contactaremos en breve")
+    assert not _reply_is_safe("Te aviso por WhatsApp cuando esté")
+    assert not _reply_is_safe("Lo tenés listo mañana")
+    assert _reply_is_safe("Tu pedido quedó registrado y lo revisa una persona para cotizar.")
+
+
 def test_adversarial_message_is_denied():
     """Escenario 6: inyección pidiendo datos de otra empresa -> denegado, sin filtrar."""
     res = orchestrator.handle_chat(

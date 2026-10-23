@@ -12,7 +12,7 @@ from ..db import tenant_tx
 from ..domain import opportunities
 from ..schemas import ChatResponse, OpportunityInput, QuoteRequirements
 from . import tools
-from .llm_adapter import get_provider
+from .llm_adapter import _CLOSING, get_provider
 
 _QUOTE_FIELDS = {"category", "tipo", "color", "material", "ancho_mm", "alto_mm", "localidad", "product_id", "quantity"}
 
@@ -44,6 +44,19 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
             reply=reply, products_referenced=[], collected_requirements={},
             opportunity_id=None, conversation_id=conversation_id, missing_fields=[],
             requires_human=True, model_used=understanding.model_used, mode=understanding.mode,
+        )
+
+    # --- Saludo/cierre sin pedido: respuesta breve, sin re-registrar la oportunidad ---
+    new_preview = {k: v for k, v in understanding.requirements.items() if v is not None}
+    if not new_preview and not understanding.customer_name and _CLOSING.search(message):
+        reply = provider.compose_reply({"company_name": company, "closing": True})
+        opportunities.add_message(tenant_id, conversation_id, "outbound", reply)
+        opportunities.audit(tenant_id, "closing", conversation_id,
+                            {"mode": understanding.mode, "model": understanding.model_used})
+        return ChatResponse(
+            reply=reply, products_referenced=[], collected_requirements={},
+            opportunity_id=None, conversation_id=conversation_id, missing_fields=[],
+            requires_human=False, model_used=understanding.model_used, mode=understanding.mode,
         )
 
     # --- Memoria del chat: acumular requisitos de turnos previos de esta conversación ---
