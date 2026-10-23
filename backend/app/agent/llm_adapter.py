@@ -319,7 +319,10 @@ def _situacion(decision: dict[str, Any]) -> str:
     elif decision.get("price_text"):
         partes.append(decision["price_text"])
     elif decision.get("requires_human"):
-        partes.append("Es un producto a medida: avisá que lo revisa una persona para cotizar y que ya quedó registrado el pedido.")
+        prod = decision.get("producto") or "el producto"
+        partes.append(f"Es un pedido de {prod} a medida: avisá que lo revisa una persona para "
+                      f"cotizar y que ya quedó registrado. Llamá al producto '{prod}', no uses "
+                      "otra palabra (no digas 'vidrio' si es una mampara).")
     partes.append('Escribí el mensaje para el cliente y devolvelo como {"reply": "<texto>"}.')
     return " ".join(partes)
 

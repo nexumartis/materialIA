@@ -83,6 +83,7 @@ def handle_chat(tenant_id: str, message: str, conversation_id: Optional[str] = N
         "no_match": no_match,
         "requires_human": estimate.requires_human,
         "missing_fields": estimate.missing_fields,
+        "producto": merged.get("category"),
         "trabajamos_text": "Sí, trabajamos ese tipo de productos. " if products else "",
     }
     if estimate.status == "estimate" and estimate.amount is not None:

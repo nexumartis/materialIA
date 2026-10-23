@@ -93,7 +93,7 @@ def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySum
                     estimated_amount = %s, price_snapshot_json = %s::jsonb, updated_at = now()
                 where tenant_id = %s and id = %s
                 returning id, stage, requires_human_quote, estimated_amount,
-                          requirements_json, created_at
+                          requirements_json, created_at, next_action_at
                 """,
                 (json.dumps(data.requirements), data.stage, data.requires_human_quote,
                  data.estimated_amount,
@@ -115,7 +115,7 @@ def create_or_update_opportunity(tenant_id: str, data: OpportunityInput) -> Oppo
                  next_action_at)
             values (%s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, now() + interval '2 days')
             returning id, stage, requires_human_quote, estimated_amount,
-                      requirements_json, created_at
+                      requirements_json, created_at, next_action_at
             """,
             (
                 tenant_id, data.conversation_id, data.customer_id,
@@ -132,7 +132,7 @@ def list_opportunities(tenant_id: str, limit: int = 50) -> list[OpportunitySumma
     with tenant_tx(tenant_id) as cur:
         cur.execute(
             "select id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at from opportunities "
+            "requirements_json, created_at, next_action_at from opportunities "
             "where tenant_id = %s order by created_at desc limit %s",
             (tenant_id, limit),
         )
@@ -144,7 +144,7 @@ def get_opportunity(tenant_id: str, opportunity_id: str) -> Optional[Opportunity
     with tenant_tx(tenant_id) as cur:
         cur.execute(
             "select id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at from opportunities "
+            "requirements_json, created_at, next_action_at from opportunities "
             "where tenant_id = %s and id = %s",
             (tenant_id, opportunity_id),
         )
@@ -156,8 +156,9 @@ ALLOWED_STAGES = {"nueva", "datos_incompletos", "para_cotizar", "cotizada", "seg
 
 
 def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str] = None,
-                       estimated_amount: Optional[float] = None) -> Optional[OpportunitySummary]:
-    """Actualiza estado y/o importe de una oportunidad de ESTA empresa (panel vendedor)."""
+                       estimated_amount: Optional[float] = None,
+                       next_action_at: Optional[str] = None) -> Optional[OpportunitySummary]:
+    """Actualiza estado, importe y/o fecha de seguimiento de una oportunidad de ESTA empresa."""
     sets, params = [], {"tenant": tenant_id, "id": opportunity_id}
     if stage is not None:
         if stage not in ALLOWED_STAGES:
@@ -167,6 +168,9 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
     if estimated_amount is not None:
         sets.append("estimated_amount = %(amount)s")
         params["amount"] = estimated_amount
+    if next_action_at is not None:
+        sets.append("next_action_at = %(next_action)s")
+        params["next_action"] = next_action_at or None
     if not sets:
         return get_opportunity(tenant_id, opportunity_id)
     sets.append("updated_at = now()")
@@ -175,7 +179,7 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
             f"update opportunities set {', '.join(sets)} "
             "where tenant_id = %(tenant)s and id = %(id)s "
             "returning id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at",
+            "requirements_json, created_at, next_action_at",
             params,
         )
         row = cur.fetchone()
@@ -190,6 +194,7 @@ def _row_to_opp(row: dict[str, Any]) -> OpportunitySummary:
         estimated_amount=float(row["estimated_amount"]) if row["estimated_amount"] is not None else None,
         requirements=row["requirements_json"] or {},
         created_at=str(row["created_at"]),
+        next_action_at=str(row["next_action_at"]) if row.get("next_action_at") else None,
     )
 
 

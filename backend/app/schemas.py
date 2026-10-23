@@ -64,6 +64,7 @@ class OpportunityInput(BaseModel):
 class OpportunityUpdate(BaseModel):
     stage: Optional[str] = None
     estimated_amount: Optional[float] = None
+    next_action_at: Optional[str] = None
 
 
 class OpportunitySummary(BaseModel):
@@ -73,6 +74,7 @@ class OpportunitySummary(BaseModel):
     estimated_amount: Optional[float] = None
     requirements: dict[str, Any] = Field(default_factory=dict)
     created_at: str
+    next_action_at: Optional[str] = None
 
 
 # --- API chat -------------------------------------------------------------

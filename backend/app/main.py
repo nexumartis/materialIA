@@ -83,7 +83,8 @@ def update_opp(opportunity_id: str, body: OpportunityUpdate,
     tenant = _resolve_tenant(company)
     try:
         updated = opportunities.update_opportunity(
-            tenant, opportunity_id, stage=body.stage, estimated_amount=body.estimated_amount)
+            tenant, opportunity_id, stage=body.stage,
+            estimated_amount=body.estimated_amount, next_action_at=body.next_action_at)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if not updated:

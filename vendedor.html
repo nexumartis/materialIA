@@ -68,6 +68,11 @@
   .rowmsg { font-size:12px; color:var(--ok); }
   .amount-cell { white-space:nowrap; }
   .amount-cell input { width:110px; }
+  .seg-cell { white-space:nowrap; }
+  .seg-cell input { width:140px; }
+  .badge-over { display:inline-block; margin-left:6px; font-size:11px; font-weight:700;
+    color:#7f1d1d; background:#fca5a5; border-radius:6px; padding:1px 6px; }
+  tr.overdue td:first-child { box-shadow:inset 3px 0 0 #f87171; }
 </style>
 </head>
 <body>
@@ -82,6 +87,9 @@
       <option value="A">A — Cristalería</option>
       <option value="B">B — Aberturas</option>
     </select>
+  </label>
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+    <input type="checkbox" id="onlyover" /> Solo vencidos
   </label>
   <button id="refresh" type="button" aria-label="Actualizar lista">↻ Actualizar</button>
 </header>
@@ -98,6 +106,7 @@
           <th scope="col">Pedido</th>
           <th scope="col">Estado</th>
           <th scope="col">Importe (ARS)</th>
+          <th scope="col">Seguimiento</th>
           <th scope="col"><span class="sr">Acciones</span>Guardar</th>
         </tr>
       </thead>
@@ -122,6 +131,12 @@
   const company = () => $("company").value;
 
   function fmtDate(iso){ try { return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}); } catch { return "—"; } }
+  function dateOnly(iso){ return iso ? String(iso).slice(0,10) : ""; }
+  function isOverdue(o){
+    if(!o.next_action_at || o.stage === "cerrada") return false;
+    const d = new Date(dateOnly(o.next_action_at) + "T23:59:59");
+    return d < new Date();
+  }
 
   function pedidoText(req){
     if(!req || !Object.keys(req).length) return "Consulta general";
@@ -137,14 +152,15 @@
     $("rows").innerHTML = "";
     $("kpis").innerHTML = "";
     const wrap = document.createElement("tr");
-    wrap.innerHTML = `<td colspan="5" style="padding:0">${'<div class="skel"></div>'.repeat(4)}</td>`;
+    wrap.innerHTML = `<td colspan="6" style="padding:0">${'<div class="skel"></div>'.repeat(4)}</td>`;
     $("rows").appendChild(wrap);
   }
 
   function renderKpis(list){
     const counts = {};
     list.forEach(o => counts[o.stage] = (counts[o.stage]||0)+1);
-    const tiles = [["Total", list.length]].concat(
+    const overdue = list.filter(isOverdue).length;
+    const tiles = [["Total", list.length], ["Seguimiento vencido", overdue]].concat(
       STAGES.filter(([k]) => counts[k]).map(([k,label]) => [label, counts[k]]));
     $("kpis").innerHTML = tiles.slice(0,4).map(([l,n]) =>
       `<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
@@ -154,7 +170,7 @@
     const tb = $("rows");
     tb.innerHTML = "";
     if(!list.length){
-      tb.innerHTML = `<tr><td colspan="5"><div class="state" role="status">
+      tb.innerHTML = `<tr><td colspan="6"><div class="state" role="status">
         Todavía no hay oportunidades para esta empresa. Generá una desde el chat (sandbox_ui.html).</div></td></tr>`;
       return;
     }
@@ -175,10 +191,15 @@
           <input type="number" min="0" step="1000" placeholder="—"
                  value="${o.estimated_amount ?? ""}" aria-label="Importe estimado en pesos" />
         </td>
+        <td class="seg-cell">
+          <input type="date" value="${dateOnly(o.next_action_at)}" aria-label="Fecha de seguimiento" />
+          ${isOverdue(o) ? '<span class="badge-over">vencido</span>' : ''}
+        </td>
         <td>
           <button type="button" class="primary">Guardar</button>
           <span class="rowmsg" aria-live="polite"></span>
         </td>`;
+      if (isOverdue(o)) tr.classList.add("overdue");
       const sel = tr.querySelector("select");
       sel.addEventListener("change", () =>
         tr.querySelector(".dot").style.background = STAGE_COLOR[sel.value] || "#64748b");
@@ -194,12 +215,17 @@
     try {
       const r = await fetch(`${API}/sandbox/opportunities?company=${company()}`);
       if(!r.ok) throw new Error("HTTP "+r.status);
-      const list = await r.json();
-      renderKpis(list);
+      const full = await r.json();
+      renderKpis(full);
+      const list = $("onlyover").checked ? full.filter(isOverdue) : full;
       renderRows(list);
+      if($("onlyover").checked && !list.length){
+        $("rows").innerHTML = `<tr><td colspan="6"><div class="state" role="status">
+          No hay oportunidades con seguimiento vencido. 🎉</div></td></tr>`;
+      }
     } catch(e){
       $("kpis").innerHTML = "";
-      $("rows").innerHTML = `<tr><td colspan="5"><div class="state err" role="alert">
+      $("rows").innerHTML = `<tr><td colspan="6"><div class="state err" role="alert">
         No pude conectar con la API (${API}). ¿Está corriendo el server?
         <br><button type="button" onclick="load()" style="margin-top:12px">Reintentar</button></div></td></tr>`;
     }
@@ -210,8 +236,10 @@
     const amountRaw = tr.querySelector("input").value;
     const btn = tr.querySelector("button");
     const msg = tr.querySelector(".rowmsg");
+    const segRaw = tr.querySelector('input[type=date]').value;
     const body = { stage };
     if(amountRaw !== "") body.estimated_amount = Number(amountRaw);
+    if(segRaw !== "") body.next_action_at = segRaw;
     btn.disabled = true; msg.textContent = "Guardando…"; msg.style.color = "var(--muted)";
     try {
       const r = await fetch(`${API}/sandbox/opportunities/${id}?company=${company()}`, {
@@ -227,6 +255,7 @@
   }
 
   $("company").addEventListener("change", load);
+  $("onlyover").addEventListener("change", load);
   $("refresh").addEventListener("click", load);
   load();
 </script>

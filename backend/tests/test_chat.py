@@ -63,6 +63,14 @@ def test_closing_message_does_not_reregister():
     assert "gracias" in r2.reply.lower()
 
 
+def test_update_sets_followup_date():
+    from app.schemas import OpportunityInput
+    o = opportunities.create_or_update_opportunity(
+        TENANT_A, OpportunityInput(requirements={}, stage="nueva"))
+    updated = opportunities.update_opportunity(TENANT_A, o.id, next_action_at="2026-12-31")
+    assert updated.next_action_at and updated.next_action_at.startswith("2026-12-31")
+
+
 def test_guardrail_filters_contact_and_time_promises():
     from app.agent.llm_adapter import _reply_is_safe
     assert not _reply_is_safe("Te contactaremos en breve")
