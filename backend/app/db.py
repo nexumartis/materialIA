@@ -12,11 +12,27 @@ from typing import Iterator
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from .config import settings
 
+# Pool de conexiones: reusa conexiones abiertas (clave con DB remota/cloud, donde
+# abrir una conexión por operación cuesta ~1-2s de handshake). Lazy init.
+_pool: ConnectionPool | None = None
+
+
+def _get_pool() -> ConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = ConnectionPool(
+            settings.database_url, min_size=1, max_size=10,
+            kwargs={"row_factory": dict_row}, open=True,
+        )
+    return _pool
+
 
 def connect() -> psycopg.Connection:
+    """Conexión suelta (para checks/tests). El resto usa el pool vía tenant_tx."""
     return psycopg.connect(settings.database_url, row_factory=dict_row)
 
 
@@ -37,15 +53,13 @@ def tenant_tx(tenant_id: str) -> Iterator[psycopg.Cursor]:
 
     Commitea al salir sin excepción; hace rollback si algo falla.
     """
-    conn = connect()
-    try:
-        with conn:  # maneja commit/rollback
-            with conn.cursor() as cur:
-                # `true` => scope local a la transacción.
-                cur.execute(
-                    "select set_config('app.current_tenant', %s, true)",
-                    (str(tenant_id),),
-                )
-                yield cur
-    finally:
-        conn.close()
+    # pool.connection() presta una conexión, abre transacción, commitea al salir
+    # sin error (rollback si falla) y la devuelve al pool.
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            # `true` => scope local a la transacción (no se filtra entre usos del pool).
+            cur.execute(
+                "select set_config('app.current_tenant', %s, true)",
+                (str(tenant_id),),
+            )
+            yield cur
