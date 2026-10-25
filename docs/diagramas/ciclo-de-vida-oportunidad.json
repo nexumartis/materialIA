@@ -1,0 +1,49 @@
+{
+  "schema_version": 3,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Ciclo de vida de una oportunidad — Presupuesto Vivo",
+    "subtitle": "Etapas, reglas de seguimiento y lo que el agente registra",
+    "output": "docs/diagramas/ciclo-de-vida-oportunidad.html",
+    "locale": "es",
+    "quality_profile": "showcase"
+  },
+  "mainPath": ["nueva", "para_cotizar", "cotizada", "seguimiento", "cerrada"],
+  "states": [
+    { "id": "nueva", "type": "start", "label": "Nueva", "sublabel": "entra una consulta", "tag": "entrada", "step": "01" },
+    { "id": "para_cotizar", "type": "active", "label": "Para cotizar", "sublabel": "completo, a medida", "tag": "califica", "step": "02" },
+    { "id": "cotizada", "type": "active", "label": "Cotizada", "sublabel": "asesor cargó importe", "tag": "asesor", "step": "03" },
+    { "id": "seguimiento", "type": "waiting", "label": "Seguimiento", "sublabel": "espera; vence por fecha", "tag": "espera", "step": "04" },
+    { "id": "cerrada", "type": "success", "label": "Cerrada", "sublabel": "concretada/descartada", "tag": "terminal", "step": "05" },
+    { "id": "datos_incompletos", "type": "waiting", "label": "Datos incompletos", "sublabel": "faltan datos", "tag": "pausa" }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "nueva", "to": "para_cotizar", "label": "datos completos" },
+    { "id": "t2", "from": "para_cotizar", "to": "cotizada", "label": "carga importe" },
+    { "id": "t3", "from": "cotizada", "to": "seguimiento", "label": "a seguimiento" },
+    { "id": "t4", "from": "seguimiento", "to": "cerrada", "label": "cierra" },
+    { "id": "t5", "from": "nueva", "to": "datos_incompletos", "label": "faltan datos" },
+    { "id": "t6", "from": "datos_incompletos", "to": "para_cotizar", "label": "completa", "note": "queda en el timeline", "variant": "dashed" },
+    { "id": "t7", "from": "cotizada", "to": "cerrada", "label": "cierre directo" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Camino de calificación",
+      "items": [
+        "Nueva → Para cotizar → Cotizada → Seguimiento → Cerrada",
+        "Datos incompletos pausa el lead sin cerrarlo",
+        "El estado lo avanza el agente (chat) o un asesor (panel)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Reglas",
+      "items": [
+        "Cada cambio de estado queda en el timeline de la oportunidad",
+        "Una oportunidad cerrada no vence: se limpia next_action_at",
+        "El importe lo carga una persona; el agente nunca lo inventa"
+      ]
+    }
+  ]
+}
