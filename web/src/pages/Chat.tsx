@@ -24,6 +24,8 @@ const REQ_LABELS: Record<string, string> = {
   alto_mm: "Alto",
   localidad: "Localidad",
   customer_name: "Cliente",
+  customer_phone: "Teléfono",
+  customer_email: "Email",
   quantity: "Cantidad",
   product_id: "Producto",
 };

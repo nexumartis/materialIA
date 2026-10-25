@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Company, type Opportunity, type Stage } from "../lib/api";
 import { STAGES, dateOnly, fmtDate, isOverdue, pedidoText } from "../lib/format";
+import { ActivityDrawer } from "../components/ActivityDrawer";
 
 export function Opportunities({ company }: { company: Company }) {
   const [list, setList] = useState<Opportunity[] | null>(null);
@@ -38,10 +39,13 @@ export function Opportunities({ company }: { company: Company }) {
   ];
   const view = onlyOver ? data.filter(isOverdue) : data;
 
+  const [selected, setSelected] = useState<Opportunity | null>(null);
+
   const onSaved = (updated: Opportunity) =>
     setList((cur) => (cur ? cur.map((o) => (o.id === updated.id ? updated : o)) : cur));
 
   return (
+    <>
     <div className="sheet">
       <div className="titlebar">
         <div>
@@ -154,12 +158,16 @@ export function Opportunities({ company }: { company: Company }) {
                 </td>
               </tr>
             ) : (
-              view.map((o) => <Row key={o.id} o={o} company={company} onSaved={onSaved} />)
+              view.map((o) => (
+                <Row key={o.id} o={o} company={company} onSaved={onSaved} onOpen={setSelected} />
+              ))
             )}
           </tbody>
         </table>
       </div>
     </div>
+    <ActivityDrawer opp={selected} company={company} onClose={() => setSelected(null)} />
+    </>
   );
 }
 
@@ -167,10 +175,12 @@ function Row({
   o,
   company,
   onSaved,
+  onOpen,
 }: {
   o: Opportunity;
   company: Company;
   onSaved: (u: Opportunity) => void;
+  onOpen: (o: Opportunity) => void;
 }) {
   const [stage, setStage] = useState<Stage>(o.stage);
   const [amount, setAmount] = useState(o.estimated_amount != null ? String(o.estimated_amount) : "");
@@ -210,7 +220,9 @@ function Row({
     <tr className={`${over ? "overdue" : ""} ${flash ? "saved" : ""}`}>
       <td className="num">{fmtDate(o.created_at)}</td>
       <td className="pedido">
-        <b>{p.main || "Consulta"}</b>
+        <button type="button" className="pedido-link" onClick={() => onOpen(o)} title="Ver actividad">
+          {p.main || "Consulta"}
+        </button>
         {p.sub && <small>{p.sub}</small>}
       </td>
       <td>
