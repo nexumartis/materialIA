@@ -115,6 +115,21 @@ def _clean_color(value: Any) -> Optional[str]:
     return None
 
 
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_PHONE_CAND = re.compile(r"\+?\d[\d\s\-().]{6,}\d")
+
+
+def _extract_phone(message: str) -> Optional[str]:
+    """Un teléfono: 8 a 15 dígitos y con separador (-, +, paréntesis) o >=10 dígitos.
+    Así no se confunde con una medida (que va con coma y 'x')."""
+    for m in _PHONE_CAND.finditer(message):
+        s = m.group(0).strip()
+        digits = re.sub(r"\D", "", s)
+        if 8 <= len(digits) <= 15 and (any(c in s for c in "-+(") or len(digits) >= 10):
+            return s
+    return None
+
+
 def _parse_requirements(message: str) -> tuple[dict[str, Any], Optional[str], Optional[str]]:
     text = message.lower()
     req: dict[str, Any] = {}
@@ -152,6 +167,14 @@ def _parse_requirements(message: str) -> tuple[dict[str, Any], Optional[str], Op
 
     name = re.search(r"\b(?:me llamo|mi nombre es|soy)\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?)", message)
     customer_name = name.group(1).strip() if name else None
+
+    # Contacto del cliente: queda en la oportunidad para el vendedor; la auditoría no lo guarda.
+    email = _EMAIL_RE.search(message)
+    if email:
+        req["customer_email"] = email.group(0)
+    phone = _extract_phone(message)
+    if phone:
+        req["customer_phone"] = phone
 
     return req, category, customer_name
 
