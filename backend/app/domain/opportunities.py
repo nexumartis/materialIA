@@ -74,16 +74,20 @@ def get_conversation_requirements(tenant_id: str, conversation_id: Optional[str]
 def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySummary:
     """Una oportunidad por conversación: inserta la primera vez, luego actualiza la
     misma (acumula requisitos en vez de duplicar leads)."""
+    existing_id = None
+    existing_stage = None
+    row = None
     with tenant_tx(tenant_id) as cur:
-        existing_id = None
         if data.conversation_id:
             cur.execute(
-                "select id from opportunities where tenant_id = %s and conversation_id = %s "
+                "select id, stage from opportunities where tenant_id = %s and conversation_id = %s "
                 "order by created_at desc limit 1",
                 (tenant_id, data.conversation_id),
             )
             r = cur.fetchone()
-            existing_id = str(r["id"]) if r else None
+            if r:
+                existing_id = str(r["id"])
+                existing_stage = r["stage"]
 
         if existing_id:
             cur.execute(
@@ -100,7 +104,14 @@ def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySum
                  json.dumps(data.price_snapshot) if data.price_snapshot else None,
                  tenant_id, existing_id),
             )
-            return _row_to_opp(cur.fetchone())
+            row = cur.fetchone()
+
+    if existing_id:
+        opp = _row_to_opp(row)
+        # El agente avanzó el lead entre turnos: queda en el timeline.
+        if data.stage != existing_stage:
+            log_activity(tenant_id, opp.id, "cambio_estado", f"{existing_stage} → {data.stage}")
+        return opp
     # sin conversación o sin oportunidad previa -> insertar
     return create_or_update_opportunity(tenant_id, data)
 
@@ -125,7 +136,9 @@ def create_or_update_opportunity(tenant_id: str, data: OpportunityInput) -> Oppo
             ),
         )
         row = cur.fetchone()
-    return _row_to_opp(row)
+    opp = _row_to_opp(row)
+    log_activity(tenant_id, opp.id, "creada", f"estado {opp.stage}, origen {data.origin}")
+    return opp
 
 
 def list_opportunities(tenant_id: str, limit: int = 50) -> list[OpportunitySummary]:
@@ -158,8 +171,15 @@ ALLOWED_STAGES = {"nueva", "datos_incompletos", "para_cotizar", "cotizada", "seg
 def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str] = None,
                        estimated_amount: Optional[float] = None,
                        next_action_at: Optional[str] = None) -> Optional[OpportunitySummary]:
-    """Actualiza estado, importe y/o fecha de seguimiento de una oportunidad de ESTA empresa."""
+    """Actualiza estado, importe y/o fecha de seguimiento de una oportunidad de ESTA empresa.
+    Registra la transición de estado y aplica la regla: una oportunidad cerrada no tiene
+    seguimiento pendiente (se limpia `next_action_at`)."""
+    current = get_opportunity(tenant_id, opportunity_id)
+    if current is None:
+        return None
+
     sets, params = [], {"tenant": tenant_id, "id": opportunity_id}
+    stage_changed = stage is not None and stage != current.stage
     if stage is not None:
         if stage not in ALLOWED_STAGES:
             raise ValueError(f"stage inválido: {stage}")
@@ -168,11 +188,14 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
     if estimated_amount is not None:
         sets.append("estimated_amount = %(amount)s")
         params["amount"] = estimated_amount
-    if next_action_at is not None:
+    if stage == "cerrada":
+        # Una cerrada no "vence": el seguimiento se limpia aunque venga una fecha.
+        sets.append("next_action_at = null")
+    elif next_action_at is not None:
         sets.append("next_action_at = %(next_action)s")
         params["next_action"] = next_action_at or None
     if not sets:
-        return get_opportunity(tenant_id, opportunity_id)
+        return current
     sets.append("updated_at = now()")
     with tenant_tx(tenant_id) as cur:
         cur.execute(
@@ -183,7 +206,35 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
             params,
         )
         row = cur.fetchone()
-    return _row_to_opp(row) if row else None
+    if row is None:
+        return None
+    if stage_changed:
+        log_activity(tenant_id, opportunity_id, "cambio_estado", f"{current.stage} → {stage}")
+    return _row_to_opp(row)
+
+
+# --- Actividad (timeline) de una oportunidad ------------------------------
+def log_activity(tenant_id: str, opportunity_id: str, kind: str, detail: str = "") -> None:
+    """Registra una acción sobre la oportunidad (sin datos personales del cliente)."""
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "insert into opportunity_activity (tenant_id, opportunity_id, kind, detail) "
+            "values (%s, %s, %s, %s)",
+            (tenant_id, opportunity_id, kind, detail),
+        )
+
+
+def get_activity(tenant_id: str, opportunity_id: str, limit: int = 50) -> list[dict[str, str]]:
+    """Timeline cronológico (más antiguo primero) de la oportunidad de ESTA empresa."""
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "select kind, detail, created_at from opportunity_activity "
+            "where tenant_id = %s and opportunity_id = %s "
+            "order by created_at asc, id asc limit %s",
+            (tenant_id, opportunity_id, limit),
+        )
+        rows = cur.fetchall()
+    return [{"kind": r["kind"], "detail": r["detail"], "created_at": str(r["created_at"])} for r in rows]
 
 
 def _row_to_opp(row: dict[str, Any]) -> OpportunitySummary:
