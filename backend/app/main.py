@@ -99,3 +99,10 @@ def update_opp(opportunity_id: str, body: OpportunityUpdate,
     if not updated:
         raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
     return updated
+
+
+@app.get("/sandbox/opportunities/{opportunity_id}/activity")
+def opp_activity(opportunity_id: str, company: str = Query("A")) -> list[dict]:
+    """Timeline de la oportunidad: qué se hizo y cuándo (creada, cambios de estado…)."""
+    tenant = _resolve_tenant(company)
+    return opportunities.get_activity(tenant, opportunity_id)
