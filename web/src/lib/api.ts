@@ -62,6 +62,12 @@ export interface ChatResponse {
   opportunity_id?: string | null;
 }
 
+export interface Activity {
+  kind: string;
+  detail: string;
+  created_at: string;
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -99,6 +105,9 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message, conversation_id: conversationId }),
     }),
+
+  activity: (company: Company, id: string) =>
+    request<Activity[]>(`/sandbox/opportunities/${id}/activity?company=${company}`),
 };
 
 export { ApiError };
