@@ -86,6 +86,17 @@ class OpportunityUpdate(BaseModel):
     next_action_at: Optional[str] = None
 
 
+# --- Agente con tool-calling (Etapa B) ------------------------------------
+class AgentChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+
+
+class AgentConfirmRequest(BaseModel):
+    pending_action: dict[str, Any]
+    conversation_id: Optional[str] = None
+
+
 class OpportunitySummary(BaseModel):
     id: str
     stage: str

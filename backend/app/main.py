@@ -10,11 +10,14 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .agent import orchestrator
+from .agent import orchestrator, tool_agent
+from .agent.tools import ToolContext
 from .config import settings
 from .db import db_healthcheck
 from .domain import catalog, opportunities
 from .schemas import (
+    AgentChatRequest,
+    AgentConfirmRequest,
     CatalogImportRequest,
     CatalogImportResult,
     ChatRequest,
@@ -106,3 +109,38 @@ def opp_activity(opportunity_id: str, company: str = Query("A")) -> list[dict]:
     """Timeline de la oportunidad: qué se hizo y cuándo (creada, cambios de estado…)."""
     tenant = _resolve_tenant(company)
     return opportunities.get_activity(tenant, opportunity_id)
+
+
+# --- Agente con tool-calling (Etapa B) ------------------------------------
+# El LLM elige las herramientas; el tenant sale del servidor y las ESCRITURAS
+# requieren confirmación humana (devuelven pending_action, no se ejecutan solas).
+@app.post("/sandbox/agent/chat")
+def agent_chat(req: AgentChatRequest, company: str = Query("A")) -> dict:
+    tenant = _resolve_tenant(company)
+    conv = opportunities.ensure_conversation(tenant, req.conversation_id)
+    ctx = ToolContext(tenant_id=tenant, conversation_id=conv)
+    registry = tool_agent.build_registry()
+    planner = tool_agent.make_planner(registry)
+    res = tool_agent.run_agent(ctx, req.message, registry, planner)
+    return {
+        "reply": res.reply,
+        "requires_human": res.requires_human,
+        "pending_action": res.pending_action,
+        "mode": getattr(planner, "mode", "mock"),
+        "conversation_id": conv,
+        "trace": [{"name": s.get("name"), "summary": s.get("summary"), "error": s.get("error")}
+                  for s in res.trace],
+    }
+
+
+@app.post("/sandbox/agent/confirm")
+def agent_confirm(req: AgentConfirmRequest, company: str = Query("A")) -> dict:
+    tenant = _resolve_tenant(company)
+    conv = opportunities.ensure_conversation(tenant, req.conversation_id)
+    ctx = ToolContext(tenant_id=tenant, conversation_id=conv)
+    registry = tool_agent.build_registry()
+    try:
+        result = tool_agent.confirm_action(ctx, req.pending_action, registry)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"reply": "Oportunidad registrada.", "opportunity_id": getattr(result, "id", None)}
