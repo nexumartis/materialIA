@@ -30,3 +30,10 @@ supabase/.branches/
 # --- Frontend web (Node) ---
 web/node_modules/
 web/dist/
+
+# --- Archify (sólo se versionan los .html y .json fuente en docs/diagramas) ---
+.archify/
+docs/diagramas/*.finalize.json
+docs/diagramas/*.finalize-summary.json
+docs/diagramas/*.browser-check.json
+docs/diagramas/*.delivery.json
