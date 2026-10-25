@@ -2,6 +2,7 @@
 que hacen, y se aplican reglas de seguimiento por etapa. Todo scoped por tenant."""
 from __future__ import annotations
 
+from app.agent import orchestrator
 from app.domain import opportunities
 from app.schemas import OpportunityInput
 
@@ -52,6 +53,17 @@ def test_activity_is_tenant_isolated():
     """Otra empresa no ve la actividad de una oportunidad ajena."""
     opp = _new_opp(TENANT_A)
     assert opportunities.get_activity(TENANT_B, opp.id) == []
+
+
+def test_agent_logs_stage_advance_across_turns():
+    """El agente, al acumular datos y avanzar el lead entre turnos, lo deja en el timeline."""
+    r1 = orchestrator.handle_chat(TENANT_A, "Hola, quiero una mampara corrediza negra")
+    conv = r1.conversation_id
+    orchestrator.handle_chat(TENANT_A, "Mide 1,60 x 1,90 y estoy en Tigre", conversation_id=conv)
+    transitions = [a for a in opportunities.get_activity(TENANT_A, r1.opportunity_id)
+                   if a["kind"] == "cambio_estado"]
+    assert transitions, "el agente debe registrar que avanzó el lead"
+    assert "para_cotizar" in transitions[-1]["detail"]
 
 
 def test_activity_endpoint_returns_timeline():

@@ -74,16 +74,20 @@ def get_conversation_requirements(tenant_id: str, conversation_id: Optional[str]
 def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySummary:
     """Una oportunidad por conversación: inserta la primera vez, luego actualiza la
     misma (acumula requisitos en vez de duplicar leads)."""
+    existing_id = None
+    existing_stage = None
+    row = None
     with tenant_tx(tenant_id) as cur:
-        existing_id = None
         if data.conversation_id:
             cur.execute(
-                "select id from opportunities where tenant_id = %s and conversation_id = %s "
+                "select id, stage from opportunities where tenant_id = %s and conversation_id = %s "
                 "order by created_at desc limit 1",
                 (tenant_id, data.conversation_id),
             )
             r = cur.fetchone()
-            existing_id = str(r["id"]) if r else None
+            if r:
+                existing_id = str(r["id"])
+                existing_stage = r["stage"]
 
         if existing_id:
             cur.execute(
@@ -100,7 +104,14 @@ def upsert_opportunity(tenant_id: str, data: OpportunityInput) -> OpportunitySum
                  json.dumps(data.price_snapshot) if data.price_snapshot else None,
                  tenant_id, existing_id),
             )
-            return _row_to_opp(cur.fetchone())
+            row = cur.fetchone()
+
+    if existing_id:
+        opp = _row_to_opp(row)
+        # El agente avanzó el lead entre turnos: queda en el timeline.
+        if data.stage != existing_stage:
+            log_activity(tenant_id, opp.id, "cambio_estado", f"{existing_stage} → {data.stage}")
+        return opp
     # sin conversación o sin oportunidad previa -> insertar
     return create_or_update_opportunity(tenant_id, data)
 
