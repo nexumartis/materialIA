@@ -7,6 +7,8 @@ segura del canal, no por este parámetro.
 """
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -163,3 +165,35 @@ def me(uid: str = Depends(current_uid)) -> MeResponse:
         cur.execute("select name from tenants where id = %s", (tenant,))
         row = cur.fetchone()
     return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"])
+
+
+@app.get("/app/opportunities", response_model=list[OpportunitySummary])
+def app_opps(uid: str = Depends(current_uid)) -> list[OpportunitySummary]:
+    with user_tx(uid) as (cur, tenant):
+        return opportunities._list(cur, tenant)
+
+
+@app.patch("/app/opportunities/{opportunity_id}", response_model=OpportunitySummary)
+def app_update_opp(opportunity_id: UUID, body: OpportunityUpdate,
+                   uid: str = Depends(current_uid)) -> OpportunitySummary:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            updated = opportunities._update(
+                cur, tenant, str(opportunity_id), stage=body.stage,
+                estimated_amount=body.estimated_amount, next_action_at=body.next_action_at)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not updated:
+            raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
+        # Auditoría sin PII: sólo qué campos se tocaron.
+        opportunities._audit(cur, tenant, "panel_opportunity_updated", updated.id,
+                             {"fields": sorted(body.model_dump(exclude_none=True))})
+        return updated
+
+
+@app.get("/app/opportunities/{opportunity_id}/activity")
+def app_opp_activity(opportunity_id: UUID, uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        if opportunities._get(cur, tenant, str(opportunity_id)) is None:
+            raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
+        return opportunities._activity(cur, tenant, str(opportunity_id))

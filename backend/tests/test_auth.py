@@ -7,28 +7,18 @@ import uuid
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.config import settings
 from app.main import app
+from jwt_helpers import KEY, OTHER_KEY, make_token
 
-_KEY = ec.generate_private_key(ec.SECP256R1())
-_OTHER_KEY = ec.generate_private_key(ec.SECP256R1())
 
 
 @pytest.fixture(autouse=True)
 def _test_jwks(monkeypatch):
     """Reemplaza la descarga del JWKS por la clave pública de prueba."""
-    monkeypatch.setattr(auth, "_signing_key", lambda token: _KEY.public_key())
-
-
-def make_token(sub: str, *, key=_KEY, alg: str = "ES256", exp_in: int = 600,
-               iss: str | None = None, aud: str = "authenticated") -> str:
-    claims = {"sub": sub, "aud": aud, "iss": iss or settings.supabase_issuer,
-              "exp": int(time.time()) + exp_in, "role": "authenticated"}
-    return jwt.encode(claims, key, algorithm=alg)
+    monkeypatch.setattr(auth, "_signing_key", lambda token: KEY.public_key())
 
 
 def bearer(token: str) -> dict:
@@ -41,7 +31,7 @@ def test_verify_jwt_returns_sub():
 
 
 @pytest.mark.parametrize("token", [
-    make_token(str(uuid.uuid4()), key=_OTHER_KEY),                 # firma de otra clave
+    make_token(str(uuid.uuid4()), key=OTHER_KEY),                 # firma de otra clave
     make_token(str(uuid.uuid4()), exp_in=-10),                     # vencido
     make_token(str(uuid.uuid4()), iss="https://otro.supabase.co/auth/v1"),
     make_token(str(uuid.uuid4()), aud="anon"),
