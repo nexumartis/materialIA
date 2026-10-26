@@ -110,3 +110,14 @@ Modalidad del socio con Claude Code. Objetivo pedido por el usuario: un vendedor
 - **Evidencia:** `PV_REQUIRE_DB=1 pytest -q` → **117 passed** (incluye pruebas del planner LLM con un modelo guionado). Conversación real contra `gpt-oss:120b` (Ollama Cloud): ~1,6–3 s por mensaje; entendió "1", "pico extarible", "no quiero sumar nada más" y "sacame la de dos llaves" recordando el turno anterior.
 - **Pendiente:** revisión en contexto fresco de este último tramo (retiro + planner LLM) antes del PR.
 - **Mensajes interactivos** (misma rama): tarjetas de producto con foto (ilustraciones propias en `backend/app/static/products`), detalle al tocar, botones de respuesta y botón de pago; el contenido se guarda en `messages.payload` y se traduce a imagen/lista/botones de WhatsApp (ver §10 del diseño). Cuenta de demo **local** `demo@canillas.local` vinculada a la empresa C (creada en el Supabase local, no versionada). `pytest` → **119 passed**.
+
+## Entrega: cada negocio arma su agente (26/10/2026, rama `feat/business-setup`)
+
+Decisiones del usuario: CRM propio del panel, catálogo por CSV + edición, "cómo habla" con plantilla por rubro + formulario. Diseño: §11 de [specs/2026-10-26-agente-ventas-design.md](superpowers/specs/2026-10-26-agente-ventas-design.md).
+
+- **Supabase remoto:** con autorización del usuario se aplicaron **0002, 0003 y 0004** (`supabase db push`; verificado con `supabase migration list`). El seed **no** se cargó en el remoto: la CLI sólo actualizó el hash del archivo; el remoto conserva datos sintéticos viejos de A/B. Falta cargar C/D (SQL editor del dashboard o `DATABASE_URL` remoto válido) y aplicar **0005**.
+- **Migración 0005:** `agent_profiles` (rubro, link público único, vendedor, tono, saludo, FAQ, reglas, envíos, horarios, medios de pago) y acceso del panel (`app_user`, permisiva + restrictiva) a catálogo, precios, stock, pedidos y perfil.
+- **Panel:** **Mi agente** (plantilla por rubro, formulario, link de la tienda), **Catálogo** (CSV con validación por fila, plantilla descargable, edición de precio/stock/estado; el stock nunca baja de lo apartado), **Pedidos** (avance preparación/despacho/entrega, alertas de revisión).
+- **Tienda pública** `#/tienda/<slug>`: el servidor resuelve el negocio por el slug; el agente usa el perfil (nombre, tono, FAQ, reglas) con IA y por reglas; lo que no está cargado lo deriva a una persona.
+- **Evidencia:** `PV_REQUIRE_DB=1 pytest -q` → **127 passed** (aislamiento del panel por RLS en catálogo/stock/pedidos/perfil, importación CSV, link único, tienda pública). Migración 0005 reaplicada dos veces. `npm run build` sin errores. Chrome: login con la cuenta demo → Mi agente, Catálogo y Pedidos; tienda pública en 390 px con tarjetas verticales.
+- **Pendiente:** revisión en contexto fresco de esta rama; Mercado Pago por negocio; CRM externos; WhatsApp.

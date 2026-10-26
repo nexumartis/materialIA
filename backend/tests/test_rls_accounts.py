@@ -129,7 +129,10 @@ def test_no_uid_sees_nothing(raw_conn, accounts):
 
 def test_app_user_has_no_access_to_out_of_scope_tables(raw_conn, accounts):
     uid_a, _ = accounts("A")
-    for table in ("catalog_items", "price_entries", "conversations", "messages", "demo_customers"):
+    # Catálogo, precios, stock, pedidos y perfil son del panel desde 0005; la conversación con el
+    # cliente y los avisos de pago, no.
+    for table in ("conversations", "messages", "demo_customers", "payment_notifications",
+                  "sim_provider_payments"):
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             _as_app_user(raw_conn, uid_a, f"select 1 from {table}")
 
@@ -151,3 +154,24 @@ def test_helpers_not_executable_by_postgrest_roles(raw_conn):
             for role in ("anon", "authenticated"):
                 cur.execute("select has_function_privilege(%s, %s, 'execute') as ok", (role, fn))
                 assert cur.fetchone()["ok"] is False, f"{role} puede ejecutar {fn}"
+
+
+def test_panel_catalog_stock_and_orders_are_isolated(raw_conn, accounts):
+    """Desde 0005 el panel ve catálogo/stock/pedidos/perfil: sólo los de su negocio."""
+    uid_a, t_a = accounts("A")
+    _, t_b = accounts("B")
+    with raw_conn.cursor() as cur:
+        cur.execute("insert into catalog_items (tenant_id, sku, name, category) values (%s, 'B-1', 'de B', 'x') "
+                    "returning id", (t_b,))
+        item_b = str(cur.fetchone()["id"])
+        cur.execute("insert into stock_levels (tenant_id, item_id, on_hand) values (%s, %s, 5)", (t_b, item_b))
+        cur.execute("insert into orders (tenant_id, status) values (%s, 'PAID')", (t_b,))
+    raw_conn.commit()
+    for table in ("catalog_items", "stock_levels", "orders", "agent_profiles"):
+        rows = _as_app_user(raw_conn, uid_a, f"select tenant_id from {table}")
+        assert all(str(r["tenant_id"]) == t_a for r in rows), table
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):   # RLS: no puede escribir en B
+        _as_app_user(raw_conn, uid_a,
+                     "insert into catalog_items (tenant_id, sku, name, category) values (%s, 'X', 'x', 'x')", (t_b,))
+    assert _as_app_user(raw_conn, uid_a,
+                        "update stock_levels set on_hand = 0 where item_id = %s returning 1", (item_b,)) == []

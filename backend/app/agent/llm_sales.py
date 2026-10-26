@@ -66,8 +66,14 @@ _TOOLS: list[dict[str, Any]] = [
          "cliente_dice_que_pago": {"type": "boolean"}}}},
 ]
 
-_SYSTEM = """Sos el vendedor virtual de "{negocio}" (asistente virtual; no te hagas pasar por una persona).
-Hablás en español rioplatense, cordial y breve. Texto plano: sin markdown, sin asteriscos ni tablas.
+_TONES = {
+    "cercano": "español rioplatense, con voseo, cálido y breve",
+    "profesional": "español rioplatense, con voseo, claro, prolijo y breve",
+    "formal": "español neutro, tratando de usted, cortés y breve",
+}
+
+_SYSTEM = """Sos {vendedor}, vendedor/a virtual de "{negocio}" (asistente virtual; no te hagas pasar por una persona).
+Hablás en {tono}. Texto plano: sin markdown, sin asteriscos ni tablas.
 
 Reglas que no se rompen:
 - Precios, stock, disponibilidad, pedidos y pagos SÓLO salen de las herramientas. Nunca inventes
@@ -81,8 +87,24 @@ Reglas que no se rompen:
   natural, pero sin cambiar ni agregar números, productos ni links). Si mostrás opciones,
   usá exactamente la numeración que devolvió la herramienta.
 
+Lo que el negocio informa de sí mismo (podés repetirlo tal cual; si algo no está acá, decí que
+lo confirma una persona del equipo):
+{perfil}
+
 Contexto actual de la conversación:
 {contexto}"""
+
+
+def _profile_text(profile: dict[str, Any]) -> str:
+    lines = []
+    for label, key in (("Envíos", "shipping"), ("Horarios", "hours"), ("Medios de pago", "payment_methods")):
+        if profile.get(key):
+            lines.append(f"{label}: {profile[key]}")
+    for item in profile.get("faq") or []:
+        lines.append(f"P: {item['q']} R: {item['a']}")
+    for rule in profile.get("rules") or []:
+        lines.append(f"Regla del negocio: {rule}")
+    return "\n".join(lines) or "(sin datos cargados)"
 
 
 def default_planner() -> Optional[Planner]:
@@ -211,8 +233,12 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
     """Bucle de herramientas. Devuelve la respuesta, o None si el modelo no está disponible y
     todavía no ejecutó nada (entonces responde el planner por reglas)."""
     history = opportunities.get_recent_messages(turn.tenant, conversation_id, limit=HISTORY)
+    profile = turn.profile
+    perfil = _profile_text(profile)
     messages: list[dict[str, Any]] = [{"role": "system", "content": _SYSTEM.format(
-        negocio=_business_name(turn.tenant), contexto=_context(turn))}] + history
+        vendedor=profile.get("seller_name") or "el asistente", negocio=_business_name(turn.tenant),
+        tono=_TONES.get(profile.get("tone") or "cercano", _TONES["cercano"]),
+        perfil=perfil, contexto=_context(turn))}] + history
     if not history or history[-1].get("content") != message:
         messages.append({"role": "user", "content": message})
     outputs: list[str] = []
@@ -245,7 +271,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
         return fallback
     reply = reply.replace("**", "").replace("__", "")
     cart = orders.get_cart(turn.tenant, turn.conv)
-    evidence = "\n".join(outputs + [_context(turn), turn.cart_text(cart)])
+    evidence = "\n".join(outputs + [_context(turn), turn.cart_text(cart), perfil])
     if cart:
         evidence += "\n" + " ".join(_money(it["unit_price"]) for it in cart["items"])
     if not _verified(reply, evidence):

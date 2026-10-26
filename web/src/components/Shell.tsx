@@ -3,7 +3,7 @@ import type { Health } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "venta" | "login" | "signup";
+export type Section = "oportunidades" | "pedidos" | "catalogo" | "agente" | "venta" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -13,7 +13,10 @@ interface Props {
 
 const TITLES: Record<Section, string> = {
   oportunidades: "Oportunidades",
-  venta: "Agente de ventas",
+  pedidos: "Pedidos",
+  catalogo: "Catálogo",
+  agente: "Mi agente",
+  venta: "Demo del agente",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -100,12 +103,36 @@ export function Shell({ health, active, children }: Props) {
               <IconList /> Oportunidades
             </a>
             <a
+              className={active === "pedidos" ? "active" : ""}
+              href="#/pedidos"
+              aria-current={active === "pedidos" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <IconList /> Pedidos
+            </a>
+            <a
+              className={active === "catalogo" ? "active" : ""}
+              href="#/catalogo"
+              aria-current={active === "catalogo" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <IconDoc /> Catálogo
+            </a>
+            <a
+              className={active === "agente" ? "active" : ""}
+              href="#/agente"
+              aria-current={active === "agente" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <IconChat /> Mi agente
+            </a>
+            <a
               className={active === "venta" ? "active" : ""}
               href="#/venta"
               aria-current={active === "venta" ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
-              <IconChat /> Agente de ventas
+              <IconChat /> Demo del agente
             </a>
             <a href={`${apiBase}/docs`} target="_blank" rel="noopener noreferrer">
               <IconDoc /> API · Swagger

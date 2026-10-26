@@ -159,3 +159,26 @@ Las **plantillas aprobadas** sólo hacen falta para mensajes que inicia el negoc
 ventana de 24 h (recuperación de carritos, avisos de despacho días después). Las fotos de la
 demo son ilustraciones propias servidas en `/static/products`; los canales reciben URL absoluta
 (`PUBLIC_BASE_URL`), que en WhatsApp debe ser pública.
+
+## 11. Etapa: cada negocio arma su agente (rama `feat/business-setup`)
+
+Decisiones del usuario (26/10/2026): CRM propio del panel primero; catálogo y stock por CSV +
+edición en el panel; "cómo habla" con plantilla por rubro + formulario.
+
+Recorrido del dueño: registrarse → **Mi agente** (elige rubro, se precargan nombre del vendedor,
+tono, saludo, preguntas frecuentes y reglas; ajusta y guarda; obtiene su **link de tienda**) →
+**Catálogo** (sube CSV con productos, precios, stock y fotos; edita precio/stock/activo) →
+comparte el link → los clientes conversan con su agente → **Oportunidades** y **Pedidos** en el
+panel (avanza preparación/despacho/entrega).
+
+- `agent_profiles` (uno por negocio): rubro, `public_slug` único, nombre del vendedor, tono,
+  saludo, FAQ, reglas, envíos, horarios, medios de pago. El agente lo lee en cada turno; las FAQ
+  y reglas son datos que el negocio afirma, y el control de respuestas los acepta como evidencia.
+- Link público `/#/tienda/<slug>`: el servidor resuelve el negocio por el slug (identificador
+  público, como la URL de una tienda); nunca por un tenant enviado por el cliente.
+- Panel `/app/*` con RLS efectivo (`app_user`): perfil, catálogo, importación CSV, pedidos.
+- CSV (encabezados en español): `sku, nombre, categoria, marca, precio, stock, descripcion,
+  foto_url, color, ambiente, tipo, a_pedido, activo`. Validación por fila con errores
+  devueltos; precio distinto ⇒ nuevo precio vigente desde hoy; stock ⇒ `on_hand` (nunca menor
+  que lo apartado) con movimiento `adjust`.
+- Fuera de esta etapa: Mercado Pago por negocio (OAuth), CRM externos, WhatsApp.

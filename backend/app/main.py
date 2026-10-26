@@ -11,7 +11,9 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+import psycopg
+
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,7 +22,7 @@ from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, user_tx
-from .domain import catalog, opportunities, orders
+from .domain import agent_profile, backoffice, catalog, opportunities, orders
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
 from .schemas import (
@@ -289,3 +291,140 @@ def app_opp_activity(opportunity_id: UUID, uid: str = Depends(current_uid)) -> l
         if opportunities._get(cur, tenant, str(opportunity_id)) is None:
             raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
         return opportunities._activity(cur, tenant, str(opportunity_id))
+
+
+# --- Panel: el negocio arma su agente ---------------------------------------
+def _business_name(cur, tenant: str) -> str:
+    cur.execute("select name from tenants where id = %s", (tenant,))
+    return cur.fetchone()["name"]
+
+
+@app.get("/app/agent-templates")
+def app_agent_templates(uid: str = Depends(current_uid)) -> list[dict]:
+    return [{"key": k, "label": t["label"]} for k, t in agent_profile.TEMPLATES.items()]
+
+
+@app.get("/app/agent-profile")
+def app_get_profile(uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        return agent_profile._ensure(cur, tenant, _business_name(cur, tenant))
+
+
+@app.put("/app/agent-profile")
+def app_put_profile(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    """Guarda el formulario. Con `apply_template`, precarga la plantilla del rubro elegido."""
+    with user_tx(uid) as (cur, tenant):
+        agent_profile._ensure(cur, tenant, _business_name(cur, tenant))
+        data = dict(body)
+        if data.pop("apply_template", False):
+            data = {**agent_profile.template_profile(data.get("business_type", "generico"),
+                                                     _business_name(cur, tenant)), **{
+                k: v for k, v in data.items() if k == "public_slug"}}
+        try:
+            changes = agent_profile.validate(data)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        # El link es único entre TODOS los negocios; bajo RLS no se ven los ajenos, así que lo
+        # decide la restricción única de la base.
+        try:
+            with cur.connection.transaction():
+                profile = agent_profile._update(cur, tenant, changes)
+        except psycopg.errors.UniqueViolation:
+            raise HTTPException(status_code=409, detail="Ese link ya lo usa otro negocio.")
+        opportunities._audit(cur, tenant, "agent_profile_updated", None, {"fields": sorted(changes)})
+        return profile
+
+
+@app.get("/app/catalog")
+def app_catalog(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return backoffice.list_catalog(cur, tenant)
+
+
+@app.patch("/app/catalog/{item_id}")
+def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            item = backoffice.update_product(
+                cur, tenant, str(item_id),
+                price=float(body["price"]) if body.get("price") is not None else None,
+                stock=int(body["stock"]) if body.get("stock") is not None else None,
+                active=bool(body["active"]) if body.get("active") is not None else None)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if item is None:
+            raise HTTPException(status_code=404, detail="Producto no encontrado.")
+        opportunities._audit(cur, tenant, "catalog_item_updated", str(item_id),
+                             {"fields": sorted(k for k in ("price", "stock", "active") if body.get(k) is not None)})
+        return item
+
+
+@app.post("/app/catalog/import")
+def app_import_catalog(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    """CSV como texto (el front lo lee del archivo). Devuelve creados, actualizados y errores por fila."""
+    text = str(body.get("csv") or "")
+    if len(text) > 2_000_000:
+        raise HTTPException(status_code=413, detail="El archivo es demasiado grande (máx. 2 MB).")
+    with user_tx(uid) as (cur, tenant):
+        try:
+            result = backoffice.import_csv(cur, tenant, text)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        opportunities._audit(cur, tenant, "catalog_imported", None,
+                             {"created": result["created"], "updated": result["updated"],
+                              "errors": len(result["errors"])})
+        return result
+
+
+@app.get("/app/orders")
+def app_orders(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return backoffice.list_orders(cur, tenant)
+
+
+@app.post("/app/orders/{order_id}/status")
+def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            order = backoffice.advance_order(cur, tenant, str(order_id), status)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if order is None:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+        opportunities._audit(cur, tenant, "order_status_changed", str(order_id), {"status": status})
+        return order
+
+
+# --- Link público del agente de cada negocio ---------------------------------
+# El negocio sale del slug (identificador público de la tienda) resuelto en el servidor.
+def _store(slug: str) -> dict:
+    store = agent_profile.tenant_by_slug(slug)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Tienda no encontrada.")
+    return store
+
+
+@app.get("/public/{slug}")
+def public_store(slug: str) -> dict:
+    store = _store(slug)
+    profile = agent_profile.for_agent(store["tenant_id"]) or {}
+    return {"name": store["name"], "seller_name": profile.get("seller_name"),
+            "greeting": profile.get("greeting"), "payments": settings.payment_provider}
+
+
+@app.post("/public/{slug}/chat")
+def public_chat(slug: str, req: ChatRequest) -> dict:
+    store = _store(slug)
+    res = sales_agent.handle_sales_message(store["tenant_id"], req.message, req.conversation_id)
+    return {"reply": res.reply, "conversation_id": res.conversation_id, "mode": res.mode,
+            "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
+            "payment": res.payment, "trace": res.trace, "ui": res.ui}
+
+
+@app.get("/public/{slug}/conversations/{conversation_id}")
+def public_conversation(slug: str, conversation_id: UUID) -> dict:
+    store = _store(slug)
+    conv = str(conversation_id)
+    return {"messages": opportunities.conversation_messages(store["tenant_id"], conv),
+            "cart": orders.get_cart(store["tenant_id"], conv),
+            "orders": orders.conversation_orders(store["tenant_id"], conv)}

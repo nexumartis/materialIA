@@ -317,13 +317,17 @@ def expire_reservations(limit: int = 100) -> int:
 def advance_status(tenant_id: str, order_id: str, new_status: str) -> Optional[dict[str, Any]]:
     """Avance operativo (preparación/despacho/entrega) por parte del negocio."""
     with tenant_tx(tenant_id) as cur:
-        row = _fetch(cur, tenant_id, order_id, lock=True)
-        if row is None:
-            return None
-        if new_status not in FULFILLMENT_NEXT.get(row["status"], set()):
-            raise ValueError(f"transición no permitida: {row['status']} → {new_status}")
-        cur.execute(
-            "update orders set status = %s, updated_at = now() where tenant_id = %s and id = %s",
-            (new_status, tenant_id, order_id),
-        )
-        return _view(cur, _fetch(cur, tenant_id, order_id))
+        return _advance(cur, tenant_id, order_id, new_status)
+
+
+def _advance(cur: Any, tenant_id: str, order_id: str, new_status: str) -> Optional[dict[str, Any]]:
+    row = _fetch(cur, tenant_id, order_id, lock=True)
+    if row is None:
+        return None
+    if new_status not in FULFILLMENT_NEXT.get(row["status"], set()):
+        raise ValueError(f"transición no permitida: {row['status']} → {new_status}")
+    cur.execute(
+        "update orders set status = %s, updated_at = now() where tenant_id = %s and id = %s",
+        (new_status, tenant_id, order_id),
+    )
+    return _view(cur, _fetch(cur, tenant_id, order_id))
