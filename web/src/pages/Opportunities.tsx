@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Company, type Opportunity, type Stage } from "../lib/api";
+import { ApiError, api, type Opportunity, type Stage } from "../lib/api";
+import { useSession } from "../lib/session";
 import { STAGES, dateOnly, fmtDate, isOverdue, pedidoText } from "../lib/format";
 import { ActivityDrawer } from "../components/ActivityDrawer";
 
-export function Opportunities({ company }: { company: Company }) {
+export function Opportunities() {
+  const { me } = useSession();
   const [list, setList] = useState<Opportunity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlyOver, setOnlyOver] = useState(false);
@@ -13,18 +15,20 @@ export function Opportunities({ company }: { company: Company }) {
     setList(null);
     setError(null);
     api
-      .opportunities(company)
+      .opportunities()
       .then((d) => {
         setList(d);
         setStamp(
           new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
         );
       })
-      .catch(() => {
+      .catch((e) => {
+        // 401 lo maneja la sesión (vuelve al login); el resto es error de conexión.
+        if (e instanceof ApiError && e.status === 401) return;
         setList([]);
         setError("No pude conectar con la API.");
       });
-  }, [company]);
+  }, []);
 
   useEffect(load, [load]);
 
@@ -98,9 +102,7 @@ export function Opportunities({ company }: { company: Company }) {
 
       {!error && (
         <div className="toolbar">
-          <span className="count">
-            Empresa {company} · {company === "A" ? "Cristalería" : "Aberturas"}
-          </span>
+          <span className="count">{me?.business_name}</span>
           <span className="right count">
             {list === null ? "" : `${view.length} ${view.length === 1 ? "oportunidad" : "oportunidades"}`}
           </span>
@@ -109,7 +111,7 @@ export function Opportunities({ company }: { company: Company }) {
 
       <div className="tablewrap">
         <table>
-          <caption className="sr">Oportunidades por empresa</caption>
+          <caption className="sr">Oportunidades de tu negocio</caption>
           <thead>
             <tr>
               <th scope="col">Fecha</th>
@@ -153,32 +155,30 @@ export function Opportunities({ company }: { company: Company }) {
                   <div className="state" role="status">
                     {onlyOver
                       ? "No hay oportunidades con seguimiento vencido."
-                      : "Todavía no hay oportunidades para esta empresa. Generá una desde el Chat demo."}
+                      : "Todavía no hay oportunidades. Van a aparecer acá cuando tu negocio reciba consultas por un canal conectado."}
                   </div>
                 </td>
               </tr>
             ) : (
               view.map((o) => (
-                <Row key={o.id} o={o} company={company} onSaved={onSaved} onOpen={setSelected} />
+                <Row key={o.id} o={o} onSaved={onSaved} onOpen={setSelected} />
               ))
             )}
           </tbody>
         </table>
       </div>
     </div>
-    <ActivityDrawer opp={selected} company={company} onClose={() => setSelected(null)} />
+    <ActivityDrawer opp={selected} onClose={() => setSelected(null)} />
     </>
   );
 }
 
 function Row({
   o,
-  company,
   onSaved,
   onOpen,
 }: {
   o: Opportunity;
-  company: Company;
   onSaved: (u: Opportunity) => void;
   onOpen: (o: Opportunity) => void;
 }) {
@@ -199,7 +199,7 @@ function Row({
     if (amount !== "") body.estimated_amount = Number(amount);
     if (date !== "") body.next_action_at = date;
     try {
-      await api.patchOpportunity(company, o.id, body);
+      await api.patchOpportunity(o.id, body);
       setMsg({ text: "Guardado", kind: "ok" });
       setFlash(true);
       setTimeout(() => setFlash(false), 1100);
