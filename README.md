@@ -1,3 +1,6 @@
+> **Documentación vigente:** empezar por [el estado actual](docs/current-state.md) y [la guía para incorporar al socio](docs/ONBOARDING.md).
+> El contenido que sigue conserva la puesta en marcha histórica de TAREA 01; contrastar su vigencia con el estado y la revisión del repositorio.
+
 # Presupuesto Vivo — MVP (corte vertical, TAREA 01)
 
 Convierte consultas de compra en **solicitudes de cotización calificadas** y
