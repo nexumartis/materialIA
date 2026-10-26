@@ -23,7 +23,12 @@ export function Signup() {
         const { data, error } = await supabase!.auth.signUp({
           email,
           password,
-          options: { data: { business_name: business_name.trim() } },
+          options: {
+            data: { business_name: business_name.trim() },
+            // El link del correo de confirmación vuelve a este panel (debe estar en las
+            // Redirect URLs permitidas del proyecto; si no, Supabase usa el Site URL).
+            emailRedirectTo: `${window.location.origin}/#/oportunidades`,
+          },
         });
         if (error) throw new Error(authErrorMessage(error.message));
         if (!data.session) {

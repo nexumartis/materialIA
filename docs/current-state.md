@@ -60,8 +60,13 @@ Modalidad del socio con Claude Code. Implementa el [plan v2](superpowers/plans/2
 
 **Revisión:** subagente en contexto fresco y sólo lectura (mismo modelo y cuenta: no acredita diversidad). Sin bloqueantes; se corrigieron 6 hallazgos (503 en caída del JWKS, test de que `user_tx` corre como `app_user`, FK compuesta, EXECUTE de anon/authenticated, recarga del panel en cada refresh de token, test vacuo). Pendiente revisión cruzada del otro socio.
 
+**Verificación del remoto (26/10/2026, sólo lectura, PR #8 ya mergeado en `main` @ `e69358b`):**
+- `supabase migration list --linked`: remoto tiene sólo **0001**; faltan **0002** y **0003**. `db push --dry-run` aplicaría ambas (el dry-run no ejecuta SQL: no valida `grant app_user to postgres` en hosted; en local `postgres` tampoco es superusuario y funciona).
+- JWKS remoto: **ES256 (EC)** → compatible con la verificación del backend sin cambios.
+- Auth remoto: `mailer_autoconfirm=false` (exige confirmar el correo) y signup habilitado. El signup del front manda `emailRedirectTo` al panel; agregar esa URL a las Redirect URLs del proyecto.
+- Aplicar 0002+0003 al remoto requiere autorización expresa (`supabase db push`).
+
 **Pendientes / riesgos aceptados:**
-- Remoto **no tocado ni verificado**: si tiene 0002, algoritmo de firma del JWKS, `enable_confirmations`, y si `grant app_user to postgres` funciona en hosted (probar con `supabase db push --dry-run`). Requiere login nexumartis y autorización expresa.
 - `set local role` no es barrera ante inyección SQL en el backend (`reset role` vuelve a postgres). Hoy todo el SQL es parametrizado; a futuro, rol de login propio para el panel.
 - El trigger crea negocio también para altas sin confirmar: con la anon key cualquiera puede crear negocios vacíos. Sin rate limit ni limpieza.
 - Cambio menor en sandbox: `PATCH` con `stage` inválido sobre id inexistente devuelve 400 (antes 404); get/update/actividad ahora en una sola transacción.
