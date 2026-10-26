@@ -47,6 +47,26 @@ Las [notas iniciales del orquestador, registradas el 26/10/2026](reviews/2026-10
 2. Reducir y corregir el plan al alcance aprobado de cuentas y aislamiento, separando catálogo; contrastar identidad, acceso por empresa, seguridad y contratos con el código y el esquema vigentes. Revalidar el desfase observado de migraciones.
 3. Resolver las decisiones técnicas pendientes y producir la especificación, criterios de aceptación y briefs para los implementadores y revisores de cada modalidad.
 
+## Entrega: cuentas del propietario + aislamiento (26/10/2026, rama `feat/accounts-multitenant`)
+
+Modalidad del socio con Claude Code. Implementa el [plan v2](superpowers/plans/2026-10-26-cuentas-multitenant-v2.md), que corrige el v1 con las cinco notas del orquestador y se ciñe al alcance aprobado (sin catálogo, invitaciones ni roles). La especificación referenciada está en [specs/2026-10-25-cuentas-multitenant-design.md](superpowers/specs/2026-10-25-cuentas-multitenant-design.md); el plan v2 reemplaza sus secciones de catálogo.
+
+**Hecho (local):**
+- Migración [0003_accounts.sql](../supabase/migrations/0003_accounts.sql): `memberships`, rol `app_user` sin BYPASSRLS, grants mínimos (sin escritura en `memberships`/`tenants`), políticas permisivas + restrictivas `to app_user` (la GUC del sandbox no amplía acceso), RLS en `tenants`/`audit_events` (antes expuestas a anon/authenticated), FK compuesta de actividad, trigger de provisioning en el signup.
+- Backend: JWT verificado por JWKS (local firma ES256; HS256/`none` rechazados), `user_tx` (una transacción por request como `app_user`), `/app/me` y `/app/opportunities*`. 401 sin sesión válida, 403 sin negocio, 503 si el JWKS no responde. Sandbox y agente sin cambios de contrato.
+- Front: registro, login/logout, panel por sesión; el chat demo A/B sigue sin cuenta.
+
+**Evidencia:** `PV_REQUIRE_DB=1 pytest -q` → **84 passed, 0 skipped** contra Postgres local con 0001–0003. Migración reaplicada dos veces sin error. Signup real contra Supabase Auth local → `/app/me` 200 con el negocio; token adulterado → 401. `npm run build` sin errores. Recorrido en Chrome (registro → panel vacío → logout → login con clave errónea muestra error → login → panel; chat demo sin sesión) completo.
+
+**Revisión:** subagente en contexto fresco y sólo lectura (mismo modelo y cuenta: no acredita diversidad). Sin bloqueantes; se corrigieron 6 hallazgos (503 en caída del JWKS, test de que `user_tx` corre como `app_user`, FK compuesta, EXECUTE de anon/authenticated, recarga del panel en cada refresh de token, test vacuo). Pendiente revisión cruzada del otro socio.
+
+**Pendientes / riesgos aceptados:**
+- Remoto **no tocado ni verificado**: si tiene 0002, algoritmo de firma del JWKS, `enable_confirmations`, y si `grant app_user to postgres` funciona en hosted (probar con `supabase db push --dry-run`). Requiere login nexumartis y autorización expresa.
+- `set local role` no es barrera ante inyección SQL en el backend (`reset role` vuelve a postgres). Hoy todo el SQL es parametrizado; a futuro, rol de login propio para el panel.
+- El trigger crea negocio también para altas sin confirmar: con la anon key cualquiera puede crear negocios vacíos. Sin rate limit ni limpieza.
+- Cambio menor en sandbox: `PATCH` con `stage` inválido sobre id inexistente devuelve 400 (antes 404); get/update/actividad ahora en una sola transacción.
+- Configurar `SUPABASE_URL` en `backend/.env` y `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` en `web/.env` para usar el panel.
+
 ## Codebase Memory
 
 La revisión indexada y sus metadatos de **materialIA** se consultan en [.codebase-memory/artifact.json](../.codebase-memory/artifact.json), cuyo campo `commit` identifica la revisión fuente efectiva. El cierre incluye persistencia del grafo mediante Codebase Memory después del commit documental. El commit que empaqueta el manifiesto y el grafo puede ser posterior al commit fuente indexado: esa diferencia no acredita cambios de producto ni que el índice contenga su propia actualización. Verificar el manifiesto al retomar y refrescar el índice si cambiaron las fuentes.

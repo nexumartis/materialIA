@@ -141,27 +141,39 @@ def create_or_update_opportunity(tenant_id: str, data: OpportunityInput) -> Oppo
     return opp
 
 
+# Cada operación tiene una versión interna que recibe el cursor (`_list`, `_get`,
+# `_update`, `_log_activity`, `_activity`, `_audit`): el panel autenticado las compone
+# dentro de UNA transacción `user_tx` (rol app_user + RLS). Las funciones públicas
+# conservan su firma y abren `tenant_tx` para el sandbox y el agente.
+_OPP_COLUMNS = ("id, stage, requires_human_quote, estimated_amount, "
+                "requirements_json, created_at, next_action_at")
+
+
 def list_opportunities(tenant_id: str, limit: int = 50) -> list[OpportunitySummary]:
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            "select id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at, next_action_at from opportunities "
-            "where tenant_id = %s order by created_at desc limit %s",
-            (tenant_id, limit),
-        )
-        rows = cur.fetchall()
-    return [_row_to_opp(r) for r in rows]
+        return _list(cur, tenant_id, limit)
+
+
+def _list(cur: Any, tenant_id: str, limit: int = 50) -> list[OpportunitySummary]:
+    cur.execute(
+        f"select {_OPP_COLUMNS} from opportunities "
+        "where tenant_id = %s order by created_at desc limit %s",
+        (tenant_id, limit),
+    )
+    return [_row_to_opp(r) for r in cur.fetchall()]
 
 
 def get_opportunity(tenant_id: str, opportunity_id: str) -> Optional[OpportunitySummary]:
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            "select id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at, next_action_at from opportunities "
-            "where tenant_id = %s and id = %s",
-            (tenant_id, opportunity_id),
-        )
-        row = cur.fetchone()
+        return _get(cur, tenant_id, opportunity_id)
+
+
+def _get(cur: Any, tenant_id: str, opportunity_id: str) -> Optional[OpportunitySummary]:
+    cur.execute(
+        f"select {_OPP_COLUMNS} from opportunities where tenant_id = %s and id = %s",
+        (tenant_id, opportunity_id),
+    )
+    row = cur.fetchone()
     return _row_to_opp(row) if row else None
 
 
@@ -171,18 +183,26 @@ ALLOWED_STAGES = {"nueva", "datos_incompletos", "para_cotizar", "cotizada", "seg
 def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str] = None,
                        estimated_amount: Optional[float] = None,
                        next_action_at: Optional[str] = None) -> Optional[OpportunitySummary]:
+    with tenant_tx(tenant_id) as cur:
+        return _update(cur, tenant_id, opportunity_id, stage=stage,
+                       estimated_amount=estimated_amount, next_action_at=next_action_at)
+
+
+def _update(cur: Any, tenant_id: str, opportunity_id: str, stage: Optional[str] = None,
+            estimated_amount: Optional[float] = None,
+            next_action_at: Optional[str] = None) -> Optional[OpportunitySummary]:
     """Actualiza estado, importe y/o fecha de seguimiento de una oportunidad de ESTA empresa.
     Registra la transición de estado y aplica la regla: una oportunidad cerrada no tiene
     seguimiento pendiente (se limpia `next_action_at`)."""
-    current = get_opportunity(tenant_id, opportunity_id)
+    if stage is not None and stage not in ALLOWED_STAGES:
+        raise ValueError(f"stage inválido: {stage}")
+    current = _get(cur, tenant_id, opportunity_id)
     if current is None:
         return None
 
     sets, params = [], {"tenant": tenant_id, "id": opportunity_id}
     stage_changed = stage is not None and stage != current.stage
     if stage is not None:
-        if stage not in ALLOWED_STAGES:
-            raise ValueError(f"stage inválido: {stage}")
         sets.append("stage = %(stage)s")
         params["stage"] = stage
     if estimated_amount is not None:
@@ -197,19 +217,16 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
     if not sets:
         return current
     sets.append("updated_at = now()")
-    with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            f"update opportunities set {', '.join(sets)} "
-            "where tenant_id = %(tenant)s and id = %(id)s "
-            "returning id, stage, requires_human_quote, estimated_amount, "
-            "requirements_json, created_at, next_action_at",
-            params,
-        )
-        row = cur.fetchone()
+    cur.execute(
+        f"update opportunities set {', '.join(sets)} "
+        f"where tenant_id = %(tenant)s and id = %(id)s returning {_OPP_COLUMNS}",
+        params,
+    )
+    row = cur.fetchone()
     if row is None:
         return None
     if stage_changed:
-        log_activity(tenant_id, opportunity_id, "cambio_estado", f"{current.stage} → {stage}")
+        _log_activity(cur, tenant_id, opportunity_id, "cambio_estado", f"{current.stage} → {stage}")
     return _row_to_opp(row)
 
 
@@ -217,24 +234,32 @@ def update_opportunity(tenant_id: str, opportunity_id: str, stage: Optional[str]
 def log_activity(tenant_id: str, opportunity_id: str, kind: str, detail: str = "") -> None:
     """Registra una acción sobre la oportunidad (sin datos personales del cliente)."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            "insert into opportunity_activity (tenant_id, opportunity_id, kind, detail) "
-            "values (%s, %s, %s, %s)",
-            (tenant_id, opportunity_id, kind, detail),
-        )
+        _log_activity(cur, tenant_id, opportunity_id, kind, detail)
+
+
+def _log_activity(cur: Any, tenant_id: str, opportunity_id: str, kind: str, detail: str = "") -> None:
+    cur.execute(
+        "insert into opportunity_activity (tenant_id, opportunity_id, kind, detail) "
+        "values (%s, %s, %s, %s)",
+        (tenant_id, opportunity_id, kind, detail),
+    )
 
 
 def get_activity(tenant_id: str, opportunity_id: str, limit: int = 50) -> list[dict[str, str]]:
     """Timeline cronológico (más antiguo primero) de la oportunidad de ESTA empresa."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            "select kind, detail, created_at from opportunity_activity "
-            "where tenant_id = %s and opportunity_id = %s "
-            "order by created_at asc, id asc limit %s",
-            (tenant_id, opportunity_id, limit),
-        )
-        rows = cur.fetchall()
-    return [{"kind": r["kind"], "detail": r["detail"], "created_at": str(r["created_at"])} for r in rows]
+        return _activity(cur, tenant_id, opportunity_id, limit)
+
+
+def _activity(cur: Any, tenant_id: str, opportunity_id: str, limit: int = 50) -> list[dict[str, str]]:
+    cur.execute(
+        "select kind, detail, created_at from opportunity_activity "
+        "where tenant_id = %s and opportunity_id = %s "
+        "order by created_at asc, id asc limit %s",
+        (tenant_id, opportunity_id, limit),
+    )
+    return [{"kind": r["kind"], "detail": r["detail"], "created_at": str(r["created_at"])}
+            for r in cur.fetchall()]
 
 
 def _row_to_opp(row: dict[str, Any]) -> OpportunitySummary:
@@ -253,8 +278,13 @@ def _row_to_opp(row: dict[str, Any]) -> OpportunitySummary:
 def audit(tenant_id: Optional[str], event_type: str, entity_id: Optional[str] = None,
           metadata: Optional[dict[str, Any]] = None) -> None:
     with tenant_tx(tenant_id or "00000000-0000-0000-0000-000000000000") as cur:
-        cur.execute(
-            "insert into audit_events (tenant_id, event_type, entity_id, metadata_redacted) "
-            "values (%s, %s, %s, %s::jsonb)",
-            (tenant_id, event_type, entity_id, json.dumps(metadata or {})),
-        )
+        _audit(cur, tenant_id, event_type, entity_id, metadata)
+
+
+def _audit(cur: Any, tenant_id: Optional[str], event_type: str, entity_id: Optional[str] = None,
+           metadata: Optional[dict[str, Any]] = None) -> None:
+    cur.execute(
+        "insert into audit_events (tenant_id, event_type, entity_id, metadata_redacted) "
+        "values (%s, %s, %s, %s::jsonb)",
+        (tenant_id, event_type, entity_id, json.dumps(metadata or {})),
+    )

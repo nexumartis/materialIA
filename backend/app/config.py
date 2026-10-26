@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
     app_env: str = "local"
 
+    # --- Supabase Auth (panel autenticado) ---
+    # URL del proyecto (no es secreto). Local: `supabase start`. Los JWT se verifican con
+    # las claves públicas del JWKS de este proyecto.
+    supabase_url: str = "http://127.0.0.1:54321"
+
     # Empresa por defecto del simulador (Empresa A sintética del seed).
     demo_default_tenant: str = "0000000a-0000-0000-0000-00000000000a"
 
@@ -33,6 +38,14 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     ollama_api_key: str | None = None
+
+    @property
+    def supabase_issuer(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+
+    @property
+    def supabase_jwks_url(self) -> str:
+        return f"{self.supabase_issuer}/.well-known/jwks.json"
 
     @property
     def llm_is_live(self) -> bool:

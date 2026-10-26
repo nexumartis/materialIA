@@ -1,6 +1,9 @@
 // Cliente de la API FastAPI de Presupuesto Vivo.
-// La base se toma de VITE_API_BASE (ver .env.example); nunca se hardcodea el tenant:
-// la empresa va como query param y el backend resuelve el tenant real.
+// La base se toma de VITE_API_BASE (ver .env.example); nunca se hardcodea el tenant.
+// - Panel (/app/*): va con `Authorization: Bearer <jwt>`; el backend deriva el negocio
+//   de la sesión. Ninguna llamada /app manda empresa.
+// - Demo sin cuenta (/sandbox/chat): la empresa A/B va como query param y el backend
+//   la resuelve contra su allowlist.
 
 export const API_BASE: string =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ||
@@ -68,11 +71,26 @@ export interface Activity {
   created_at: string;
 }
 
+export interface Me {
+  user_id: string;
+  tenant_id: string;
+  business_name: string;
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+let getToken: () => string | null = () => null;
+let onUnauthorized: () => void = () => {};
+
+/** Lo registra la sesión: de dónde sale el token y qué hacer ante un 401. */
+export function setAuth(token: () => string | null, unauthorized: () => void): void {
+  getToken = token;
+  onUnauthorized = unauthorized;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -86,14 +104,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Llamada al panel autenticado. Sin token o con 401 => se cierra la sesión. */
+async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  if (!token) {
+    onUnauthorized();
+    throw new ApiError(401, "Sesión no iniciada.");
+  }
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  try {
+    return await request<T>(path, { ...init, headers });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) onUnauthorized();
+    throw e;
+  }
+}
+
 export const api = {
   health: () => request<Health>("/health"),
 
-  opportunities: (company: Company) =>
-    request<Opportunity[]>(`/sandbox/opportunities?company=${company}`),
+  me: () => authed<Me>("/app/me"),
 
-  patchOpportunity: (company: Company, id: string, body: OpportunityPatch) =>
-    request<unknown>(`/sandbox/opportunities/${id}?company=${company}`, {
+  opportunities: () => authed<Opportunity[]>("/app/opportunities"),
+
+  patchOpportunity: (id: string, body: OpportunityPatch) =>
+    authed<Opportunity>(`/app/opportunities/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -106,8 +142,7 @@ export const api = {
       body: JSON.stringify({ message, conversation_id: conversationId }),
     }),
 
-  activity: (company: Company, id: string) =>
-    request<Activity[]>(`/sandbox/opportunities/${id}/activity?company=${company}`),
+  activity: (id: string) => authed<Activity[]>(`/app/opportunities/${id}/activity`),
 };
 
 export { ApiError };

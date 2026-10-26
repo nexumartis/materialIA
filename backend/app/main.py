@@ -7,13 +7,18 @@ segura del canal, no por este parámetro.
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+import logging
+from uuid import UUID
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .agent import orchestrator, tool_agent
 from .agent.tools import ToolContext
-from .config import settings
-from .db import db_healthcheck
+from .auth import current_uid
+from .config import Settings, settings
+from .db import NoMembership, db_healthcheck, user_tx
 from .domain import catalog, opportunities
 from .schemas import (
     AgentChatRequest,
@@ -22,6 +27,7 @@ from .schemas import (
     CatalogImportResult,
     ChatRequest,
     ChatResponse,
+    MeResponse,
     OpportunitySummary,
     OpportunityUpdate,
     ProductSummary,
@@ -32,6 +38,13 @@ SANDBOX_TENANTS = {
     "A": "0000000a-0000-0000-0000-00000000000a",
     "B": "0000000b-0000-0000-0000-00000000000b",
 }
+
+# Fuera de local, verificar JWT contra el Supabase local por omisión rechaza toda sesión
+# del panel (401): se avisa al arrancar en vez de descubrirlo request por request.
+if settings.app_env != "local" and settings.supabase_url == Settings.model_fields["supabase_url"].default:
+    logging.getLogger(__name__).warning(
+        "SUPABASE_URL apunta al Supabase local con APP_ENV=%s: el panel /app rechazará "
+        "las sesiones del proyecto remoto.", settings.app_env)
 
 app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
 
@@ -144,3 +157,51 @@ def agent_confirm(req: AgentConfirmRequest, company: str = Query("A")) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"reply": "Oportunidad registrada.", "opportunity_id": getattr(result, "id", None)}
+
+
+# --- Panel autenticado (/app/*) -------------------------------------------
+# El tenant NO viene del cliente: sale de la membresía del usuario del JWT verificado,
+# y cada request corre en UNA transacción `user_tx` (rol app_user, RLS efectivo).
+@app.exception_handler(NoMembership)
+def _no_membership(_: Request, __: NoMembership) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": "Tu cuenta no tiene un negocio asociado."})
+
+
+@app.get("/app/me", response_model=MeResponse)
+def me(uid: str = Depends(current_uid)) -> MeResponse:
+    with user_tx(uid) as (cur, tenant):
+        cur.execute("select name from tenants where id = %s", (tenant,))
+        row = cur.fetchone()
+    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"])
+
+
+@app.get("/app/opportunities", response_model=list[OpportunitySummary])
+def app_opps(uid: str = Depends(current_uid)) -> list[OpportunitySummary]:
+    with user_tx(uid) as (cur, tenant):
+        return opportunities._list(cur, tenant)
+
+
+@app.patch("/app/opportunities/{opportunity_id}", response_model=OpportunitySummary)
+def app_update_opp(opportunity_id: UUID, body: OpportunityUpdate,
+                   uid: str = Depends(current_uid)) -> OpportunitySummary:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            updated = opportunities._update(
+                cur, tenant, str(opportunity_id), stage=body.stage,
+                estimated_amount=body.estimated_amount, next_action_at=body.next_action_at)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not updated:
+            raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
+        # Auditoría sin PII: sólo qué campos se tocaron.
+        opportunities._audit(cur, tenant, "panel_opportunity_updated", updated.id,
+                             {"fields": sorted(body.model_dump(exclude_none=True))})
+        return updated
+
+
+@app.get("/app/opportunities/{opportunity_id}/activity")
+def app_opp_activity(opportunity_id: UUID, uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        if opportunities._get(cur, tenant, str(opportunity_id)) is None:
+            raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
+        return opportunities._activity(cur, tenant, str(opportunity_id))

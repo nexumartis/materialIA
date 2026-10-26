@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Activity, type Company, type Opportunity } from "../lib/api";
+import { api, type Activity, type Opportunity } from "../lib/api";
 import { STAGE_LABEL, fmtAmount, pedidoText } from "../lib/format";
 
 const KIND_LABEL: Record<string, string> = {
@@ -24,11 +24,9 @@ function fmtWhen(iso: string): string {
 
 export function ActivityDrawer({
   opp,
-  company,
   onClose,
 }: {
   opp: Opportunity | null;
-  company: Company;
   onClose: () => void;
 }) {
   const [items, setItems] = useState<Activity[] | null>(null);
@@ -39,10 +37,10 @@ export function ActivityDrawer({
     setItems(null);
     setError(false);
     api
-      .activity(company, opp.id)
+      .activity(opp.id)
       .then(setItems)
       .catch(() => setError(true));
-  }, [opp, company]);
+  }, [opp]);
 
   useEffect(() => {
     if (!opp) return;

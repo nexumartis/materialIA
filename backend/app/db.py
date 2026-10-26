@@ -63,3 +63,28 @@ def tenant_tx(tenant_id: str) -> Iterator[psycopg.Cursor]:
                 (str(tenant_id),),
             )
             yield cur
+
+
+class NoMembership(Exception):
+    """El usuario autenticado no tiene negocio asociado."""
+
+
+@contextlib.contextmanager
+def user_tx(uid: str) -> Iterator[tuple[psycopg.Cursor, str]]:
+    """Transacción del panel autenticado, con RLS efectivo.
+
+    Asume `app_user` (sin BYPASSRLS) y fija `app.current_uid` con el `sub` ya verificado;
+    el negocio lo deriva la base desde `memberships`. Devuelve `(cursor, tenant_id)`.
+    Todo lo de la request (lecturas, escrituras, actividad, auditoría) usa ESTE cursor.
+    `set local` y `set_config(..., true)` terminan con el commit/rollback: la conexión
+    vuelve al pool sin rol ni uid.
+    """
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("set local role app_user")
+            cur.execute("select set_config('app.current_uid', %s, true)", (str(uid),))
+            cur.execute("select app_member_tenant() as tenant_id")
+            row = cur.fetchone()
+            if not row or row["tenant_id"] is None:
+                raise NoMembership()
+            yield cur, str(row["tenant_id"])
