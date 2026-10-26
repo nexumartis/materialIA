@@ -1,13 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { Company, Health } from "../lib/api";
+import type { Health } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "chat" | "login" | "signup";
+export type Section = "oportunidades" | "venta" | "login" | "signup";
 
 interface Props {
-  company: Company;
-  onCompany: (c: Company) => void;
   health: Health | null;
   active: Section;
   children: ReactNode;
@@ -15,7 +13,7 @@ interface Props {
 
 const TITLES: Record<Section, string> = {
   oportunidades: "Oportunidades",
-  chat: "Chat demo",
+  venta: "Agente de ventas",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -43,7 +41,7 @@ function IconDoc() {
   );
 }
 
-export function Shell({ company, onCompany, health, active, children }: Props) {
+export function Shell({ health, active, children }: Props) {
   const [open, setOpen] = useState(false);
   const { status, me, signOut } = useSession();
   const live = health?.llm.mode === "live";
@@ -87,23 +85,10 @@ export function Shell({ company, onCompany, health, active, children }: Props) {
             <Mark />
             <div>
               <b>Presupuesto Vivo</b>
-              <span>Cerramientos a medida</span>
+              <span>Agente de ventas</span>
             </div>
           </div>
 
-          {active === "chat" && (
-          <div className="scope">
-            <label htmlFor="company">Empresa demo</label>
-            <select
-              id="company"
-              value={company}
-              onChange={(e) => onCompany(e.target.value as Company)}
-            >
-              <option value="A">A · Cristalería</option>
-              <option value="B">B · Aberturas</option>
-            </select>
-          </div>
-          )}
 
           <nav className="nav" aria-label="Secciones">
             <a
@@ -115,12 +100,12 @@ export function Shell({ company, onCompany, health, active, children }: Props) {
               <IconList /> Oportunidades
             </a>
             <a
-              className={active === "chat" ? "active" : ""}
-              href="#/chat"
-              aria-current={active === "chat" ? "page" : undefined}
+              className={active === "venta" ? "active" : ""}
+              href="#/venta"
+              aria-current={active === "venta" ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
-              <IconChat /> Chat demo
+              <IconChat /> Agente de ventas
             </a>
             <a href={`${apiBase}/docs`} target="_blank" rel="noopener noreferrer">
               <IconDoc /> API · Swagger
@@ -148,7 +133,7 @@ export function Shell({ company, onCompany, health, active, children }: Props) {
               {live ? "Modo live" : "Modo demo"}
             </span>
             {health?.llm.model && <span className="foot-note">{health.llm.model}</span>}
-            {active === "chat" && <span className="foot-note">Datos sintéticos de demostración.</span>}
+            {active === "venta" && <span className="foot-note">Datos sintéticos de demostración.</span>}
           </div>
         </aside>
 

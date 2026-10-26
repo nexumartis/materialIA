@@ -40,12 +40,28 @@ def get_recent_messages(tenant_id: str, conversation_id: str, limit: int = 8) ->
     return [{"role": role.get(r["direction"], "user"), "content": r["content"]} for r in reversed(rows)]
 
 
-def add_message(tenant_id: str, conversation_id: str, direction: str, content: str) -> None:
+def conversation_messages(tenant_id: str, conversation_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    """Historial para mostrar en el chat, con el contenido interactivo de cada mensaje."""
     with tenant_tx(tenant_id) as cur:
         cur.execute(
-            "insert into messages (tenant_id, conversation_id, direction, content) "
-            "values (%s, %s, %s, %s)",
-            (tenant_id, conversation_id, direction, content),
+            "select direction, content, payload from messages "
+            "where tenant_id = %s and conversation_id = %s order by created_at, id limit %s",
+            (tenant_id, conversation_id, limit),
+        )
+        rows = cur.fetchall()
+    role = {"inbound": "user", "outbound": "assistant"}
+    return [{"role": role.get(r["direction"], "user"), "content": r["content"], "ui": r["payload"]}
+            for r in rows]
+
+
+def add_message(tenant_id: str, conversation_id: str, direction: str, content: str,
+                payload: Optional[dict[str, Any]] = None) -> None:
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "insert into messages (tenant_id, conversation_id, direction, content, payload) "
+            "values (%s, %s, %s, %s, %s::jsonb)",
+            (tenant_id, conversation_id, direction, content,
+             json.dumps(payload) if payload else None),
         )
         if direction == "inbound":
             cur.execute(

@@ -65,6 +65,16 @@ def tenant_tx(tenant_id: str) -> Iterator[psycopg.Cursor]:
             yield cur
 
 
+@contextlib.contextmanager
+def system_tx() -> Iterator[psycopg.Cursor]:
+    """Transacción SIN tenant fijado, sólo para procesos de sistema (webhooks de pago, worker)
+    que DERIVAN el negocio de filas de la base (p. ej. el pedido), nunca de un dato externo.
+    Cualquier operación de negocio posterior debe usar `tenant_tx` con ese tenant."""
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            yield cur
+
+
 class NoMembership(Exception):
     """El usuario autenticado no tiene negocio asociado."""
 

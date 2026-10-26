@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { api, type Company, type Health } from "./lib/api";
+import { api, type Health } from "./lib/api";
 import { useSession } from "./lib/session";
 import { Shell, type Section } from "./components/Shell";
 import { Opportunities } from "./pages/Opportunities";
-import { Chat } from "./pages/Chat";
+import { Sales } from "./pages/Sales";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -18,15 +18,14 @@ function useHashRoute(): string {
 }
 
 function sectionFor(hash: string): Section {
-  if (hash === "#/chat") return "chat";
+  // "#/chat" era el chat del producto anterior (cotización de cerramientos): va al agente de ventas.
+  if (hash === "#/venta" || hash === "#/chat") return "venta";
   if (hash === "#/login") return "login";
   if (hash === "#/signup") return "signup";
   return "oportunidades";
 }
 
 export default function App() {
-  // La empresa A/B sólo aplica al chat demo ("probar sin cuenta").
-  const [company, setCompany] = useState<Company>("A");
   const [health, setHealth] = useState<Health | null>(null);
   const { status } = useSession();
   const active = sectionFor(useHashRoute());
@@ -54,8 +53,12 @@ export default function App() {
   }, [status, active]);
 
   return (
-    <Shell company={company} onCompany={setCompany} health={health} active={active}>
-      {active === "chat" ? <Chat company={company} health={health} /> : <Panel active={active} />}
+    <Shell health={health} active={active}>
+      {active === "venta" ? (
+        <Sales health={health} />
+      ) : (
+        <Panel active={active} />
+      )}
     </Shell>
   );
 }

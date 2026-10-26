@@ -6,7 +6,7 @@ from __future__ import annotations
 import psycopg
 import pytest
 
-from conftest import TENANT_B, seed_opportunity
+from conftest import TENANT_D, seed_opportunity
 
 
 def _as_app_user(conn, uid: str | None, sql: str, params: tuple = (), extra_gucs: dict | None = None):
@@ -109,7 +109,7 @@ def test_sandbox_guc_does_not_widen_access(raw_conn, accounts):
     uid_a, t_a = accounts("A")
     opp_a = seed_opportunity(raw_conn, t_a)
     rows = _as_app_user(raw_conn, uid_a, "select id from opportunities",
-                        extra_gucs={"app.current_tenant": TENANT_B})
+                        extra_gucs={"app.current_tenant": TENANT_D})
     assert {str(r["id"]) for r in rows} == {opp_a}
 
 

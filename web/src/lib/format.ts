@@ -47,6 +47,11 @@ export function pedidoText(req: Requirements | undefined): {
 } {
   if (!req || !Object.keys(req).length)
     return { main: "Consulta general", sub: "" };
+  // Oportunidad del agente de ventas: productos del pedido y su número.
+  if (Array.isArray(req.productos) || req.pedido != null || req.producto) {
+    const items = Array.isArray(req.productos) ? (req.productos as string[]).join(", ") : String(req.producto ?? "");
+    return { main: items || "Pedido", sub: req.pedido != null ? `Pedido #${req.pedido}` : "" };
+  }
   const cat = (req.category as string) || "pedido";
   const tc = [req.tipo, req.color].filter(Boolean).join(" ");
   const med =

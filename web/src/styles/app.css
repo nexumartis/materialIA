@@ -375,3 +375,40 @@ tr.saved { animation:flash 1.1s var(--ease); }
 .account b { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .account .btn { align-self:flex-start; }
 .account a.btn { display:inline-flex; align-items:center; }
+
+/* ---- Agente de ventas: mensajes interactivos ---- */
+.msg { display:flex; flex-direction:column; gap:8px; }
+.msg.me { align-items:flex-end; }
+.msg.bot { align-items:flex-start; }
+.pcards { display:flex; gap:10px; overflow-x:auto; max-width:100%; padding:2px 2px 6px; scroll-snap-type:x mandatory; }
+.pcard {
+  flex:0 0 190px; scroll-snap-align:start; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-card); overflow:hidden; display:flex; flex-direction:column;
+  animation:bubble-in .22s var(--ease);
+}
+.pcard-img { position:relative; display:block; padding:0; border:0; background:var(--raised); cursor:zoom-in; aspect-ratio:1/1; width:100%; }
+.pcard-img img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .2s var(--ease); }
+.pcard-img:hover img { transform:scale(1.04); }
+.pcard-img .noimg { font-size:12px; color:var(--muted); }
+.pcard-n {
+  position:absolute; top:8px; left:8px; min-width:22px; height:22px; border-radius:11px; padding:0 6px;
+  background:var(--primary); color:#fff; font-size:12px; font-weight:600; display:grid; place-items:center;
+}
+.pcard-body { padding:10px; display:flex; flex-direction:column; gap:4px; flex:1; }
+.pcard-name { font-size:13px; line-height:1.3; }
+.pcard-brand { font-size:12px; color:var(--muted); }
+.pcard-row { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:auto; padding-top:4px; }
+.pcard-price { font-weight:600; font-size:15px; }
+.pcard-btn { width:100%; margin-top:6px; justify-content:center; }
+.paybtn { display:inline-flex; align-items:center; text-decoration:none; }
+.quick { display:flex; flex-wrap:wrap; gap:8px; }
+.pmodal-scrim { position:fixed; inset:0; background:rgba(15,17,19,.45); display:grid; place-items:center; z-index:50; padding:16px; }
+.pmodal {
+  position:relative; background:var(--surface); border-radius:var(--radius-sheet); width:min(440px,100%);
+  max-height:calc(100vh - 32px); overflow:auto; box-shadow:0 24px 60px rgba(0,0,0,.25); animation:bubble-in .2s var(--ease);
+}
+.pmodal-img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:var(--raised); }
+.pmodal-body { padding:16px 18px 18px; display:flex; flex-direction:column; gap:8px; }
+.pmodal-body h2 { margin:0; font-size:18px; }
+.pmodal-body p { margin:0; color:var(--muted); font-size:14px; }
+.pmodal-close { position:absolute; top:8px; right:8px; background:var(--surface); }

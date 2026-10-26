@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:4b"
     ollama_api_key: str | None = None
 
+    # --- Ventas: pagos y reservas de stock ---
+    # "simulated" (default, sin credenciales; mismo camino de webhook y verificación) |
+    # "mercadopago" (Checkout Pro; requiere MP_ACCESS_TOKEN de PRUEBA y MP_WEBHOOK_SECRET).
+    payment_provider: str = "simulated"
+    mp_access_token: str | None = None
+    mp_webhook_secret: str | None = None
+    mp_api_base: str = "https://api.mercadopago.com"
+    # URL pública del backend: links del checkout simulado y notification_url del proveedor.
+    public_base_url: str = "http://127.0.0.1:8077"
+    # Firma de los avisos del proveedor SIMULADO (no protege nada real; sólo recorre el camino).
+    sim_webhook_secret: str = "sim-local-no-es-secreto"
+    reservation_minutes: int = 30
+
     @property
     def supabase_issuer(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1"

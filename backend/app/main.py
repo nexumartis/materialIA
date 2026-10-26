@@ -1,7 +1,8 @@
-"""API del simulador (sandbox). Sólo servidor, sin WhatsApp ni envíos a clientes.
+"""API del agente de ventas: sandbox (sin cuenta), webhooks de pago y panel autenticado.
+Sin WhatsApp ni envíos a clientes reales en esta fase.
 
 Resolución de empresa: NO se confía un tenant_id arbitrario del cliente. El sandbox
-expone un allowlist fijo de empresas demo (A/B) mapeado en el servidor a UUIDs del
+expone un allowlist fijo de empresas demo (C/D) mapeado en el servidor a UUIDs del
 seed. En producción el tenant se resolverá por autenticación del panel o asignación
 segura del canal, no por este parámetro.
 """
@@ -12,21 +13,20 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from .agent import orchestrator, tool_agent
-from .agent.tools import ToolContext
+from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, user_tx
-from .domain import catalog, opportunities
+from .domain import catalog, opportunities, orders
+from .payments import service as payments
+from .payments.providers import SimulatedProvider
 from .schemas import (
-    AgentChatRequest,
-    AgentConfirmRequest,
     CatalogImportRequest,
     CatalogImportResult,
     ChatRequest,
-    ChatResponse,
     MeResponse,
     OpportunitySummary,
     OpportunityUpdate,
@@ -35,8 +35,8 @@ from .schemas import (
 
 # Allowlist de empresas demo (sandbox). Coinciden con supabase/seed.sql.
 SANDBOX_TENANTS = {
-    "A": "0000000a-0000-0000-0000-00000000000a",
-    "B": "0000000b-0000-0000-0000-00000000000b",
+    "C": "0000000c-0000-0000-0000-00000000000c",   # grifería: agente de ventas
+    "D": "0000000d-0000-0000-0000-00000000000d",   # ferretería: segunda empresa (aislamiento)
 }
 
 # Fuera de local, verificar JWT contra el Supabase local por omisión rechaza toda sesión
@@ -50,6 +50,10 @@ app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
 
 # CORS abierto SÓLO para el sandbox local (la UI se abre como file:// => origin "null").
 # En producción restringir a los orígenes del panel autenticado.
+# Fotos de producto de la demo (ilustraciones propias). Los canales reciben URL absoluta.
+app.mount("/static", StaticFiles(directory=str(__import__("pathlib").Path(__file__).parent / "static")),
+          name="static")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,7 +65,7 @@ app.add_middleware(
 def _resolve_tenant(company: str) -> str:
     tenant = SANDBOX_TENANTS.get(company.upper())
     if not tenant:
-        raise HTTPException(status_code=400, detail="Empresa demo inválida (usar A o B).")
+        raise HTTPException(status_code=400, detail="Empresa demo inválida (usar C o D).")
     return tenant
 
 
@@ -73,38 +77,33 @@ def health() -> dict:
         "db": {"reachable": ok, "detail": detail},
         "app_env": settings.app_env,
         "llm": {"mode": settings.llm_mode_label, "model": settings.llm_model_label},
+        "payments": {"provider": settings.payment_provider},
         # Nunca exponemos credenciales ni la URL completa de la base.
     }
 
 
 @app.get("/sandbox/products", response_model=list[ProductSummary])
-def products(company: str = Query("A"), q: str = Query("")) -> list[ProductSummary]:
+def products(company: str = Query("C"), q: str = Query("")) -> list[ProductSummary]:
     tenant = _resolve_tenant(company)
     return catalog.search_products(tenant, query=q)
 
 
 @app.post("/sandbox/catalog/import", response_model=CatalogImportResult)
-def import_catalog(body: CatalogImportRequest, company: str = Query("A")) -> CatalogImportResult:
+def import_catalog(body: CatalogImportRequest, company: str = Query("C")) -> CatalogImportResult:
     tenant = _resolve_tenant(company)
     imported, errors = catalog.import_items(tenant, [i.model_dump() for i in body.items])
     return CatalogImportResult(imported=imported, errors=errors)
 
 
-@app.post("/sandbox/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, company: str = Query("A")) -> ChatResponse:
-    tenant = _resolve_tenant(company)
-    return orchestrator.handle_chat(tenant, req.message, req.conversation_id)
-
-
 @app.get("/sandbox/opportunities", response_model=list[OpportunitySummary])
-def opps(company: str = Query("A")) -> list[OpportunitySummary]:
+def opps(company: str = Query("C")) -> list[OpportunitySummary]:
     tenant = _resolve_tenant(company)
     return opportunities.list_opportunities(tenant)
 
 
 @app.patch("/sandbox/opportunities/{opportunity_id}", response_model=OpportunitySummary)
 def update_opp(opportunity_id: str, body: OpportunityUpdate,
-               company: str = Query("A")) -> OpportunitySummary:
+               company: str = Query("C")) -> OpportunitySummary:
     tenant = _resolve_tenant(company)
     try:
         updated = opportunities.update_opportunity(
@@ -118,45 +117,130 @@ def update_opp(opportunity_id: str, body: OpportunityUpdate,
 
 
 @app.get("/sandbox/opportunities/{opportunity_id}/activity")
-def opp_activity(opportunity_id: str, company: str = Query("A")) -> list[dict]:
+def opp_activity(opportunity_id: str, company: str = Query("C")) -> list[dict]:
     """Timeline de la oportunidad: qué se hizo y cuándo (creada, cambios de estado…)."""
     tenant = _resolve_tenant(company)
     return opportunities.get_activity(tenant, opportunity_id)
 
 
-# --- Agente con tool-calling (Etapa B) ------------------------------------
-# El LLM elige las herramientas; el tenant sale del servidor y las ESCRITURAS
-# requieren confirmación humana (devuelven pending_action, no se ejecutan solas).
-@app.post("/sandbox/agent/chat")
-def agent_chat(req: AgentChatRequest, company: str = Query("A")) -> dict:
+# --- Agente de ventas (empresa demo C) -------------------------------------
+# Stock, carrito, pedido y link de pago desde el chat. El pago SÓLO se confirma con el aviso
+# verificado del proveedor (webhook + consulta del pago), nunca por lo que diga el cliente.
+@app.post("/sandbox/sales/chat")
+def sales_chat(req: ChatRequest, company: str = Query("C")) -> dict:
     tenant = _resolve_tenant(company)
-    conv = opportunities.ensure_conversation(tenant, req.conversation_id)
-    ctx = ToolContext(tenant_id=tenant, conversation_id=conv)
-    registry = tool_agent.build_registry()
-    planner = tool_agent.make_planner(registry)
-    res = tool_agent.run_agent(ctx, req.message, registry, planner)
+    res = sales_agent.handle_sales_message(tenant, req.message, req.conversation_id)
     return {
-        "reply": res.reply,
-        "requires_human": res.requires_human,
-        "pending_action": res.pending_action,
-        "mode": getattr(planner, "mode", "mock"),
-        "conversation_id": conv,
-        "trace": [{"name": s.get("name"), "summary": s.get("summary"), "error": s.get("error")}
-                  for s in res.trace],
+        "reply": res.reply, "conversation_id": res.conversation_id, "mode": res.mode,
+        "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
+        "payment": res.payment, "products": res.products, "trace": res.trace, "ui": res.ui,
     }
 
 
-@app.post("/sandbox/agent/confirm")
-def agent_confirm(req: AgentConfirmRequest, company: str = Query("A")) -> dict:
+@app.get("/sandbox/sales/{conversation_id}")
+def sales_conversation(conversation_id: UUID, company: str = Query("C")) -> dict:
+    """Estado actual de la conversación de venta (mensajes, carrito y pedidos). El chat lo relee
+    al volver del checkout: el aviso de pago confirmado llega por acá, como llegaría por WhatsApp."""
     tenant = _resolve_tenant(company)
-    conv = opportunities.ensure_conversation(tenant, req.conversation_id)
-    ctx = ToolContext(tenant_id=tenant, conversation_id=conv)
-    registry = tool_agent.build_registry()
+    conv = str(conversation_id)
+    return {
+        "messages": opportunities.conversation_messages(tenant, conv),
+        "cart": orders.get_cart(tenant, conv),
+        "orders": orders.conversation_orders(tenant, conv),
+    }
+
+
+@app.get("/sandbox/orders/{order_id}")
+def sandbox_order(order_id: UUID, company: str = Query("C")) -> dict:
+    tenant = _resolve_tenant(company)
+    order = orders.get_order(tenant, str(order_id))
+    if order is None:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    return order
+
+
+@app.post("/sandbox/orders/{order_id}/status")
+def sandbox_order_status(order_id: UUID, status: str = Query(...), company: str = Query("C")) -> dict:
+    """Avance operativo (preparación, despacho, entrega) que hará el negocio desde el panel."""
+    tenant = _resolve_tenant(company)
     try:
-        result = tool_agent.confirm_action(ctx, req.pending_action, registry)
+        order = orders.advance_status(tenant, str(order_id), status)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"reply": "Oportunidad registrada.", "opportunity_id": getattr(result, "id", None)}
+    if order is None:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    return order
+
+
+@app.post("/sandbox/maintenance/expire-reservations")
+def sandbox_expire() -> dict:
+    """Lo mismo que hace el worker (`python -m app.worker`) en cada vuelta."""
+    return {"expired": orders.expire_reservations()}
+
+
+_SIM_PAGE = """<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Checkout simulado</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:420px;margin:40px auto;padding:0 16px;color:#1b1b1b}}
+.tag{{background:#fff3cd;border:1px solid #e0c36a;padding:8px 10px;border-radius:8px;font-size:14px}}
+button{{font-size:16px;padding:10px 14px;border-radius:8px;border:1px solid #888;margin:6px 6px 0 0;cursor:pointer}}
+.ok{{background:#1f7a3a;color:#fff;border-color:#1f7a3a}}</style></head><body>
+<p class="tag">Checkout <b>SIMULADO</b> de prueba. No es Mercado Pago y no se cobra nada.</p>
+<h2>Pedido #{number}</h2><p>Total: <b>{total}</b></p>{body}</body></html>"""
+
+
+def _sim_order(preference_id: str) -> dict:
+    from .db import system_tx
+    if settings.payment_provider != "simulated":
+        raise HTTPException(status_code=404, detail="Checkout simulado deshabilitado.")
+    with system_tx() as cur:
+        cur.execute("select tenant_id, order_id from payments where provider = 'simulated' "
+                    "and preference_id = %s", (preference_id,))
+        row = cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Link de pago inexistente.")
+    return orders.get_order(str(row["tenant_id"]), str(row["order_id"]))
+
+
+@app.get("/sandbox/checkout/{preference_id}", response_class=HTMLResponse)
+def sim_checkout_page(preference_id: str) -> str:
+    order = _sim_order(preference_id)
+    body = (f'<form method="post" action="/sandbox/checkout/{preference_id}/pay?outcome=approved">'
+            '<button class="ok">Pagar (aprobado)</button></form>'
+            f'<form method="post" action="/sandbox/checkout/{preference_id}/pay?outcome=rejected">'
+            '<button>Simular pago rechazado</button></form>')
+    total = "$" + f"{order['total']:,.0f}".replace(",", ".")
+    return _SIM_PAGE.format(number=order["number"], total=total, body=body)
+
+
+@app.post("/sandbox/checkout/{preference_id}/pay", response_class=HTMLResponse)
+def sim_checkout_pay(preference_id: str, outcome: str = Query("approved")) -> str:
+    """El comprador paga en el checkout simulado; el "proveedor" manda su aviso firmado al mismo
+    procesador que usa Mercado Pago (firma → consulta del pago → aplicación idempotente)."""
+    _sim_order(preference_id)   # 404 si el simulado no es el proveedor configurado
+    try:
+        headers, body = SimulatedProvider().pay(preference_id, outcome)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Link de pago inexistente.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _, result = payments.receive_notification("simulated", headers, {}, body)
+    order = _sim_order(preference_id)
+    total = "$" + f"{order['total']:,.0f}".replace(",", ".")
+    msg = ("<p><b>Pago aprobado.</b> Volvé al chat: el pedido ya figura como pagado.</p>"
+           if order["status"] == "PAID" else f"<p>Resultado: {result}. Podés volver a intentar.</p>")
+    return _SIM_PAGE.format(number=order["number"], total=total, body=msg)
+
+
+@app.post("/webhooks/{provider}")
+async def payment_webhook(provider: str, request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    status, result = payments.receive_notification(
+        provider, dict(request.headers), dict(request.query_params),
+        body if isinstance(body, dict) else {})
+    return JSONResponse(status_code=status, content={"result": result})
 
 
 # --- Panel autenticado (/app/*) -------------------------------------------
