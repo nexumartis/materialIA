@@ -1,4 +1,4 @@
-# Cómo usar Presupuesto Vivo (chuleta de comandos)
+# Cómo usar el agente de ventas (chuleta de comandos)
 
 Todo se corre desde la carpeta del proyecto. El backend está en `backend/`.
 
@@ -11,7 +11,7 @@ cd /Users/tomascastro/materialIA
 ```bash
 # Base de datos local (Postgres real, vía Docker)
 supabase start
-supabase db reset                 # aplica migraciones + seed (empresas A/B)
+supabase db reset                 # aplica migraciones + seed (empresas C y D)
 
 # Backend
 cd backend
@@ -28,12 +28,11 @@ npm run dev          # http://localhost:5173
 ```
 
 - **Oportunidades:** http://localhost:5173/#/oportunidades
-- **Chat demo:** http://localhost:5173/#/chat
+- **Agente de ventas:** http://localhost:5173/#/venta
 - **Swagger (API):** http://127.0.0.1:8077/docs
 - **Studio (ver la base):** http://127.0.0.1:54323
 
-> El frontend viejo (HTML estático) quedó archivado en `legacy/`
-> (`legacy/vendedor.html`, `legacy/sandbox_ui.html`). El vigente es la app React de `web/`.
+- **Worker** (libera reservas de stock vencidas): `python -m app.worker` desde `backend/`.
 
 ## 2. Apagar
 

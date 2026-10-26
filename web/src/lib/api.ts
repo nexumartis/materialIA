@@ -2,14 +2,12 @@
 // La base se toma de VITE_API_BASE (ver .env.example); nunca se hardcodea el tenant.
 // - Panel (/app/*): va con `Authorization: Bearer <jwt>`; el backend deriva el negocio
 //   de la sesión. Ninguna llamada /app manda empresa.
-// - Demo sin cuenta (/sandbox/chat): la empresa A/B va como query param y el backend
-//   la resuelve contra su allowlist.
+// - Agente de ventas demo sin cuenta (/sandbox/sales/*): empresa demo C, resuelta por el
+//   backend contra su allowlist.
 
 export const API_BASE: string =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ||
   "http://127.0.0.1:8077";
-
-export type Company = "A" | "B";
 
 export type Stage =
   | "nueva"
@@ -47,22 +45,13 @@ export interface Health {
   db: { reachable: boolean; detail?: string };
   app_env?: string;
   llm: { mode: "mock" | "live"; model?: string };
+  payments?: { provider: string };
 }
 
 export interface OpportunityPatch {
   stage?: Stage;
   estimated_amount?: number;
   next_action_at?: string;
-}
-
-export interface ChatResponse {
-  conversation_id: string;
-  reply: string;
-  collected_requirements: Requirements;
-  missing_fields: string[];
-  requires_human: boolean;
-  mode: string;
-  opportunity_id?: string | null;
 }
 
 export interface Activity {
@@ -135,14 +124,84 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  chat: (company: Company, message: string, conversationId: string | null) =>
-    request<ChatResponse>(`/sandbox/chat?company=${company}`, {
+
+  activity: (id: string) => authed<Activity[]>(`/app/opportunities/${id}/activity`),
+
+  // Agente de ventas (empresa demo C, sin cuenta).
+  salesChat: (message: string, conversationId: string | null) =>
+    request<SalesResponse>(`/sandbox/sales/chat?company=C`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message, conversation_id: conversationId }),
     }),
 
-  activity: (id: string) => authed<Activity[]>(`/app/opportunities/${id}/activity`),
+  salesConversation: (conversationId: string) =>
+    request<SalesConversation>(`/sandbox/sales/${conversationId}?company=C`),
 };
+
+export interface OrderLine {
+  item_id: string;
+  sku: string;
+  name: string;
+  qty: number;
+  unit_price: number;
+  line_total: number;
+}
+
+export interface Order {
+  id: string;
+  number: number;
+  status: string;
+  status_label: string;
+  total: number;
+  currency: string;
+  items: OrderLine[];
+  reserved_until: string | null;
+  attention_reason: string | null;
+  payment: { provider: string; checkout_url: string | null; status: string } | null;
+}
+
+export interface QuickReply {
+  label: string;
+  message: string;
+}
+
+export interface ProductCard {
+  n: number;
+  name: string;
+  brand: string | null;
+  image_url: string | null;
+  price: number | null;
+  available: number;
+  pricing_mode: string;
+  description: string;
+  specs: Record<string, unknown>;
+  action: QuickReply | null;
+}
+
+/** Contenido interactivo de un mensaje del agente (tarjetas, botones, pago). */
+export interface MessageUI {
+  products?: ProductCard[];
+  quick_replies?: QuickReply[];
+  payment?: { url: string; provider: string };
+}
+
+export interface SalesResponse {
+  reply: string;
+  conversation_id: string;
+  mode: string;
+  requires_human: boolean;
+  cart: Order | null;
+  orders: Order[];
+  payment: { provider: string; checkout_url: string } | null;
+  trace: { name: string; summary: string }[];
+  ui: MessageUI;
+}
+
+export interface SalesConversation {
+  messages: { role: "user" | "assistant"; content: string; ui: MessageUI | null }[];
+  cart: Order | null;
+  orders: Order[];
+}
 
 export { ApiError };

@@ -1,5 +1,5 @@
-"""Aislamiento multiempresa (escenarios 1 y 2 del Paso E): la Empresa B no puede ver
-ni modificar productos ni oportunidades de la Empresa A, aunque pase IDs de A."""
+"""Aislamiento multiempresa: la empresa D no puede ver ni modificar productos ni
+oportunidades de la empresa C, aunque pase IDs reales de C."""
 from __future__ import annotations
 
 import pytest
@@ -7,49 +7,40 @@ import pytest
 from app.domain import catalog, opportunities
 from app.schemas import OpportunityInput
 
-from conftest import A_MAMP_160, TENANT_A, TENANT_B
+from conftest import C_CANILLA, TENANT_C, TENANT_D
 
 
-def test_b_cannot_read_a_product_by_id():
-    # B intenta leer un producto de A pasando el ID real de A.
-    assert catalog.get_product_details(TENANT_B, A_MAMP_160) is None
-    price = catalog.get_price(TENANT_B, A_MAMP_160)
-    assert price.status == "no_price"  # para B ese producto no existe
+def test_other_company_cannot_read_a_product_by_id():
+    assert catalog.get_product_details(TENANT_D, C_CANILLA) is None
+    assert catalog.get_price(TENANT_D, C_CANILLA).status == "no_price"
 
 
 def test_search_returns_only_own_catalog():
-    b_items = catalog.search_products(TENANT_B, query="")
-    skus = {p.sku for p in b_items}
-    assert skus  # B tiene su propio catálogo
-    assert not any(s.startswith("MAMP-COR-NEG") for s in skus)  # ningún SKU de A
+    skus = {p.sku for p in catalog.search_products(TENANT_D, query="")}
+    assert skus  # D tiene su propio catálogo
+    assert not any(s.startswith("GRIF-") for s in skus)  # ningún SKU de C
 
 
-def test_b_cannot_read_a_opportunity():
-    opp_a = opportunities.create_or_update_opportunity(
-        TENANT_A, OpportunityInput(requirements={"probe": "aislamiento"}, stage="nueva")
-    )
-    # B no la ve en su listado ni la puede leer por ID.
-    b_ids = {o.id for o in opportunities.list_opportunities(TENANT_B)}
-    assert opp_a.id not in b_ids
-    assert opportunities.get_opportunity(TENANT_B, opp_a.id) is None
-    # A sí la ve.
-    assert opportunities.get_opportunity(TENANT_A, opp_a.id) is not None
+def test_other_company_cannot_read_an_opportunity():
+    opp_c = opportunities.create_or_update_opportunity(
+        TENANT_C, OpportunityInput(requirements={"probe": "aislamiento"}, stage="nueva"))
+    assert opp_c.id not in {o.id for o in opportunities.list_opportunities(TENANT_D)}
+    assert opportunities.get_opportunity(TENANT_D, opp_c.id) is None
+    assert opportunities.get_opportunity(TENANT_C, opp_c.id) is not None
 
 
-def test_b_cannot_update_a_opportunity():
+def test_other_company_cannot_update_an_opportunity():
     opp = opportunities.create_or_update_opportunity(
-        TENANT_A, OpportunityInput(requirements={"x": 1}, stage="nueva"))
-    # B intenta mover el estado de la oportunidad de A -> no la encuentra.
-    assert opportunities.update_opportunity(TENANT_B, opp.id, stage="cotizada") is None
-    assert opportunities.get_opportunity(TENANT_A, opp.id).stage == "nueva"
-    # A sí puede actualizar estado + importe.
+        TENANT_C, OpportunityInput(requirements={"x": 1}, stage="nueva"))
+    assert opportunities.update_opportunity(TENANT_D, opp.id, stage="cotizada") is None
+    assert opportunities.get_opportunity(TENANT_C, opp.id).stage == "nueva"
     updated = opportunities.update_opportunity(
-        TENANT_A, opp.id, stage="cotizada", estimated_amount=123000)
+        TENANT_C, opp.id, stage="cotizada", estimated_amount=123000)
     assert updated.stage == "cotizada" and updated.estimated_amount == 123000
 
 
 def test_update_rejects_invalid_stage():
     opp = opportunities.create_or_update_opportunity(
-        TENANT_A, OpportunityInput(requirements={}, stage="nueva"))
+        TENANT_C, OpportunityInput(requirements={}, stage="nueva"))
     with pytest.raises(ValueError):
-        opportunities.update_opportunity(TENANT_A, opp.id, stage="inventado")
+        opportunities.update_opportunity(TENANT_C, opp.id, stage="inventado")
