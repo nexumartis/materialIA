@@ -7,13 +7,15 @@ segura del canal, no por este parámetro.
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .agent import orchestrator, tool_agent
 from .agent.tools import ToolContext
+from .auth import current_uid
 from .config import settings
-from .db import db_healthcheck
+from .db import NoMembership, db_healthcheck, user_tx
 from .domain import catalog, opportunities
 from .schemas import (
     AgentChatRequest,
@@ -22,6 +24,7 @@ from .schemas import (
     CatalogImportResult,
     ChatRequest,
     ChatResponse,
+    MeResponse,
     OpportunitySummary,
     OpportunityUpdate,
     ProductSummary,
@@ -144,3 +147,19 @@ def agent_confirm(req: AgentConfirmRequest, company: str = Query("A")) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"reply": "Oportunidad registrada.", "opportunity_id": getattr(result, "id", None)}
+
+
+# --- Panel autenticado (/app/*) -------------------------------------------
+# El tenant NO viene del cliente: sale de la membresía del usuario del JWT verificado,
+# y cada request corre en UNA transacción `user_tx` (rol app_user, RLS efectivo).
+@app.exception_handler(NoMembership)
+def _no_membership(_: Request, __: NoMembership) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": "Tu cuenta no tiene un negocio asociado."})
+
+
+@app.get("/app/me", response_model=MeResponse)
+def me(uid: str = Depends(current_uid)) -> MeResponse:
+    with user_tx(uid) as (cur, tenant):
+        cur.execute("select name from tenants where id = %s", (tenant,))
+        row = cur.fetchone()
+    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"])

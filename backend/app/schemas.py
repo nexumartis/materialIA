@@ -107,6 +107,13 @@ class OpportunitySummary(BaseModel):
     next_action_at: Optional[str] = None
 
 
+# --- Panel autenticado ----------------------------------------------------
+class MeResponse(BaseModel):
+    user_id: str
+    tenant_id: str
+    business_name: str
+
+
 # --- API chat -------------------------------------------------------------
 class ChatRequest(BaseModel):
     message: str
