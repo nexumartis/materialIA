@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type Health, type MessageUI, type Order, type ProductCard } from "../lib/api";
+import {
+  api,
+  type Health,
+  type MessageUI,
+  type Order,
+  type ProductCard,
+  type SalesConversation,
+  type SalesResponse,
+} from "../lib/api";
 import { fmtAmount } from "../lib/format";
 
 const money = (n: number) => `$${fmtAmount(n)}`;
@@ -161,7 +169,28 @@ function ProductModal({
   );
 }
 
-export function Sales({ health }: { health: Health | null }) {
+/** De dónde habla el chat: la demo C (`/sandbox/sales`) o la tienda pública de un negocio. */
+export interface ChatSource {
+  title: string;
+  subtitle: string;
+  greeting: string;
+  suggestions: string[];
+  chat: (message: string, conversationId: string | null) => Promise<SalesResponse>;
+  conversation: (conversationId: string) => Promise<SalesConversation>;
+  /** Vista de cliente: sin datos internos (herramientas usadas, notas técnicas). */
+  customerView?: boolean;
+}
+
+export const DEMO_SOURCE: ChatSource = {
+  title: "Agente de ventas",
+  subtitle: "Stock y precios reales del catálogo demo, carrito, pedido y link de pago. Datos sintéticos.",
+  greeting: GREETING,
+  suggestions: SUGGESTIONS,
+  chat: api.salesChat,
+  conversation: api.salesConversation,
+};
+
+export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null; source?: ChatSource }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -180,8 +209,8 @@ export function Sales({ health }: { health: Health | null }) {
   useEffect(() => {
     if (!convId) return;
     const refresh = () => {
-      api
-        .salesConversation(convId)
+      source
+        .conversation(convId)
         .then((c) => {
           setMessages(
             c.messages.map((m) => ({ role: m.role === "user" ? "me" : "bot", text: m.content, ui: m.ui })),
@@ -193,7 +222,7 @@ export function Sales({ health }: { health: Health | null }) {
     };
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
-  }, [convId]);
+  }, [convId, source]);
 
   async function send(text: string) {
     const msg = text.trim();
@@ -202,7 +231,7 @@ export function Sales({ health }: { health: Health | null }) {
     setMessages((m) => [...m, { role: "me", text: msg }]);
     setSending(true);
     try {
-      const j = await api.salesChat(msg, convId);
+      const j = await source.chat(msg, convId);
       setConvId(j.conversation_id);
       setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
       setCart(j.cart);
@@ -233,18 +262,18 @@ export function Sales({ health }: { health: Health | null }) {
     <div className="sheet">
       <div className="titlebar">
         <div>
-          <h1>Agente de ventas</h1>
-          <p className="finding">
-            Stock y precios reales del catálogo demo, carrito, pedido y link de pago. Datos sintéticos.
-          </p>
+          <h1>{source.title}</h1>
+          <p className="finding">{source.subtitle}</p>
         </div>
         <div className="right">
+          {!source.customerView && (
           <span className="statusline">
             <span className={`sdot ${health?.db.reachable ? "ok" : "off"}`} />
             {health
               ? `pagos: ${health.payments?.provider ?? "?"} · ${health.llm.mode === "live" ? `IA: ${health.llm.model}` : "reglas (sin IA)"}`
               : "API no disponible"}
           </span>
+          )}
           <button className="btn sm" type="button" onClick={restart}>
             Nueva conversación
           </button>
@@ -254,11 +283,11 @@ export function Sales({ health }: { health: Health | null }) {
       <div className="chat-grid">
         <section className="chatcol" aria-label="Conversación">
           <div className="chatlog" ref={logRef}>
-            <div className="bubble bot">{GREETING}</div>
+            <div className="bubble bot">{source.greeting}</div>
             {messages.length === 0 && (
               <div className="suggest">
                 <span className="suggest-label">Probá con:</span>
-                {SUGGESTIONS.map((s) => (
+                {source.suggestions.map((s) => (
                   <button key={s} type="button" className="chip" onClick={() => send(s)}>
                     {s}
                   </button>
@@ -313,10 +342,12 @@ export function Sales({ health }: { health: Health | null }) {
               Enviar
             </button>
           </form>
-          <p className="note">
-            Canal simulado (<code>/sandbox/sales/chat</code>). El pago se confirma sólo con el aviso del
-            proveedor; en modo simulado no se cobra nada.
-          </p>
+          {!source.customerView && (
+            <p className="note">
+              Canal simulado. El pago se confirma sólo con el aviso del proveedor; en modo simulado no
+              se cobra nada.
+            </p>
+          )}
         </section>
 
         <aside className="rail" aria-label="Carrito y pedidos">
@@ -367,6 +398,7 @@ export function Sales({ health }: { health: Health | null }) {
               <div className="empty-box">Sin pedidos.</div>
             )}
           </div>
+          {!source.customerView && (
           <div>
             <h2 className="panel-title">Herramientas usadas</h2>
             <p className="panel-sub">Último turno del agente.</p>
@@ -376,6 +408,7 @@ export function Sales({ health }: { health: Health | null }) {
               <div className="empty-box">—</div>
             )}
           </div>
+          )}
         </aside>
       </div>
       {detail && <ProductModal card={detail} onClose={() => setDetail(null)} onAction={send} />}

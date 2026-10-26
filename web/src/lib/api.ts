@@ -89,7 +89,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(0, "No se pudo conectar con la API.");
   }
-  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  if (!res.ok) {
+    // El backend explica el error en `detail` (p. ej. "Ese link ya lo usa otro negocio").
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* sin cuerpo JSON */
+    }
+    throw new ApiError(res.status, detail);
+  }
   return (await res.json()) as T;
 }
 
@@ -137,7 +147,87 @@ export const api = {
 
   salesConversation: (conversationId: string) =>
     request<SalesConversation>(`/sandbox/sales/${conversationId}?company=C`),
+
+  // Panel: el negocio arma su agente.
+  agentTemplates: () => authed<{ key: string; label: string }[]>("/app/agent-templates"),
+  agentProfile: () => authed<AgentProfile>("/app/agent-profile"),
+  saveAgentProfile: (body: Partial<AgentProfile> & { apply_template?: boolean }) =>
+    authed<AgentProfile>("/app/agent-profile", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  catalog: () => authed<CatalogItem[]>("/app/catalog"),
+  updateProduct: (id: string, body: { price?: number; stock?: number; active?: boolean }) =>
+    authed<CatalogItem>(`/app/catalog/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  importCatalog: (csv: string) =>
+    authed<ImportResult>("/app/catalog/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ csv }),
+    }),
+  orders: () => authed<Order[]>("/app/orders"),
+  advanceOrder: (id: string, status: string) =>
+    authed<Order>(`/app/orders/${id}/status?status=${status}`, { method: "POST" }),
+
+  // Tienda pública de cada negocio (sin cuenta).
+  store: (slug: string) => request<StoreInfo>(`/public/${encodeURIComponent(slug)}`),
+  storeChat: (slug: string, message: string, conversationId: string | null) =>
+    request<SalesResponse>(`/public/${encodeURIComponent(slug)}/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message, conversation_id: conversationId }),
+    }),
+  storeConversation: (slug: string, conversationId: string) =>
+    request<SalesConversation>(`/public/${encodeURIComponent(slug)}/conversations/${conversationId}`),
 };
+
+export interface AgentProfile {
+  business_type: string;
+  public_slug: string;
+  seller_name: string;
+  tone: "cercano" | "profesional" | "formal";
+  greeting: string;
+  faq: { q: string; a: string }[];
+  rules: string[];
+  shipping: string;
+  hours: string;
+  payment_methods: string;
+  updated_at: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  sku: string;
+  name: string;
+  brand: string | null;
+  category: string;
+  pricing_mode: string;
+  price: number | null;
+  available: number;
+  on_hand: number;
+  reserved: number;
+  active: boolean;
+  image_url: string | null;
+  specs: Record<string, unknown>;
+}
+
+export interface ImportResult {
+  created: number;
+  updated: number;
+  errors: { fila: number; sku?: string; error: string }[];
+}
+
+export interface StoreInfo {
+  name: string;
+  seller_name: string | null;
+  greeting: string | null;
+  payments: string;
+}
 
 export interface OrderLine {
   item_id: string;

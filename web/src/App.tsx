@@ -4,6 +4,10 @@ import { useSession } from "./lib/session";
 import { Shell, type Section } from "./components/Shell";
 import { Opportunities } from "./pages/Opportunities";
 import { Sales } from "./pages/Sales";
+import { Store } from "./pages/Store";
+import { AgentSetup } from "./pages/AgentSetup";
+import { Catalog } from "./pages/Catalog";
+import { OrdersPage } from "./pages/OrdersPage";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -20,15 +24,26 @@ function useHashRoute(): string {
 function sectionFor(hash: string): Section {
   // "#/chat" era el chat del producto anterior (cotización de cerramientos): va al agente de ventas.
   if (hash === "#/venta" || hash === "#/chat") return "venta";
+  if (hash === "#/agente") return "agente";
+  if (hash === "#/catalogo") return "catalogo";
+  if (hash === "#/pedidos") return "pedidos";
   if (hash === "#/login") return "login";
   if (hash === "#/signup") return "signup";
   return "oportunidades";
 }
 
 export default function App() {
+  const hash = useHashRoute();
+  // La tienda pública de un negocio es la vista del cliente: sin panel ni menú.
+  const store = /^#\/tienda\/([a-z0-9-]{3,48})$/.exec(hash);
+  if (store) return <Store slug={store[1]} />;
+  return <Backoffice hash={hash} />;
+}
+
+function Backoffice({ hash }: { hash: string }) {
   const [health, setHealth] = useState<Health | null>(null);
   const { status } = useSession();
-  const active = sectionFor(useHashRoute());
+  const active = sectionFor(hash);
 
   useEffect(() => {
     let alive = true;
@@ -99,6 +114,9 @@ function Panel({ active }: { active: Section }) {
       </Notice>
     );
   }
+  if (active === "agente") return <AgentSetup />;
+  if (active === "catalogo") return <Catalog />;
+  if (active === "pedidos") return <OrdersPage />;
   return <Opportunities />;
 }
 

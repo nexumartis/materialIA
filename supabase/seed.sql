@@ -89,3 +89,16 @@ on conflict (tenant_id, item_id) do nothing;
 -- Fotos de demo (ilustraciones propias servidas por el backend en /static/products).
 update catalog_items set image_url = '/static/products/' || lower(sku) || '.svg'
 where tenant_id = '0000000c-0000-0000-0000-00000000000c' and image_url is null;
+
+-- Perfiles de agente de las empresas demo (link público /#/tienda/<slug>).
+insert into agent_profiles (tenant_id, business_type, public_slug, seller_name, tone, greeting, faq, rules, shipping, hours, payment_methods) values
+  ('0000000c-0000-0000-0000-00000000000c', 'sanitarios', 'sanitarios-demo-c', 'Caro', 'cercano',
+   '¡Hola! Soy Caro, la asistente virtual de Sanitarios Demo C. ¿Qué estás buscando? Canillas, duchas, repuestos…',
+   '[{"q": "¿Hacen envíos?", "a": "Sí, enviamos en CABA y GBA. El costo se coordina después del pago (DEMO)."}, {"q": "¿Dónde retiro?", "a": "Podés retirar en el local de lunes a sábado (dirección DEMO)."}, {"q": "¿Dan factura?", "a": "Sí, factura A o B (DEMO)."}]'::jsonb,
+   '["Los productos a pedido los confirma una persona del equipo."]'::jsonb,
+   'Envíos en CABA y GBA, costo a coordinar (DEMO).', 'Lunes a viernes 8 a 18, sábados 9 a 13 (DEMO).',
+   'Mercado Pago (tarjeta, débito, dinero en cuenta).'),
+  ('0000000d-0000-0000-0000-00000000000d', 'ferreteria', 'ferreteria-demo-d', 'Nico', 'cercano',
+   '¡Hola! Soy Nico, el asistente virtual de Ferretería Demo D. ¿En qué te ayudo?',
+   '[]'::jsonb, '[]'::jsonb, '', '', 'Mercado Pago.')
+on conflict (tenant_id) do nothing;

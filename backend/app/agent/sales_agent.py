@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import inventory, opportunities, orders
+from ..domain import agent_profile, inventory, opportunities, orders
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -129,6 +129,10 @@ _RE_DENY = re.compile(r"^\s*(no|nop|mejor no|cancela|cancelar|todavia no|espera|
 _RE_DONE = re.compile(r"^\s*(no|nop|nada|nada mas|no gracias|no,? gracias|eso es todo|eso nomas|es todo|"
                       r"ya esta|no,? (quiero|necesito|voy a) (sumar|agregar|llevar) nada( mas)?|"
                       r"no quiero nada mas|no,? nada mas|nada mas,? gracias)\b[\s!.,]*(gracias)?[\s!.]*$")
+# Preguntas sobre el negocio (envíos, retiro, horarios, pagos, factura): responde el perfil.
+_RE_INFO = re.compile(r"\b(envio|envios|envian|mandan|entrega|entregan|retiro|retirar|horario|horarios|"
+                      r"abren|atienden|abierto|factura|facturan|cuotas|tarjeta|medios? de pago|formas? de pago|"
+                      r"se puede pagar|puedo pagar|direccion|donde (estan|queda)|local)\b")
 _RE_PAID_CLAIM = re.compile(r"\bya (te )?(pague|abone|transferi|deposite)\b")
 _RE_STATUS = re.compile(r"\b(estado|salio|llego|llega|donde (esta|anda|viene)|seguimiento|tracking|"
                         r"cuando (llega|sale)|despach|como (va|viene|anda|sigue)|novedad)")
@@ -256,6 +260,35 @@ class _Turn:
             f["keywords"] = fixed
         return f
 
+    @property
+    def profile(self) -> dict[str, Any]:
+        if not hasattr(self, "_profile"):
+            self._profile = agent_profile.for_agent(self.tenant) or {}
+        return self._profile
+
+    def info(self, text: str) -> str:
+        """Responde con lo que el negocio cargó en su perfil; si no lo tiene, no lo inventa."""
+        p = self.profile
+        words = {w for w in re.findall(r"[a-z]{4,}", text) if w not in _STOP}
+        best, score = None, 0
+        for item in p.get("faq") or []:
+            q = set(re.findall(r"[a-z]{4,}", normalize(item["q"])))
+            overlap = len({w[:5] for w in words} & {w[:5] for w in q})
+            if overlap > score:
+                best, score = item, overlap
+        self.tool("perfil_negocio", "faq" if best else "campos")
+        if best:
+            return best["a"]
+        topics = [("envi", "shipping"), ("entreg", "shipping"), ("mand", "shipping"), ("retir", "hours"),
+                  ("horar", "hours"), ("abr", "hours"), ("atiend", "hours"), ("pag", "payment_methods"),
+                  ("tarjet", "payment_methods"), ("cuota", "payment_methods")]
+        for prefix, field in topics:
+            if any(w.startswith(prefix) for w in words) and p.get(field):
+                return p[field]
+        self.requires_human = True
+        return ("Eso no lo tengo cargado. Le paso tu consulta a una persona del equipo para que te "
+                "responda. ¿Te ayudo con algún producto mientras tanto?")
+
     def tool(self, name: str, summary: str) -> None:
         self.trace.append({"name": name, "summary": summary})
 
@@ -346,8 +379,8 @@ class _Turn:
             if self.state.get("last_results"):
                 return ("No te entendí. Si querés alguna de las opciones, decime el número "
                         "(por ejemplo \"la 2\"), o contame qué otra cosa buscás.")
-            return ("¡Hola! Soy el asistente de ventas (demo). Contame qué buscás: por ejemplo "
-                    "\"canilla negra para cocina\" o \"flexible de 40 cm\".")
+            return (self.profile.get("greeting") or
+                    "¡Hola! Soy el asistente de ventas. Contame qué buscás.")
         self.state["last_query"] = query
         found = inventory.offers(self.tenant, **query, max_price=budget, limit=6)
         self.tool("buscar_productos", f"{len(found)} resultado(s)")
@@ -607,6 +640,8 @@ def _rules_reply(turn: _Turn, text: str) -> str:
     cart_now = orders.get_cart(tenant_id, conv)
     if _RE_DONE.match(text) and cart_now and cart_now["items"]:
         reply = turn.prepare_checkout(text)
+    elif _RE_INFO.search(text) and not _RE_ORDER_WORD.search(text):
+        reply = turn.info(text)
     elif _RE_PAID_CLAIM.search(text):
         reply = turn.status(paid_claim=True)
     elif _RE_STATUS.search(text) and (_RE_ORDER_WORD.search(text) or "salio" in text or "llego" in text):
