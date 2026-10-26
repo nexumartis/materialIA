@@ -1,6 +1,10 @@
 # CLAUDE.md — Presupuesto Vivo
 
-Guía para agentes que trabajen en este repo. Leer junto con `docs/TAREA01_REPORTE.md`.
+**Primera lectura en cada tarea:** [docs/current-state.md](docs/current-state.md).
+Después seguir el acuerdo compartido de [AGENTS.md](AGENTS.md) y, según la tarea,
+[docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md). Las invariantes de este archivo aplican a todos los agentes.
+Para preparar el entorno del socio que sólo usa Claude Code, seguir [docs/ONBOARDING.md](docs/ONBOARDING.md).
+`docs/TAREA01_REPORTE.md` conserva evidencia histórica de TAREA 01; sus conteos y resultados no son validación actual.
 
 ## Qué es
 MVP (Fase 1) que convierte consultas de compra en **oportunidades trazables** con
@@ -12,7 +16,7 @@ Nicho inicial: mamparas/cerramientos a medida (AR). **Datos del seed = sintétic
 supabase start && supabase db reset          # Postgres real + migraciones + seed A/B
 cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e .
 cp .env.example .env
-python -m pytest -q                          # 13 tests contra Postgres real
+python -m pytest -q                          # tests contra Postgres real; registrar resultado actual
 uvicorn app.main:app --port 8077 --reload    # /docs para Swagger
 ```
 
@@ -30,10 +34,11 @@ uvicorn app.main:app --port 8077 --reload    # /docs para Swagger
 - `backend/app/domain/` — catálogo, `pricing.py` (determinista), oportunidades.
 - `backend/app/agent/` — `orchestrator.py` (el backend decide), `tools.py` (tenant-safe),
   `llm_adapter.py` (mock/openai), `skills/*.yaml` (versionadas).
-- `supabase/migrations/0001_init.sql` — esquema + RLS preparada (defensa en profundidad).
-- `backend/tests/` — 8 escenarios del Paso E.
+- `supabase/migrations/` — esquema SQL y políticas de aislamiento versionados.
+- `backend/tests/` — pruebas; verificar el conjunto y los resultados vigentes.
 
 ## Supabase remoto (dev)
 Proyecto ref `zfmjcturyhxytyfzmcha` (cuenta nexumartis). Para enlazar: `supabase login` con esa
-cuenta → `supabase link --project-ref zfmjcturyhxytyfzmcha` → `supabase db push`. `DATABASE_URL`
+cuenta → `supabase link --project-ref zfmjcturyhxytyfzmcha`. Un `supabase db push` modifica
+el remoto: revisar las migraciones y contar con instrucción expresa para aplicarlas. `DATABASE_URL`
 del remoto va en `backend/.env` (no en git).
