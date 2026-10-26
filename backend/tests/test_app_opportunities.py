@@ -131,3 +131,18 @@ def test_pooled_connection_is_clean_after_user_request(raw_conn, accounts, monke
         assert row["u"] == "postgres" and not row["uid"]
     finally:
         pool.close()
+
+
+def test_user_tx_runs_as_app_user_with_rls(accounts, raw_conn):
+    """La barrera es la base, no sólo el `where tenant_id` del código: dentro de user_tx el
+    rol es app_user y una query SIN filtro de tenant sólo devuelve filas propias."""
+    uid_a, t_a = accounts("A")
+    _, t_b = accounts("B")
+    own = seed_opportunity(raw_conn, t_a)
+    seed_opportunity(raw_conn, t_b)
+    with db.user_tx(uid_a) as (cur, tenant):
+        cur.execute("select current_user as u")
+        assert cur.fetchone()["u"] == "app_user"
+        cur.execute("select id from opportunities")
+        assert {str(r["id"]) for r in cur.fetchall()} == {own}
+    assert tenant == t_a

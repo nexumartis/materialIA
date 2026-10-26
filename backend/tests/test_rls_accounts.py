@@ -115,7 +115,14 @@ def test_sandbox_guc_does_not_widen_access(raw_conn, accounts):
 
 def test_no_uid_sees_nothing(raw_conn, accounts):
     _, t_a = accounts("A")
-    seed_opportunity(raw_conn, t_a)
+    opp = seed_opportunity(raw_conn, t_a)
+    with raw_conn.cursor() as cur:
+        cur.execute("insert into opportunity_activity (tenant_id, opportunity_id, kind) "
+                    "values (%s, %s, 'nota')", (t_a, opp))
+        for table in ("opportunities", "opportunity_activity", "tenants", "memberships"):
+            cur.execute(f"select 1 from {table} limit 1")
+            assert cur.fetchone(), f"{table} vacía como postgres: el assert de abajo sería vacuo"
+    raw_conn.commit()
     for table in ("opportunities", "opportunity_activity", "tenants", "memberships"):
         assert _as_app_user(raw_conn, None, f"select 1 from {table}") == []
 
@@ -125,3 +132,22 @@ def test_app_user_has_no_access_to_out_of_scope_tables(raw_conn, accounts):
     for table in ("catalog_items", "price_entries", "conversations", "messages", "demo_customers"):
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             _as_app_user(raw_conn, uid_a, f"select 1 from {table}")
+
+
+def test_activity_cannot_point_to_foreign_opportunity(raw_conn, accounts):
+    """Referencial por empresa: actividad de A no puede colgar de una oportunidad de B."""
+    uid_a, t_a = accounts("A")
+    _, t_b = accounts("B")
+    opp_b = seed_opportunity(raw_conn, t_b)
+    with pytest.raises(psycopg.errors.ForeignKeyViolation):
+        _as_app_user(raw_conn, uid_a,
+                     "insert into opportunity_activity (tenant_id, opportunity_id, kind) values (%s, %s, 'nota')",
+                     (t_a, opp_b))
+
+
+def test_helpers_not_executable_by_postgrest_roles(raw_conn):
+    with raw_conn.cursor() as cur:
+        for fn in ("app_uid()", "app_member_tenant()", "handle_new_user()"):
+            for role in ("anon", "authenticated"):
+                cur.execute("select has_function_privilege(%s, %s, 'execute') as ok", (role, fn))
+                assert cur.fetchone()["ok"] is False, f"{role} puede ejecutar {fn}"

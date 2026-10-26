@@ -7,6 +7,7 @@ segura del canal, no por este parámetro.
 """
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -16,7 +17,7 @@ from fastapi.responses import JSONResponse
 from .agent import orchestrator, tool_agent
 from .agent.tools import ToolContext
 from .auth import current_uid
-from .config import settings
+from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, user_tx
 from .domain import catalog, opportunities
 from .schemas import (
@@ -37,6 +38,13 @@ SANDBOX_TENANTS = {
     "A": "0000000a-0000-0000-0000-00000000000a",
     "B": "0000000b-0000-0000-0000-00000000000b",
 }
+
+# Fuera de local, verificar JWT contra el Supabase local por omisión rechaza toda sesión
+# del panel (401): se avisa al arrancar en vez de descubrirlo request por request.
+if settings.app_env != "local" and settings.supabase_url == Settings.model_fields["supabase_url"].default:
+    logging.getLogger(__name__).warning(
+        "SUPABASE_URL apunta al Supabase local con APP_ENV=%s: el panel /app rechazará "
+        "las sesiones del proyecto remoto.", settings.app_env)
 
 app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
 

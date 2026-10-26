@@ -25,6 +25,10 @@ class AuthError(Exception):
     """Token ausente, mal formado o no verificable."""
 
 
+class AuthUnavailable(Exception):
+    """No se pudo consultar el JWKS: falla del servicio, no de la sesión del usuario."""
+
+
 def _signing_key(token: str) -> Any:
     """Clave pública que firmó el token, según su `kid` en el JWKS (cacheado)."""
     global _jwks_client
@@ -45,6 +49,8 @@ def verify_jwt(token: str) -> str:
             options={"require": ["exp", "sub", "iss", "aud"]},
         )
         return str(uuid.UUID(claims["sub"]))
+    except jwt.PyJWKClientConnectionError as exc:
+        raise AuthUnavailable() from exc
     except (jwt.PyJWTError, ValueError, TypeError) as exc:
         raise AuthError(type(exc).__name__) from exc
 
@@ -58,3 +64,6 @@ def current_uid(authorization: str | None = Header(default=None)) -> str:
         return verify_jwt(token.strip())
     except AuthError:
         raise HTTPException(status_code=401, detail="Sesión inválida o vencida.")
+    except AuthUnavailable:
+        # 503 y no 401: el front no debe cerrar la sesión por una caída del proveedor.
+        raise HTTPException(status_code=503, detail="No se pudo verificar la sesión. Probá de nuevo.")

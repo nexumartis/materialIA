@@ -54,9 +54,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setAuth(() => session?.access_token ?? null, () => void signOut());
   }, [session, signOut]);
 
-  const token = session?.access_token ?? null;
+  // Se recarga el negocio cuando cambia la PERSONA, no en cada refresh del token
+  // (TOKEN_REFRESHED cada ~hora): así el panel no se desmonta ni pierde ediciones.
+  const userId = session?.user.id ?? null;
   useEffect(() => {
-    if (!token) return;
+    if (!userId) return;
     let alive = true;
     setStatus("loading");
     api
@@ -74,7 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [token, attempt]);
+  }, [userId, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
