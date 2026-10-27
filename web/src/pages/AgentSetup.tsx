@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, api, type AgentProfile } from "../lib/api";
+import { EvalsSection, KnowledgeSection, PoliciesSection, ToolsSection, VersionsSection } from "./AgentAdvanced";
 
 const TONES: { key: AgentProfile["tone"]; label: string }[] = [
   { key: "cercano", label: "Cercano (vos, cálido)" },
@@ -13,6 +14,7 @@ export function AgentSetup() {
   const [templates, setTemplates] = useState<{ key: string; label: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
     api.agentProfile().then(setP).catch(() => setMsg({ ok: false, text: "No pude cargar tu agente." }));
@@ -22,15 +24,23 @@ export function AgentSetup() {
   if (!p) return <div className="sheet"><div className="state">{msg?.text ?? "Cargando…"}</div></div>;
 
   const set = <K extends keyof AgentProfile>(k: K, v: AgentProfile[K]) => setP({ ...p, [k]: v });
+  const formBody = (): Partial<AgentProfile> => ({
+    seller_name: p.seller_name, tone: p.tone, greeting: p.greeting, faq: p.faq, rules: p.rules,
+    shipping: p.shipping, hours: p.hours, payment_methods: p.payment_methods, public_slug: p.public_slug,
+    policies: p.policies, disabled_tools: p.disabled_tools,
+  });
   const storeUrl = `${window.location.origin}${window.location.pathname}#/tienda/${p.public_slug}`;
 
-  async function save(body: Partial<AgentProfile> & { apply_template?: boolean }, okText: string) {
+  async function save(body: Partial<AgentProfile> & { apply_template?: boolean; require_evals?: boolean }, okText: string) {
     setSaving(true);
     setMsg(null);
+    setBlocked(false);
     try {
       setP(await api.saveAgentProfile(body));
       setMsg({ ok: true, text: okText });
     } catch (e) {
+      // 409 con pruebas: la versión no se activó; se puede revisar o guardar igual.
+      setBlocked(e instanceof ApiError && e.status === 409 && e.message.includes("pruebas"));
       setMsg({ ok: false, text: e instanceof ApiError ? e.message : "No pude guardar." });
     } finally {
       setSaving(false);
@@ -55,13 +65,7 @@ export function AgentSetup() {
         className="setup"
         onSubmit={(e) => {
           e.preventDefault();
-          void save(
-            {
-              seller_name: p.seller_name, tone: p.tone, greeting: p.greeting, faq: p.faq, rules: p.rules,
-              shipping: p.shipping, hours: p.hours, payment_methods: p.payment_methods, public_slug: p.public_slug,
-            },
-            "Guardado. Tu agente ya responde así.",
-          );
+          void save({ ...formBody(), require_evals: true }, "Guardado. Tu agente ya responde así.");
         }}
       >
         <section className="setup-card">
@@ -153,11 +157,25 @@ export function AgentSetup() {
           <button className="btn sm" type="button" onClick={() => set("rules", [...p.rules, ""])}>+ Agregar regla</button>
         </section>
 
+        <PoliciesSection policies={p.policies ?? {}} onChange={(v) => set("policies", v)} />
+        <ToolsSection disabled={p.disabled_tools ?? []} onChange={(v) => set("disabled_tools", v)} />
+
         <div className="setup-actions">
           {msg && <span className={`pill ${msg.ok ? "pos" : "neg"}`}>{msg.text}</span>}
+          {blocked && (
+            <button className="btn ghost" type="button" disabled={saving}
+              onClick={() => void save(formBody(), "Guardado aunque fallan pruebas.")}>Guardar igual</button>
+          )}
+          <span className="muted">v{p.version}</span>
           <button className="btn primary" type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
         </div>
       </form>
+
+      <div className="setup" style={{ marginTop: 16 }}>
+        <KnowledgeSection />
+        <EvalsSection draft={formBody} />
+        <VersionsSection current={p.version} onRestored={(np) => { setP(np); setMsg({ ok: true, text: `Restaurada como v${np.version}.` }); }} />
+      </div>
     </div>
   );
 }

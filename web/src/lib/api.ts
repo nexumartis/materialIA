@@ -151,7 +151,7 @@ export const api = {
   // Panel: el negocio arma su agente.
   agentTemplates: () => authed<{ key: string; label: string }[]>("/app/agent-templates"),
   agentProfile: () => authed<AgentProfile>("/app/agent-profile"),
-  saveAgentProfile: (body: Partial<AgentProfile> & { apply_template?: boolean }) =>
+  saveAgentProfile: (body: Partial<AgentProfile> & { apply_template?: boolean; require_evals?: boolean }) =>
     authed<AgentProfile>("/app/agent-profile", {
       method: "PUT",
       headers: { "content-type": "application/json" },
@@ -183,6 +183,40 @@ export const api = {
       headers: { "content-type": "application/json", ...buyerHeader(ref) },
       body: JSON.stringify({ message, conversation_id: ref?.id ?? null }),
     }),
+  forgetMe: (slug: string) =>
+    request<{ forgotten: boolean }>(`/public/${encodeURIComponent(slug)}/me`, {
+      method: "DELETE",
+      headers: buyerHeader(null),
+    }),
+
+  // Arquitectura del agente: versiones, herramientas, conocimiento y pruebas.
+  agentTools: () => authed<{ key: string; label: string }[]>("/app/agent-tools"),
+  profileVersions: () => authed<ProfileVersion[]>("/app/agent-profile/versions"),
+  restoreVersion: (version: number) =>
+    authed<AgentProfile>(`/app/agent-profile/versions/${version}/restore`, { method: "POST" }),
+  knowledge: () => authed<KnowledgeDoc[]>("/app/knowledge"),
+  addKnowledge: (title: string, text: string) =>
+    authed<KnowledgeDoc>("/app/knowledge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, text }),
+    }),
+  deleteKnowledge: (id: string) => authed<{ deleted: boolean }>(`/app/knowledge/${id}`, { method: "DELETE" }),
+  evalCases: () => authed<EvalCase[]>("/app/agent-evals"),
+  addEvalCase: (c: Omit<EvalCase, "id">) =>
+    authed<EvalCase>("/app/agent-evals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(c),
+    }),
+  deleteEvalCase: (id: string) => authed<{ deleted: boolean }>(`/app/agent-evals/${id}`, { method: "DELETE" }),
+  runEvals: (profile?: Partial<AgentProfile>) =>
+    authed<EvalRun>("/app/agent-evals/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(profile ? { profile } : {}),
+    }),
+
   storeConversation: (slug: string, ref: ConversationRef) =>
     request<SalesConversation>(
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}`,
@@ -197,8 +231,35 @@ export interface ConversationRef {
   token: string | null;
 }
 
+/** Clave aleatoria de este navegador para que la tienda recuerde preferencias del comprador.
+ * El servidor guarda sólo un hash por negocio; "Olvidarme" la borra. */
+const BUYER_KEY = "pv.comprador.clave";
+
+export function buyerKey(): string | null {
+  try {
+    let key = localStorage.getItem(BUYER_KEY);
+    if (!key) {
+      const bytes = crypto.getRandomValues(new Uint8Array(24));
+      key = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem(BUYER_KEY, key);
+    }
+    return key;
+  } catch {
+    return null; // sin almacenamiento (modo privado): la tienda funciona sin memoria
+  }
+}
+
+export function resetBuyerKey(): void {
+  try {
+    localStorage.removeItem(BUYER_KEY);
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
 function buyerHeader(ref: ConversationRef | null): Record<string, string> {
-  return ref?.token ? { "x-conversation-token": ref.token } : {};
+  const key = buyerKey();
+  return { ...(ref?.token ? { "x-conversation-token": ref.token } : {}), ...(key ? { "x-buyer-key": key } : {}) };
 }
 
 export interface AgentProfile {
@@ -212,7 +273,45 @@ export interface AgentProfile {
   shipping: string;
   hours: string;
   payment_methods: string;
+  policies: Policies;
+  disabled_tools: string[];
+  version: number;
   updated_at: string;
+}
+
+/** Reglas que hace cumplir el código (no el modelo). */
+export interface Policies {
+  min_order_total?: number;
+  delivery_zones?: string[];
+  human_only_categories?: string[];
+}
+
+export interface ProfileVersion {
+  version: number;
+  created_at: string;
+  seller_name: string | null;
+  tone: string | null;
+}
+
+export interface KnowledgeDoc {
+  id: string;
+  title: string;
+  chars: number;
+  chunks: number;
+  created_at: string;
+}
+
+export interface EvalCase {
+  id: string;
+  message: string;
+  expect_contains: string[];
+  expect_not_contains: string[];
+}
+
+export interface EvalRun {
+  passed: number;
+  total: number;
+  results: { id: string | null; message: string; reply: string; passed: boolean; failures: string[] }[];
 }
 
 export interface CatalogItem {

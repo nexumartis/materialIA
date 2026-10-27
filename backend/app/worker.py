@@ -1,7 +1,9 @@
 """Worker de tareas de mantenimiento. El estado vive en Postgres: si se reinicia, retoma.
 
-Por ahora libera el stock de pedidos impagos con la reserva vencida (idempotente y seguro con
-varias instancias: toma filas con `for update skip locked`).
+Cada vuelta (todas idempotentes; el estado vive en la base):
+- libera el stock de pedidos impagos con la reserva vencida (`for update skip locked`);
+- destila la memoria de clientes cuya conversación quedó inactiva (fuera de la respuesta);
+- resume la parte vieja de las conversaciones largas.
 
     python -m app.worker            # bucle cada WORKER_INTERVAL_S segundos (default 60)
     python -m app.worker --once     # una sola vuelta (cron, tests)
@@ -13,13 +15,16 @@ import os
 import sys
 import time
 
-from .domain import orders
+from .agent import compaction
+from .domain import customer_memory, orders
 
 log = logging.getLogger("app.worker")
 
 
 def run_once() -> dict[str, int]:
-    return {"expired_reservations": orders.expire_reservations()}
+    return {"expired_reservations": orders.expire_reservations(),
+            "customer_memories": customer_memory.refresh_due(),
+            "compacted_conversations": compaction.compact_due()}
 
 
 def main(argv: list[str]) -> None:

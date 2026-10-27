@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, api, type StoreInfo } from "../lib/api";
+import { ApiError, api, resetBuyerKey, type StoreInfo } from "../lib/api";
 import { Sales, type ChatSource } from "./Sales";
 
 /** Tienda pública de un negocio (`#/tienda/<slug>`): lo que ve el cliente, sin cuenta. */
@@ -45,12 +45,41 @@ export function Store({ slug }: { slug: string }) {
           <div className="state err">{error}</div>
         </div>
       ) : source ? (
-        <Sales health={null} source={source} />
+        <>
+          <Sales health={null} source={source} />
+          <MemoryNotice slug={slug} />
+        </>
       ) : (
         <div className="sheet">
           <div className="state">Cargando…</div>
         </div>
       )}
     </div>
+  );
+}
+
+/** Aviso de memoria: qué recuerda la tienda y cómo borrarlo. */
+function MemoryNotice({ slug }: { slug: string }) {
+  const [done, setDone] = useState(false);
+  async function forget() {
+    if (!window.confirm("Se borra lo que esta tienda recuerda de vos en este navegador. ¿Seguimos?")) return;
+    try {
+      await api.forgetMe(slug);
+    } finally {
+      resetBuyerKey();
+      setDone(true);
+    }
+  }
+  return (
+    <p className="memory-note">
+      {done ? (
+        "Listo: esta tienda ya no recuerda tus preferencias."
+      ) : (
+        <>
+          Esta tienda recuerda tus preferencias en este navegador para atenderte mejor (nunca datos de pago).{" "}
+          <button className="linkish" type="button" onClick={() => void forget()}>Olvidarme</button>
+        </>
+      )}
+    </p>
   );
 }

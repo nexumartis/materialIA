@@ -9,7 +9,7 @@ from ..schemas import OpportunityInput, OpportunitySummary
 
 
 # --- Conversaciones / mensajes -------------------------------------------
-def ensure_conversation(tenant_id: str, conversation_id: Optional[str]) -> str:
+def ensure_conversation(tenant_id: str, conversation_id: Optional[str], channel: str = "web_sandbox") -> str:
     with tenant_tx(tenant_id) as cur:
         if conversation_id:
             cur.execute(
@@ -20,8 +20,8 @@ def ensure_conversation(tenant_id: str, conversation_id: Optional[str]) -> str:
                 return conversation_id
         cur.execute(
             "insert into conversations (tenant_id, channel, status) "
-            "values (%s, 'web_sandbox', 'open') returning id",
-            (tenant_id,),
+            "values (%s, %s, 'open') returning id",
+            (tenant_id, channel),
         )
         return str(cur.fetchone()["id"])
 
@@ -55,13 +55,14 @@ def conversation_messages(tenant_id: str, conversation_id: str, limit: int = 200
 
 
 def add_message(tenant_id: str, conversation_id: str, direction: str, content: str,
-                payload: Optional[dict[str, Any]] = None) -> None:
+                payload: Optional[dict[str, Any]] = None, profile_version: Optional[int] = None) -> None:
+    """`profile_version`: versión del perfil del agente que generó la respuesta (auditoría)."""
     with tenant_tx(tenant_id) as cur:
         cur.execute(
-            "insert into messages (tenant_id, conversation_id, direction, content, payload) "
-            "values (%s, %s, %s, %s, %s::jsonb)",
+            "insert into messages (tenant_id, conversation_id, direction, content, payload, profile_version) "
+            "values (%s, %s, %s, %s, %s::jsonb, %s)",
             (tenant_id, conversation_id, direction, content,
-             json.dumps(payload) if payload else None),
+             json.dumps(payload) if payload else None, profile_version),
         )
         if direction == "inbound":
             cur.execute(

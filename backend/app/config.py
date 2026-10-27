@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     sim_webhook_secret: str = "sim-local-no-es-secreto"
     reservation_minutes: int = 30
 
+    # --- Memoria y contexto del agente (worker) ---
+    # Minutos de inactividad antes de destilar la memoria del cliente.
+    memory_idle_minutes: int = 10
+    # Mensajes a partir de los cuales se resume la parte vieja de una conversación.
+    compact_after_messages: int = 30
+    # Embeddings para la base de conocimiento (vacío = sólo búsqueda de texto).
+    embedding_model: str | None = None
+
     @property
     def sandbox_admin_enabled(self) -> bool:
         """Mutaciones administrativas del sandbox sin cuenta (importar catálogo, avanzar pedidos,

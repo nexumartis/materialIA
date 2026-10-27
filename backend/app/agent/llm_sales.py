@@ -71,6 +71,19 @@ _TOOLS: list[dict[str, Any]] = [
      "description": "El cliente quiere comprar/pagar o no quiere sumar nada más: arma el resumen y "
                     "le pide confirmación. NO genera el pago: eso pasa sólo si el cliente responde 'sí'.",
      "parameters": {"type": "object", "properties": {}}},
+    {"name": "consultar_envio",
+     "description": "¿Se envía a una zona? Responde con las zonas que cargó el negocio.",
+     "parameters": {"type": "object", "properties": {
+         "zona": {"type": "string", "description": "barrio, ciudad o provincia que dijo el cliente"}},
+         "required": ["zona"]}},
+    {"name": "buscar_info_negocio",
+     "description": "Busca en los documentos del negocio (fichas técnicas, garantías, políticas, "
+                    "instalación). Usala para preguntas que no son de precio ni stock.",
+     "parameters": {"type": "object", "properties": {"consulta": {"type": "string"}},
+                    "required": ["consulta"]}},
+    {"name": "historial_cliente",
+     "description": "Compras anteriores de ESTE cliente con el negocio (\"lo mismo que la otra vez\").",
+     "parameters": {"type": "object", "properties": {}}},
     {"name": "estado_pedido",
      "description": "Estado real de los pedidos de esta conversación (pago, despacho).",
      "parameters": {"type": "object", "properties": {
@@ -120,8 +133,36 @@ Lo que el negocio informa de sí mismo (podés repetirlo tal cual; si algo no es
 lo confirma una persona del equipo):
 {perfil}
 
-Contexto actual de la conversación:
+{memoria}Contexto actual de la conversación:
 {contexto}"""
+
+
+def _memory_text(turn: _Turn) -> str:
+    """Memoria de largo plazo y resumen: orientan, no son datos verificados (no son evidencia)."""
+    parts = []
+    facts = turn.memory()
+    if facts:
+        parts.append("Lo que sabemos de este cliente por conversaciones anteriores (orientativo, puede "
+                     "haber cambiado; no lo afirmes como dato de stock o precio):\n"
+                     + "\n".join(f"- {f}" for f in facts))
+    summary = _summary(turn)
+    if summary:
+        parts.append(f"Resumen de la parte anterior de esta conversación: {summary}")
+    return "".join(p + "\n\n" for p in parts)
+
+
+def _summary(turn: _Turn) -> Optional[str]:
+    with tenant_tx(turn.tenant) as cur:
+        cur.execute("select summary from conversations where tenant_id = %s and id = %s",
+                    (turn.tenant, turn.conv))
+        row = cur.fetchone()
+    return row["summary"] if row else None
+
+
+def _tools_for(turn: _Turn) -> list[dict[str, Any]]:
+    """Las herramientas que el negocio apagó ni se le ofrecen al modelo."""
+    from ..domain import agent_profile
+    return [t for t in _TOOLS if agent_profile.tool_enabled(turn.profile, t["name"])]
 
 
 def _profile_text(profile: dict[str, Any]) -> str:
@@ -193,7 +234,10 @@ def _context(turn: _Turn) -> str:
         lines.append("Búsqueda vigente: " + ", ".join(p for p in prefs if p))
     cart = orders.get_cart(turn.tenant, turn.conv)
     lines.append("Carrito: " + (turn.cart_text(cart).replace("\n", " | ") if cart else "vacío"))
-    recent = orders.conversation_orders(turn.tenant, turn.conv, limit=3)
+    from ..domain import agent_profile
+    # Si el negocio apagó "estado del pedido", el modelo tampoco ve estados para repetirlos.
+    recent = (orders.conversation_orders(turn.tenant, turn.conv, limit=3)
+              if agent_profile.tool_enabled(turn.profile, "estado_pedido") else [])
     for o in recent:
         note = ("lo revisa una persona: no pidas pagar ni ofrezcas link" if o["attention_reason"]
                 else "ya pagado: no pidas pagar" if o["status"] in _PAID else "")
@@ -239,6 +283,15 @@ def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
             return "No hay una lista de opciones para comparar: buscá primero."
         # Ninguna opción entra en el presupuesto: la búsqueda real con ese tope.
         return turn.compare("", picks, budget) or turn.search(turn.text, budget)
+    from ..domain import agent_profile
+    if not agent_profile.tool_enabled(turn.profile, name):
+        return "Herramienta no habilitada por el negocio: decí que lo confirma una persona del equipo."
+    if name == "consultar_envio":
+        return turn.shipping(str(args.get("zona") or ""))
+    if name == "buscar_info_negocio":
+        return turn.knowledge(consulta) or "No hay información cargada sobre eso: lo confirma una persona."
+    if name == "historial_cliente":
+        return turn.customer_history()
     if name == "preparar_compra":
         return turn.prepare_checkout("")
     if name == "estado_pedido":
@@ -412,7 +465,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
     messages: list[dict[str, Any]] = [{"role": "system", "content": _SYSTEM.format(
         vendedor=profile.get("seller_name") or "el asistente", negocio=_business_name(turn.tenant),
         tono=_TONES.get(profile.get("tone") or "cercano", _TONES["cercano"]),
-        perfil=perfil, contexto=_context(turn))}] + history
+        perfil=perfil, memoria=_memory_text(turn), contexto=_context(turn))}] + history
     if not history or history[-1].get("content") != message:
         messages.append({"role": "user", "content": message})
     outputs: list[str] = []
@@ -421,7 +474,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
     reply = ""
     try:
         for _ in range(MAX_STEPS):
-            resp = planner(messages, _TOOLS)
+            resp = planner(messages, _tools_for(turn))
             calls = [c for c in resp.get("tool_calls") or [] if c.get("name")]
             if not calls:
                 reply = (resp.get("content") or "").strip()

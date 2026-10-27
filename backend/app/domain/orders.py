@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 from ..config import settings
 from ..db import system_tx, tenant_tx
-from . import inventory
+from . import agent_profile, inventory
 from .inventory import OutOfStock
 
 log = logging.getLogger(__name__)
@@ -149,7 +149,9 @@ def _ensure_cart(cur: Any, tenant_id: str, conversation_id: str) -> dict[str, An
     return _open_cart_row(cur, tenant_id, conversation_id, lock=True)
 
 
-def add_item(tenant_id: str, conversation_id: str, item_id: str, qty: int = 1) -> CartResult:
+def add_item(tenant_id: str, conversation_id: str, item_id: str, qty: int = 1,
+             policies: Optional[dict[str, Any]] = None) -> CartResult:
+    """`policies`: las de un BORRADOR de perfil (evaluaciones); si no, las vigentes en la base."""
     if qty <= 0:
         raise ValueError("la cantidad debe ser positiva")
     with tenant_tx(tenant_id) as cur:
@@ -157,6 +159,10 @@ def add_item(tenant_id: str, conversation_id: str, item_id: str, qty: int = 1) -
         if offer is None:
             return CartResult("not_found")
         if offer["pricing_mode"] != "fixed":
+            return CartResult("requires_human", offer=offer)
+        # Política del negocio: estas categorías las vende sólo una persona.
+        rules = policies if policies is not None else agent_profile.policies(cur, tenant_id)
+        if offer["category"].lower() in rules.get("human_only_categories", []):
             return CartResult("requires_human", offer=offer)
         if offer["price"] is None:
             return CartResult("no_price", offer=offer)
@@ -204,7 +210,7 @@ def remove_item(tenant_id: str, conversation_id: str, item_id: str) -> CartResul
 # --- Checkout -----------------------------------------------------------------
 @dataclass
 class CheckoutResult:
-    status: str        # pending_payment | already_pending | price_changed | out_of_stock | empty | requires_human
+    status: str        # pending_payment | already_pending | price_changed | out_of_stock | empty | requires_human | below_minimum
     order: Optional[dict[str, Any]] = None
     price_changes: list[dict[str, Any]] = field(default_factory=list)
     shortage: Optional[dict[str, Any]] = None
@@ -250,6 +256,23 @@ def checkout(tenant_id: str, conversation_id: str) -> CheckoutResult:
                 return CheckoutResult("price_changed",
                                       order=_view(cur, _fetch(cur, tenant_id, order_id)),
                                       price_changes=changes)
+
+            # Políticas del negocio, revalidadas al cobrar (pudieron cambiar desde el carrito).
+            rules = agent_profile.policies(cur, tenant_id)
+            human_only = rules.get("human_only_categories", [])
+            if human_only:
+                cur.execute("select c.name from order_items i join catalog_items c "
+                            "on c.tenant_id = i.tenant_id and c.id = i.item_id "
+                            "where i.tenant_id = %s and i.order_id = %s and lower(c.category) = any(%s) "
+                            "limit 1", (tenant_id, order_id, human_only))
+                blocked = cur.fetchone()
+                if blocked:
+                    return CheckoutResult("requires_human", order=_view(cur, cart),
+                                          shortage={"name": blocked["name"]})
+            minimum = float(rules.get("min_order_total") or 0)
+            if minimum and float(cart["subtotal"]) < minimum:
+                return CheckoutResult("below_minimum", order=_view(cur, cart),
+                                      shortage={"minimum": minimum, "total": float(cart["subtotal"])})
 
             inventory._reserve(cur, tenant_id, order_id,
                                [(it["item_id"], it["qty"]) for it in items])
