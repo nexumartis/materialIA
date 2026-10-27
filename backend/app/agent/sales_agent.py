@@ -130,7 +130,8 @@ _RE_DONE = re.compile(r"^\s*(no|nop|nada|nada mas|no gracias|no,? gracias|eso es
                       r"ya esta|no,? (quiero|necesito|voy a) (sumar|agregar|llevar) nada( mas)?|"
                       r"no quiero nada mas|no,? nada mas|nada mas,? gracias)\b[\s!.,]*(gracias)?[\s!.]*$")
 # Preguntas sobre el negocio (envíos, retiro, horarios, pagos, factura): responde el perfil.
-_RE_INFO = re.compile(r"\b(envio|envios|envian|mandan|entrega|entregan|retiro|retirar|horario|horarios|"
+_RE_INFO = re.compile(r"\b(envio|envios|envian|mandan|entrega|entregan|llega|llegan|avisas|avisame|whatsapp|"
+                      r"mail|email|correo|retiro|retirar|horario|horarios|"
                       r"abren|atienden|abierto|factura|facturan|cuotas|tarjeta|medios? de pago|formas? de pago|"
                       r"se puede pagar|puedo pagar|direccion|donde (estan|queda)|local)\b")
 _RE_PAID_CLAIM = re.compile(r"\bya (te )?(pague|abone|transferi|deposite)\b")
@@ -146,6 +147,28 @@ _RE_ADD = re.compile(r"\b(agrega|agregame|agregala|agregalo|agregalas|agregalos|
 _RE_BUDGET = re.compile(r"(menos de|hasta|maximo|no mas de|por debajo de|debajo de|tope de?)\s*\$?\s*"
                         r"([\d][\d.,]*)\s*(mil|k|lucas)?")
 _RE_STOCK_Q = re.compile(r"\b(stock|disponib|quedan|queda|cuantas hay|cuantos hay|hay de)\b")
+# Agradecimiento o despedida sin otro pedido ("gracias!", "listo, muchas gracias, chau").
+_SOCIAL = set("""gracias muchas muchisimas mil genial perfecto buenisimo barbaro joya listo excelente
+bueno ok dale no chau saludos hasta luego nos vemos igualmente a vos por todo un abrazo crack capo""".split())
+
+
+# Pedido de comparar o recomendar entre opciones: se responde con la ficha (no con rasgos libres).
+_RE_COMPARE = re.compile(r"\b(diferencias?|compar\w*|recomend\w*|cual (me )?(conviene|sirve)|cual es mejor|"
+                         r"cual (elijo|llevo)|versus|vs)\b")
+# Palabras del pedido de comparar que no son un dato a buscar en la ficha.
+_INTENT = set("""diferencia diferencias compara comparar comparas comparame comparacion recomendas
+recomendarias recomendame recomienda conviene sirve elijo llevo entre versus tiene tienen cual mejor
+para usar usarla usarlo""".split())
+_RE_NO_BUDGET = re.compile(r"\b(sin (limite|tope|presupuesto)( de precio)?|cualquier precio|no importa el precio)\b")
+
+
+def _stems(text: str) -> set[str]:
+    return {w[:5] for w in re.findall(r"[a-z0-9]+", normalize(text)) if len(w) >= 4}
+
+
+def _social(text: str) -> bool:
+    words = re.findall(r"[a-z]+", text)
+    return any(w in ("gracias", "chau", "saludos") for w in words) and all(w in _SOCIAL for w in words)
 
 
 def _money(amount: Optional[float]) -> str:
@@ -236,6 +259,7 @@ class _Turn:
         self.products: list[dict[str, Any]] = []
         self.payment: Optional[dict[str, Any]] = None
         self.requires_human = False
+        self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
 
     @property
     def tenant(self) -> str:
@@ -279,7 +303,8 @@ class _Turn:
         self.tool("perfil_negocio", "faq" if best else "campos")
         if best:
             return best["a"]
-        topics = [("envi", "shipping"), ("entreg", "shipping"), ("mand", "shipping"), ("retir", "hours"),
+        topics = [("envi", "shipping"), ("entreg", "shipping"), ("mand", "shipping"), ("lleg", "shipping"),
+                  ("retir", "hours"),
                   ("horar", "hours"), ("abr", "hours"), ("atiend", "hours"), ("pag", "payment_methods"),
                   ("tarjet", "payment_methods"), ("cuota", "payment_methods")]
         for prefix, field in topics:
@@ -370,18 +395,24 @@ class _Turn:
 
     # -- intenciones --
     def search(self, text: str, budget: Optional[float]) -> str:
-        f = self.filters(text)
+        drop_budget = bool(_RE_NO_BUDGET.search(text))
+        f = self.filters(_RE_NO_BUDGET.sub(" ", text))
         query = {"keywords": f["keywords"], "color": f["color"], "ambiente": f["ambiente"]}
-        if budget is not None and not (f["keywords"] or f["color"] or f["ambiente"]):
-            # "¿cuál me recomendás por menos de 100 mil?" => sobre la última búsqueda
-            query = dict(self.state.get("last_query") or query)
+        last = self.state.get("last_query")
+        if last and not f["keywords"] and (budget is not None or f["color"] or f["ambiente"] or drop_budget):
+            # Corrección parcial ("¿y en cromo?", "hasta 150 mil", "sin límite de precio") => sobre la
+            # última búsqueda, con su tope salvo que lo cambie o lo quite. Otro tipo de producto
+            # arranca de cero (sin tope).
+            query = {k: query[k] or last.get(k) for k in query}
+            if budget is None and not drop_budget:
+                budget = last.get("budget")
         if not (query["keywords"] or query["color"] or query["ambiente"]):
             if self.state.get("last_results"):
                 return ("No te entendí. Si querés alguna de las opciones, decime el número "
                         "(por ejemplo \"la 2\"), o contame qué otra cosa buscás.")
             return (self.profile.get("greeting") or
                     "¡Hola! Soy el asistente de ventas. Contame qué buscás.")
-        self.state["last_query"] = query
+        self.state["last_query"] = {**query, "budget": budget}
         found = inventory.offers(self.tenant, **query, max_price=budget, limit=6)
         self.tool("buscar_productos", f"{len(found)} resultado(s)")
         if not found:
@@ -419,6 +450,61 @@ class _Turn:
             self.state["last_results"] = [i["id"] for i in items]
             return head + " Si querés, le aviso al equipo para que te contacten cuando vuelva."
         return self.show(alts, head + " Te puedo ofrecer estas, que sí tienen stock:")
+
+    def compare(self, text: str, picks: Optional[list[int]] = None,
+                budget: Optional[float] = None) -> Optional[str]:
+        """Comparación con hechos de la ficha (nombre, precio, stock, specs, descripción); nada
+        que no esté cargado. Productos: los números dados, los nombrados o toda la última lista,
+        hasta el presupuesto si lo hay. None si ninguno entra (entonces se busca de nuevo)."""
+        shown = self._shown()
+        if not shown:
+            return None
+        if picks is None:
+            picks = [int(n) for n in re.findall(r"\b(\d)\b", text)]
+            picks += [_ORDINALS[t] for t in re.findall(r"[a-z0-9]+", text) if t in _ORDINALS]
+            words = _stems(text)
+            for i, o in enumerate(shown, 1):
+                others = set().union(*(_stems(x["name"]) for x in shown if x is not o))
+                if (_stems(o["name"]) - others) & words:
+                    picks.append(i)
+        nums = sorted({n for n in picks if 0 < n <= len(shown)})
+        if len(nums) < 2:
+            nums = list(range(1, min(len(shown), 4) + 1))
+        if budget is not None:
+            nums = [n for n in nums if shown[n - 1]["price"] is not None and shown[n - 1]["price"] <= budget]
+            if not nums:
+                return None
+        items = [shown[n - 1] for n in nums]
+        self.tool("comparar_productos", ", ".join(o["sku"] for o in items))
+        lines = ["Te las comparo con lo que figura en la ficha"
+                 + (f" (hasta {_money(budget)}):" if budget is not None else ":")]
+        for n, o in zip(nums, items):
+            ficha = ", ".join(f"{k}: {v}" for k, v in (o.get("specs") or {}).items())
+            lines.append(self._line(n, o) + (f" ({ficha})" if ficha else "")
+                         + (f". {o['description']}" if o.get("description") else ""))
+        keys = sorted({k for o in items for k in (o.get("specs") or {})})
+        diff = [f"{k}: " + " / ".join(str(o["specs"].get(k, "sin dato")) for o in items)
+                for k in keys if len({str(o["specs"].get(k)) for o in items}) > 1]
+        lines.append("Diferencias en la ficha: " + "; ".join(diff) + "." if diff else
+                     "En la ficha no hay otras diferencias cargadas además del nombre, el precio y el stock.")
+        sellable = [(n, o) for n, o in zip(nums, items)
+                    if o["pricing_mode"] == "fixed" and o["price"] is not None and o["available"] > 0]
+        if sellable:
+            n, o = min(sellable, key=lambda x: x[1]["price"])
+            lines.append(f"La más económica con stock es la {n} ({_money(o['price'])}).")
+        # Lo que pidió (uso, prestación, dato) y no figura en ninguna ficha comparada: lo ve una persona.
+        known = _stems(" ".join(f"{o['name']} {o.get('brand') or ''} {json.dumps(o.get('specs') or {}, ensure_ascii=False)} "
+                                f"{o.get('description') or ''}" for o in items))
+        asked = [w for w in re.findall(r"[a-z]+", self.text or text)
+                 if len(w) >= 4 and w not in _STOP and w not in _INTENT and w[:5] not in known]
+        if asked:
+            self.requires_human = True
+            lines.append(f"Lo que preguntás («{' '.join(asked)}») no figura en la ficha: lo confirma una "
+                         "persona del equipo.")
+        else:
+            lines.append("Si necesitás otro dato (medida, caudal, compatibilidad), preguntame y te digo "
+                         "si figura.")
+        return "\n".join(lines)
 
     def stock(self, text: str) -> str:
         o = self.resolve(text)
@@ -578,6 +664,10 @@ class _Turn:
             if cart and cart["items"]:
                 return "Todavía no confirmaste ningún pedido. Tenés en el carrito:\n" + self.cart_text(cart)
             return "No encuentro pedidos en esta conversación."
+        if len(found) > 1:
+            # Varios pedidos: el estado de cada uno, sin elegir uno ni esconder una revisión humana.
+            self.requires_human = any(o["attention_reason"] for o in found)
+            return "Tus pedidos:\n" + "\n".join(self._order_line(o) for o in found)
         o = found[0]
         if o["attention_reason"]:
             # Algo del cobro necesita a una persona: no se ofrece otro link ni se afirma un estado.
@@ -603,6 +693,27 @@ class _Turn:
         tracking = ("" if o["status"] in ("PAID", "PREPARING", "REFUNDED")
                     else " Todavía no tengo número de seguimiento cargado para este envío.")
         return f"Tu pedido #{o['number']} está {o['status_label']}.{tracking}"
+
+    @staticmethod
+    def _order_line(o: dict[str, Any]) -> str:
+        if o["attention_reason"] == "paid_without_stock":
+            return (f"• #{o['number']}: recibimos el pago, pero el producto se agotó; una persona del "
+                    "equipo te contacta para devolverte el dinero o darte una alternativa.")
+        if o["attention_reason"]:
+            return (f"• #{o['number']}: una persona del equipo revisa el pago; no hace falta que "
+                    "pagues de nuevo.")
+        return f"• #{o['number']}: {o['status_label']}."
+
+    def thanks(self) -> str:
+        """Cierre social: agradece sin reabrir la venta; el estado del pedido sale de la base."""
+        self.tool("cierre", "agradecimiento")
+        recent = orders.conversation_orders(self.tenant, self.conv, limit=1)
+        tail = ""
+        if recent:
+            o = recent[0]
+            tail = (f" El pedido #{o['number']} lo revisa una persona del equipo." if o["attention_reason"]
+                    else f" Tu pedido #{o['number']} está {o['status_label']}.")
+        return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
     # -- CRM --
     def _lead_for_order(self, order: dict[str, Any]) -> None:
@@ -640,6 +751,10 @@ def _rules_reply(turn: _Turn, text: str) -> str:
     cart_now = orders.get_cart(tenant_id, conv)
     if _RE_DONE.match(text) and cart_now and cart_now["items"]:
         reply = turn.prepare_checkout(text)
+    elif _social(text):
+        reply = turn.thanks()
+    elif _RE_COMPARE.search(text) and state.get("last_results") and (cmp := turn.compare(text, budget=budget)):
+        reply = cmp
     elif _RE_INFO.search(text) and not _RE_ORDER_WORD.search(text):
         reply = turn.info(text)
     elif _RE_PAID_CLAIM.search(text):
@@ -678,6 +793,7 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     state = _load_state(tenant_id, conv)
     turn = _Turn(ToolContext(tenant_id=tenant_id, conversation_id=conv), state)
     text = normalize(message)
+    turn.text = text
     mode = "mock"
 
     reply = _confirmation_reply(turn, text)

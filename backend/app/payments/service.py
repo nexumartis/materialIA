@@ -222,7 +222,7 @@ def _after_paid(tenant_id: str, order: dict[str, Any]) -> None:
             opportunities.add_message(
                 tenant_id, conv, "outbound",
                 f"¡Pago confirmado! Tu pedido #{order['number']} quedó pagado. "
-                "Te aviso cuando salga.")
+                "Para ver cómo sigue, escribime «¿cómo va mi pedido?».")
             opp = opportunities.upsert_opportunity(tenant_id, OpportunityInput(
                 conversation_id=conv, stage="cerrada", origin="venta_chat",
                 requirements={"pedido": order["number"]}, requires_human_quote=False,
