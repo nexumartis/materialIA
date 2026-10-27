@@ -34,7 +34,9 @@ Mercado Pago real y por negocio, WhatsApp, transportistas/tracking y automatizac
 
 El orquestador conserva las decisiones y coordina; Claude Code y Codex personal implementan con revisión cruzada. Cada archivo tiene un owner. Usar briefs cortos, lectura selectiva, evidencia en archivos y resultados breves según [economía de contexto](AI-WORKFLOW.md#economía-de-contexto). El socio con sólo Claude mantiene su modalidad de revisión en contexto fresco.
 
-Codebase Memory es un índice derivado. Consultar [.codebase-memory/artifact.json](../.codebase-memory/artifact.json) antes de usarlo: el artefacto heredado corresponde a fuentes anteriores. Esta entrega está en cambios locales, todavía sin commit ni índice nuevo. Git/Markdown conservan decisiones y resultados; el MCP no garantiza que un agente lea el estado.
+Codebase Memory se regeneró el 26/10/2026 mediante su CLI local: **indexed, 1102 nodos y 4017 relaciones**, fuente cerrada `d2280c4187a93ec7e01db852ffc1536560af4304` (código R2 en `e0e3317`). Se utilizó una copia Git del mismo commit para compatibilidad con WSL; la conexión MCP de esta sesión se cerró, sin impedir exportar el artefacto con la CLI. Consultar [.codebase-memory/artifact.json](../.codebase-memory/artifact.json): el commit que incorpora el grafo y este estado es posterior al indexado.
+
+Modo fast: excluyó docs, web/e2e, migraciones SQL y archivos estáticos. Leer esos materiales directamente según tarea. Git/Markdown conservan decisiones y resultados; el índice no reemplaza esa lectura ni garantiza ahorro de tokens. Entrega en rama `fix/public-chat-continuity`; integración pendiente de aceptación de los socios.
 
 ## Próximo paso
 
