@@ -138,15 +138,15 @@ export const api = {
   activity: (id: string) => authed<Activity[]>(`/app/opportunities/${id}/activity`),
 
   // Agente de ventas (empresa demo C, sin cuenta).
-  salesChat: (message: string, conversationId: string | null) =>
+  salesChat: (message: string, ref: ConversationRef | null) =>
     request<SalesResponse>(`/sandbox/sales/chat?company=C`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, conversation_id: conversationId }),
+      body: JSON.stringify({ message, conversation_id: ref?.id ?? null }),
     }),
 
-  salesConversation: (conversationId: string) =>
-    request<SalesConversation>(`/sandbox/sales/${conversationId}?company=C`),
+  salesConversation: (ref: ConversationRef) =>
+    request<SalesConversation>(`/sandbox/sales/${encodeURIComponent(ref.id)}?company=C`),
 
   // Panel: el negocio arma su agente.
   agentTemplates: () => authed<{ key: string; label: string }[]>("/app/agent-templates"),
@@ -174,17 +174,32 @@ export const api = {
   advanceOrder: (id: string, status: string) =>
     authed<Order>(`/app/orders/${id}/status?status=${status}`, { method: "POST" }),
 
-  // Tienda pública de cada negocio (sin cuenta).
+  // Tienda pública de cada negocio (sin cuenta). El token del comprador va en un header,
+  // nunca en la URL.
   store: (slug: string) => request<StoreInfo>(`/public/${encodeURIComponent(slug)}`),
-  storeChat: (slug: string, message: string, conversationId: string | null) =>
+  storeChat: (slug: string, message: string, ref: ConversationRef | null) =>
     request<SalesResponse>(`/public/${encodeURIComponent(slug)}/chat`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, conversation_id: conversationId }),
+      headers: { "content-type": "application/json", ...buyerHeader(ref) },
+      body: JSON.stringify({ message, conversation_id: ref?.id ?? null }),
     }),
-  storeConversation: (slug: string, conversationId: string) =>
-    request<SalesConversation>(`/public/${encodeURIComponent(slug)}/conversations/${conversationId}`),
+  storeConversation: (slug: string, ref: ConversationRef) =>
+    request<SalesConversation>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}`,
+      { headers: buyerHeader(ref) },
+    ),
 };
+
+/** Referencia del comprador a su conversación. En la tienda pública lleva el token que emitió el
+ *  servidor al crearla: sin él, la UUID sola no abre la conversación. */
+export interface ConversationRef {
+  id: string;
+  token: string | null;
+}
+
+function buyerHeader(ref: ConversationRef | null): Record<string, string> {
+  return ref?.token ? { "x-conversation-token": ref.token } : {};
+}
 
 export interface AgentProfile {
   business_type: string;
@@ -279,6 +294,8 @@ export interface MessageUI {
 export interface SalesResponse {
   reply: string;
   conversation_id: string;
+  /** Sólo tienda pública y sólo al crear la conversación. */
+  conversation_token?: string | null;
   mode: string;
   requires_human: boolean;
   cart: Order | null;

@@ -13,11 +13,12 @@ from uuid import UUID
 
 import psycopg
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import buyer_session
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
@@ -71,6 +72,19 @@ def _resolve_tenant(company: str) -> str:
     return tenant
 
 
+# Las empresas demo C/D también tienen tienda pública: el sandbox (sin cuenta) no lee ni opera los
+# pedidos y oportunidades de conversaciones de compradores, y sus mutaciones administrativas sólo
+# existen en local. La lectura demo y el chat demo siguen disponibles.
+def _sandbox_admin() -> None:
+    if not settings.sandbox_admin_enabled:
+        raise HTTPException(status_code=404, detail="No disponible fuera del entorno local.")
+
+
+def _not_buyer_record(table: str, tenant: str, record_id: str, detail: str) -> None:
+    if buyer_session.in_public_thread(table, tenant, record_id):
+        raise HTTPException(status_code=404, detail=detail)
+
+
 @app.get("/health")
 def health() -> dict:
     ok, detail = db_healthcheck()
@@ -92,6 +106,7 @@ def products(company: str = Query("C"), q: str = Query("")) -> list[ProductSumma
 
 @app.post("/sandbox/catalog/import", response_model=CatalogImportResult)
 def import_catalog(body: CatalogImportRequest, company: str = Query("C")) -> CatalogImportResult:
+    _sandbox_admin()
     tenant = _resolve_tenant(company)
     imported, errors = catalog.import_items(tenant, [i.model_dump() for i in body.items])
     return CatalogImportResult(imported=imported, errors=errors)
@@ -100,13 +115,15 @@ def import_catalog(body: CatalogImportRequest, company: str = Query("C")) -> Cat
 @app.get("/sandbox/opportunities", response_model=list[OpportunitySummary])
 def opps(company: str = Query("C")) -> list[OpportunitySummary]:
     tenant = _resolve_tenant(company)
-    return opportunities.list_opportunities(tenant)
+    return opportunities.list_opportunities(tenant, exclude_buyer_threads=True)
 
 
 @app.patch("/sandbox/opportunities/{opportunity_id}", response_model=OpportunitySummary)
 def update_opp(opportunity_id: str, body: OpportunityUpdate,
                company: str = Query("C")) -> OpportunitySummary:
+    _sandbox_admin()
     tenant = _resolve_tenant(company)
+    _not_buyer_record("opportunities", tenant, opportunity_id, "Oportunidad no encontrada.")
     try:
         updated = opportunities.update_opportunity(
             tenant, opportunity_id, stage=body.stage,
@@ -122,15 +139,23 @@ def update_opp(opportunity_id: str, body: OpportunityUpdate,
 def opp_activity(opportunity_id: str, company: str = Query("C")) -> list[dict]:
     """Timeline de la oportunidad: qué se hizo y cuándo (creada, cambios de estado…)."""
     tenant = _resolve_tenant(company)
+    _not_buyer_record("opportunities", tenant, opportunity_id, "Oportunidad no encontrada.")
     return opportunities.get_activity(tenant, opportunity_id)
 
 
 # --- Agente de ventas (empresa demo C) -------------------------------------
 # Stock, carrito, pedido y link de pago desde el chat. El pago SÓLO se confirma con el aviso
 # verificado del proveedor (webhook + consulta del pago), nunca por lo que diga el cliente.
+def _not_public(tenant: str, conversation_id: str | None) -> None:
+    """El sandbox no es un acceso alternativo a las conversaciones de la tienda pública."""
+    if conversation_id and buyer_session.is_public(tenant, conversation_id):
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+
+
 @app.post("/sandbox/sales/chat")
 def sales_chat(req: ChatRequest, company: str = Query("C")) -> dict:
     tenant = _resolve_tenant(company)
+    _not_public(tenant, req.conversation_id)
     res = sales_agent.handle_sales_message(tenant, req.message, req.conversation_id)
     return {
         "reply": res.reply, "conversation_id": res.conversation_id, "mode": res.mode,
@@ -145,6 +170,7 @@ def sales_conversation(conversation_id: UUID, company: str = Query("C")) -> dict
     al volver del checkout: el aviso de pago confirmado llega por acá, como llegaría por WhatsApp."""
     tenant = _resolve_tenant(company)
     conv = str(conversation_id)
+    _not_public(tenant, conv)
     return {
         "messages": opportunities.conversation_messages(tenant, conv),
         "cart": orders.get_cart(tenant, conv),
@@ -155,6 +181,7 @@ def sales_conversation(conversation_id: UUID, company: str = Query("C")) -> dict
 @app.get("/sandbox/orders/{order_id}")
 def sandbox_order(order_id: UUID, company: str = Query("C")) -> dict:
     tenant = _resolve_tenant(company)
+    _not_buyer_record("orders", tenant, str(order_id), "Pedido no encontrado.")
     order = orders.get_order(tenant, str(order_id))
     if order is None:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
@@ -164,7 +191,9 @@ def sandbox_order(order_id: UUID, company: str = Query("C")) -> dict:
 @app.post("/sandbox/orders/{order_id}/status")
 def sandbox_order_status(order_id: UUID, status: str = Query(...), company: str = Query("C")) -> dict:
     """Avance operativo (preparación, despacho, entrega) que hará el negocio desde el panel."""
+    _sandbox_admin()
     tenant = _resolve_tenant(company)
+    _not_buyer_record("orders", tenant, str(order_id), "Pedido no encontrado.")
     try:
         order = orders.advance_status(tenant, str(order_id), status)
     except ValueError as exc:
@@ -177,6 +206,7 @@ def sandbox_order_status(order_id: UUID, status: str = Query(...), company: str 
 @app.post("/sandbox/maintenance/expire-reservations")
 def sandbox_expire() -> dict:
     """Lo mismo que hace el worker (`python -m app.worker`) en cada vuelta."""
+    _sandbox_admin()
     return {"expired": orders.expire_reservations()}
 
 
@@ -412,19 +442,38 @@ def public_store(slug: str) -> dict:
             "greeting": profile.get("greeting"), "payments": settings.payment_provider}
 
 
+# Cada conversación pertenece al comprador que la empezó: el token emitido al crearla viaja en el
+# header `X-Conversation-Token` y se exige en cada lectura y escritura (ver buyer_session.py).
+# Una UUID ajena, de otro negocio o sin token da el mismo 404 que una inexistente.
+def _owned(tenant: str, conversation_id: str, token: str | None) -> None:
+    if not buyer_session.owns(tenant, conversation_id, token):
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+
+
 @app.post("/public/{slug}/chat")
-def public_chat(slug: str, req: ChatRequest) -> dict:
+def public_chat(slug: str, req: ChatRequest,
+                token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
     store = _store(slug)
-    res = sales_agent.handle_sales_message(store["tenant_id"], req.message, req.conversation_id)
-    return {"reply": res.reply, "conversation_id": res.conversation_id, "mode": res.mode,
-            "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
+    tenant = store["tenant_id"]
+    new_token = None
+    if req.conversation_id:
+        _owned(tenant, req.conversation_id, token)
+        conv = req.conversation_id
+    else:
+        conv, new_token = buyer_session.start(tenant)
+    res = sales_agent.handle_sales_message(tenant, req.message, conv)
+    # El token se entrega sólo al crear la conversación.
+    return {"reply": res.reply, "conversation_id": res.conversation_id, "conversation_token": new_token,
+            "mode": res.mode, "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
             "payment": res.payment, "trace": res.trace, "ui": res.ui}
 
 
 @app.get("/public/{slug}/conversations/{conversation_id}")
-def public_conversation(slug: str, conversation_id: UUID) -> dict:
+def public_conversation(slug: str, conversation_id: UUID,
+                        token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
     store = _store(slug)
     conv = str(conversation_id)
+    _owned(store["tenant_id"], conv, token)
     return {"messages": opportunities.conversation_messages(store["tenant_id"], conv),
             "cart": orders.get_cart(store["tenant_id"], conv),
             "orders": orders.conversation_orders(store["tenant_id"], conv)}

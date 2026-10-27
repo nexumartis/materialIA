@@ -39,6 +39,17 @@ Asignar un único owner por archivo antes de editar. Dividir tareas paralelas po
 
 Los briefs usan roles y referencias del proyecto, sin rutas privadas, credenciales, identidades personales ni modelos fijos heredados de otra tarea. Mantener instrucciones breves y agrupar correcciones para cuidar contexto y cuota.
 
+## Economía de contexto
+
+Preferencia expresa del usuario, 26/10/2026: cuidar tokens del orquestador y de los ejecutores para prolongar la sesión, conservando alcance, validación y revisión.
+
+- El orquestador entrega un brief corto con objetivo, revisión base, archivos, aceptación y referencias al contexto existente.
+- Leer las invariantes al iniciar; después consultar sólo fuentes y skills pertinentes. Usar búsquedas y fragmentos concretos; releer cuando cambie la fuente o falte información.
+- Implementador y revisor comparten la revisión base, el diff y la evidencia. El revisor trabaja en contexto separado sobre ese alcance; ampliar sólo ante dependencias o hallazgos.
+- Ejecutar comprobaciones proporcionadas al cambio. Repetirlas cuando haya modificaciones, fallos o dudas pendientes. Guardar logs extensos y devolver resultado, evidencia y pendientes en pocas líneas.
+- Usar subagentes para trabajo independiente que justifique su contexto. Agrupar hallazgos y correcciones en una devolución.
+- Cerrar con decisiones y pendientes breves en el estado; enlazar el detalle. Mantener la configuración acordada de modelo y esfuerzo y registrar la efectiva.
+
 ## Estado y Codebase Memory
 
 Git y los Markdown versionados son la fuente de verdad. [current-state.md](current-state.md) conserva la revisión inspeccionada, cambios locales relevantes, decisiones, evidencia con fecha, pendientes y próximo paso. Una observación de una base remota debe distinguirse del esquema versionado y revalidarse antes de actuar sobre ella. Las credenciales quedan en el mecanismo de secretos del entorno.

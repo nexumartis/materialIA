@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Default: puerto de Postgres de `supabase start` (local).
     database_url: str = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
     app_env: str = "local"
+    # Opt-in de las mutaciones administrativas del sandbox sin cuenta (SANDBOX_ADMIN=1). Apagado por
+    # defecto y sin efecto fuera de APP_ENV=local.
+    sandbox_admin: bool = False
 
     # --- Supabase Auth (panel autenticado) ---
     # URL del proyecto (no es secreto). Local: `supabase start`. Los JWT se verifican con
@@ -51,6 +54,13 @@ class Settings(BaseSettings):
     # Firma de los avisos del proveedor SIMULADO (no protege nada real; sólo recorre el camino).
     sim_webhook_secret: str = "sim-local-no-es-secreto"
     reservation_minutes: int = 30
+
+    @property
+    def sandbox_admin_enabled(self) -> bool:
+        """Mutaciones administrativas del sandbox sin cuenta (importar catálogo, avanzar pedidos,
+        editar oportunidades, vencer reservas): sólo con opt-in explícito Y en local. Fuera de eso
+        las hace el panel autenticado."""
+        return self.sandbox_admin and self.app_env == "local"
 
     @property
     def supabase_issuer(self) -> str:

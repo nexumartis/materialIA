@@ -33,6 +33,7 @@ export function Store({ slug }: { slug: string }) {
         chat: (m, c) => api.storeChat(slug, m, c),
         conversation: (c) => api.storeConversation(slug, c),
         customerView: true,
+        storageKey: `pv.tienda.${slug}.conversacion`,
       },
     [info, slug],
   );

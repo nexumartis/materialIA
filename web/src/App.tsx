@@ -34,9 +34,10 @@ function sectionFor(hash: string): Section {
 
 export default function App() {
   const hash = useHashRoute();
-  // La tienda pública de un negocio es la vista del cliente: sin panel ni menú.
+  // La tienda pública de un negocio es la vista del cliente: sin panel ni menú. Una instancia por
+  // tienda: al cambiar de tienda se desmonta la anterior y se descartan sus respuestas pendientes.
   const store = /^#\/tienda\/([a-z0-9-]{3,48})$/.exec(hash);
-  if (store) return <Store slug={store[1]} />;
+  if (store) return <Store key={store[1]} slug={store[1]} />;
   return <Backoffice hash={hash} />;
 }
 

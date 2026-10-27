@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   api,
+  type ConversationRef,
   type Health,
   type MessageUI,
   type Order,
@@ -175,11 +177,38 @@ export interface ChatSource {
   subtitle: string;
   greeting: string;
   suggestions: string[];
-  chat: (message: string, conversationId: string | null) => Promise<SalesResponse>;
-  conversation: (conversationId: string) => Promise<SalesConversation>;
+  chat: (message: string, ref: ConversationRef | null) => Promise<SalesResponse>;
+  conversation: (ref: ConversationRef) => Promise<SalesConversation>;
   /** Vista de cliente: sin datos internos (herramientas usadas, notas técnicas). */
   customerView?: boolean;
+  /** Clave de sessionStorage donde la pestaña recuerda la conversación (una por tienda). */
+  storageKey?: string;
 }
+
+// La referencia vive en sessionStorage: sobrevive a recargas y a ir y volver entre tiendas o del
+// checkout en la misma pestaña, y se pierde al cerrarla (el token no queda en el equipo).
+function loadRef(key?: string): ConversationRef | null {
+  if (!key) return null;
+  try {
+    const v = JSON.parse(sessionStorage.getItem(key) ?? "null");
+    return v && typeof v.id === "string" && typeof v.token === "string" ? { id: v.id, token: v.token } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRef(key: string | undefined, ref: ConversationRef | null) {
+  if (!key) return;
+  try {
+    if (ref) sessionStorage.setItem(key, JSON.stringify(ref));
+    else sessionStorage.removeItem(key);
+  } catch {
+    /* almacenamiento no disponible: la conversación dura lo que la vista */
+  }
+}
+
+const toMsgs = (c: SalesConversation): Msg[] =>
+  c.messages.map((m) => ({ role: m.role === "user" ? "me" : "bot", text: m.content, ui: m.ui }));
 
 export const DEMO_SOURCE: ChatSource = {
   title: "Agente de ventas",
@@ -194,66 +223,119 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [convId, setConvId] = useState<string | null>(null);
+  const [conv, setConv] = useState<ConversationRef | null>(() => loadRef(source.storageKey));
   const [cart, setCart] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [trace, setTrace] = useState<{ name: string; summary: string }[]>([]);
   const [detail, setDetail] = useState<ProductCard | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  // Generación de la conversación: "Nueva conversación" y desmontar la incrementan, y toda
+  // respuesta (o error) de una generación anterior se descarta. `reads` además invalida las
+  // relecturas pendientes cuando sale un mensaje, para que no pisen la respuesta más nueva.
+  const gen = useRef(0);
+  const reads = useRef(0);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // Al volver del checkout, releer la conversación: el aviso de pago lo escribe el backend.
-  useEffect(() => {
-    if (!convId) return;
-    const refresh = () => {
-      source
-        .conversation(convId)
-        .then((c) => {
-          setMessages(
-            c.messages.map((m) => ({ role: m.role === "user" ? "me" : "bot", text: m.content, ui: m.ui })),
-          );
-          setCart(c.cart);
-          setOrders(c.orders);
-        })
-        .catch(() => {});
-    };
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [convId, source]);
+  useEffect(
+    () => () => {
+      gen.current++;
+    },
+    [],
+  );
 
-  async function send(text: string) {
-    const msg = text.trim();
-    if (!msg || sending) return;
-    setInput("");
-    setMessages((m) => [...m, { role: "me", text: msg }]);
-    setSending(true);
-    try {
-      const j = await source.chat(msg, convId);
-      setConvId(j.conversation_id);
-      setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
-      setCart(j.cart);
-      setOrders(j.orders);
-      setTrace(j.trace);
-    } catch {
-      setMessages((m) => [
-        ...m,
-        { role: "bot", text: "No pude conectar con la API local. ¿Está corriendo el backend?" },
-      ]);
-    } finally {
-      setSending(false);
-    }
+  function remember(ref: ConversationRef | null) {
+    setConv(ref);
+    saveRef(source.storageKey, ref);
   }
 
-  function restart() {
+  function clearView() {
     setMessages([]);
-    setConvId(null);
     setCart(null);
     setOrders([]);
     setTrace([]);
     setDetail(null);
+  }
+
+  // Relee la conversación (al montar con una referencia guardada y al volver del checkout: el
+  // aviso de pago lo escribe el backend). Una referencia inválida o revocada se olvida.
+  function reload(ref: ConversationRef) {
+    const g = gen.current;
+    const r = ++reads.current;
+    const current = () => g === gen.current && r === reads.current;
+    source
+      .conversation(ref)
+      .then((c) => {
+        if (!current()) return;
+        setMessages(toMsgs(c));
+        setCart(c.cart);
+        setOrders(c.orders);
+      })
+      .catch((e) => {
+        if (!current()) return;
+        if (e instanceof ApiError && e.status === 404) {
+          remember(null);
+          clearView();
+        }
+      });
+  }
+
+  useEffect(() => {
+    // Sólo al montar: después, la vista se actualiza con cada respuesta.
+    if (conv) reload(conv);
+  }, []);
+
+  useEffect(() => {
+    if (!conv) return;
+    const refresh = () => reload(conv);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [conv, source]);
+
+  async function send(text: string) {
+    const msg = text.trim();
+    if (!msg || sending) return;
+    const g = gen.current;
+    reads.current++;
+    setInput("");
+    setMessages((m) => [...m, { role: "me", text: msg }]);
+    setSending(true);
+    try {
+      const j = await source.chat(msg, conv);
+      if (g !== gen.current) return;
+      remember(j.conversation_id === conv?.id ? conv : { id: j.conversation_id, token: j.conversation_token ?? null });
+      setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
+      setCart(j.cart);
+      setOrders(j.orders);
+      setTrace(j.trace);
+    } catch (e) {
+      if (g !== gen.current) return;
+      if (conv && e instanceof ApiError && e.status === 404) {
+        // La conversación guardada ya no es válida: se olvida y el próximo mensaje empieza otra.
+        remember(null);
+        clearView();
+        setMessages([
+          { role: "bot", text: "Esa conversación ya no está disponible. Escribí de nuevo para empezar otra." },
+        ]);
+      } else {
+        setMessages((m) => [
+          ...m,
+          { role: "bot", text: "No pude conectar con la API local. ¿Está corriendo el backend?" },
+        ]);
+      }
+    } finally {
+      if (g === gen.current) setSending(false);
+    }
+  }
+
+  function restart() {
+    gen.current++;
+    reads.current++;
+    remember(null);
+    clearView();
+    setSending(false);
   }
 
   const lastBot = messages.length && messages[messages.length - 1].role === "bot" ? messages.length - 1 : -1;

@@ -165,15 +165,21 @@ _OPP_COLUMNS = ("id, stage, requires_human_quote, estimated_amount, "
                 "requirements_json, created_at, next_action_at")
 
 
-def list_opportunities(tenant_id: str, limit: int = 50) -> list[OpportunitySummary]:
+def list_opportunities(tenant_id: str, limit: int = 50, *,
+                       exclude_buyer_threads: bool = False) -> list[OpportunitySummary]:
     with tenant_tx(tenant_id) as cur:
-        return _list(cur, tenant_id, limit)
+        return _list(cur, tenant_id, limit, exclude_buyer_threads=exclude_buyer_threads)
 
 
-def _list(cur: Any, tenant_id: str, limit: int = 50) -> list[OpportunitySummary]:
+def _list(cur: Any, tenant_id: str, limit: int = 50, *,
+          exclude_buyer_threads: bool = False) -> list[OpportunitySummary]:
+    # El sandbox no lista las de conversaciones de compradores de la tienda pública (0006).
+    buyer_filter = (" and not exists (select 1 from conversations c where c.tenant_id = opportunities.tenant_id"
+                    " and c.id = opportunities.conversation_id and c.access_token_hash is not null)"
+                    if exclude_buyer_threads else "")
     cur.execute(
         f"select {_OPP_COLUMNS} from opportunities "
-        "where tenant_id = %s order by created_at desc limit %s",
+        f"where tenant_id = %s{buyer_filter} order by created_at desc limit %s",
         (tenant_id, limit),
     )
     return [_row_to_opp(r) for r in cur.fetchall()]
