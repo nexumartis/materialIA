@@ -108,11 +108,12 @@ def test_public_store_sells_with_the_business_profile_and_catalog(client, accoun
     assert store["name"] == "Grifería Online" and store["seller_name"] == "Caro"
     r = client.post(f"/public/{slug}/chat", json={"message": "tenés canilla negra de cocina?"}).json()
     assert "$89.900" in r["reply"] and r["ui"]["products"][0]["image_url"] == "https://ejemplo.test/c1.jpg"
-    r = client.post(f"/public/{slug}/chat", json={"message": "hacen envíos?",
-                                                   "conversation_id": r["conversation_id"]}).json()
+    buyer = {"X-Conversation-Token": r["conversation_token"]}
+    r = client.post(f"/public/{slug}/chat", headers=buyer, json={"message": "hacen envíos?",
+                                                                  "conversation_id": r["conversation_id"]}).json()
     assert "todo Rosario por $5.000" in r["reply"]
-    r = client.post(f"/public/{slug}/chat", json={"message": "dan factura?",
-                                                   "conversation_id": r["conversation_id"]}).json()
+    r = client.post(f"/public/{slug}/chat", headers=buyer, json={"message": "dan factura?",
+                                                                  "conversation_id": r["conversation_id"]}).json()
     assert "persona" in r["reply"] and r["requires_human"] is True
     assert client.get("/public/no-existe-esta").status_code == 404
 
@@ -121,10 +122,11 @@ def test_panel_orders_and_fulfillment(client, accounts):
     uid, _ = accounts("Vendedora")
     client.post("/app/catalog/import", headers=bearer(uid), json={"csv": CSV})
     slug = client.get("/app/agent-profile", headers=bearer(uid)).json()["public_slug"]
-    conv = None
+    conv, buyer = None, {}
     for m in ("canilla negra de cocina", "agregame la 1", "comprar", "sí"):
-        r = client.post(f"/public/{slug}/chat", json={"message": m, "conversation_id": conv}).json()
+        r = client.post(f"/public/{slug}/chat", headers=buyer, json={"message": m, "conversation_id": conv}).json()
         conv = r["conversation_id"]
+        buyer = buyer or {"X-Conversation-Token": r["conversation_token"]}
     orders_ = client.get("/app/orders", headers=bearer(uid)).json()
     assert len(orders_) == 1 and orders_[0]["status"] == "PENDING_PAYMENT"
     oid = orders_[0]["id"]

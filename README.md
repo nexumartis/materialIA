@@ -52,11 +52,18 @@ cd ../web && npm install && npm run dev    # http://localhost:5173/#/venta
 | GET  | `/sandbox/sales/{conversation_id}?company=C` | Mensajes, carrito y pedidos de la conversación. |
 | GET  | `/sandbox/checkout/{preference_id}` | Checkout **simulado** (sólo con `PAYMENT_PROVIDER=simulated`). |
 | POST | `/webhooks/{provider}` | Avisos de pago firmados (`simulated` / `mercadopago`). |
-| POST | `/sandbox/catalog/import?company=C` | Alta/actualización masiva de catálogo (upsert por sku). |
+| POST | `/sandbox/catalog/import?company=C` | Alta/actualización masiva de catálogo (upsert por sku). Requiere `SANDBOX_ADMIN=1`. |
 | GET  | `/app/me`, `/app/opportunities*` | Panel autenticado (JWT de Supabase Auth). |
 
 `company` es un **allowlist fijo** (C/D) mapeado en el servidor a UUIDs del seed; no se confía
 un `tenant_id` arbitrario del cliente.
+
+Las mutaciones administrativas del sandbox sin cuenta (`/sandbox/catalog/import`,
+`/sandbox/orders/{id}/status`, `PATCH /sandbox/opportunities/{id}`,
+`/sandbox/maintenance/expire-reservations`) están **apagadas por defecto** (404). Se habilitan
+sólo con `SANDBOX_ADMIN=1` **y** `APP_ENV=local`; fuera de local el opt-in no tiene efecto. El chat
+demo, la tienda pública y el checkout simulado no lo necesitan. Las rutas del sandbox tampoco
+leen ni operan pedidos u oportunidades de conversaciones de la tienda pública.
 
 ## Supabase de desarrollo REMOTO (opcional)
 
