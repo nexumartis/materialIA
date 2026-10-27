@@ -48,7 +48,9 @@ def test_approved_payment_marks_paid_and_sells_stock_once(shop, raw_conn):
     with raw_conn.cursor() as cur:
         cur.execute("select content from messages where conversation_id = %s and direction = 'outbound'",
                     (conv,))
-        assert any("Pago confirmado" in r["content"] for r in cur.fetchall())
+        notes = [r["content"] for r in cur.fetchall() if "Pago confirmado" in r["content"]]
+        # Sin promesa de aviso que el sistema no envía: indica cómo consultar el estado.
+        assert notes and "Te aviso" not in notes[0] and "¿cómo va mi pedido?" in notes[0]
         cur.execute("select stage from opportunities where conversation_id = %s", (conv,))
         assert cur.fetchone()["stage"] == "cerrada"
     raw_conn.commit()

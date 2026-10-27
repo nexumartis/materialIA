@@ -1,0 +1,12 @@
+{
+  "base": "6290f60725e0033284875f840bcd0af63937f179",
+  "files": {
+    "backend/app/agent/llm_sales.py": "ef870acec1c52419fd243a056f637469fbf9a9351220a41b4da15a60891f38a1",
+    "backend/app/agent/sales_agent.py": "e814bc39662d3bbb36f7ade203d9a82214fcc4a407fef5064027061f34f5c040",
+    "backend/app/payments/service.py": "74c0ffa371ce228297c434361dc992998d1e2b4044bc8d6a210fd4c67ea00399",
+    "backend/evals/natural_smoke.py": "ba1c8bfd4b96d6b6d460012776eff4603db88e5b9478b3f61ea27c7ec4e8a89f",
+    "backend/tests/test_natural_conversation.py": "928d4ba47a7ae9cf5937048749934709fca7be44e38dd213576af6c95802fc6b",
+    "backend/tests/test_payments.py": "f84a3eea56284f33e277bc12ea26b58ca87df17506b876773153c45132824273"
+  },
+  "status": "reviewed_static_approved_174_tests_local"
+}
