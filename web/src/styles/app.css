@@ -470,3 +470,10 @@ label.btn.disabled { opacity:.5; cursor:default; }
   /* Vista del cliente: primero la conversación, después carrito y pedidos. */
   .store .rail { order:1; }
 }
+.memory-note { max-width:1100px; margin:10px auto 0; font-size:12px; color:var(--muted); text-align:center; }
+.linkish { background:none; border:0; padding:0; color:var(--accent); text-decoration:underline; cursor:pointer; font:inherit; }
+.checks { display:flex; flex-direction:column; gap:6px; }
+.check { display:flex; gap:8px; align-items:center; font-size:14px; }
+.eval-row { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--rule); }
+.eval-row code { font-size:13px; }
+.neg-text { color:var(--negative); margin-top:4px; }

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, inventory, opportunities, orders
+from ..domain import agent_profile, customer_memory, inventory, knowledge, opportunities, orders
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -134,6 +134,15 @@ _RE_INFO = re.compile(r"\b(envio|envios|envian|mandan|entrega|entregan|llega|lle
                       r"mail|email|correo|retiro|retirar|horario|horarios|"
                       r"abren|atienden|abierto|factura|facturan|cuotas|tarjeta|medios? de pago|formas? de pago|"
                       r"se puede pagar|puedo pagar|direccion|donde (estan|queda)|local)\b")
+_MONEY_IN_DOCS = re.compile(r"(\$|\bars\b|\busd\b|u\$s)\s?\d[\d.,]*|\d[\d.,]*\s?(pesos|dolares|dólares|ars\b|usd\b)", re.I)
+# "Busco/tenés/quiero…": pedido de productos, aunque mencione una palabra de documentos.
+_RE_PRODUCT_ASK = re.compile(r"\b(busco|buscando|quiero|necesito|me mostras|mostrame)\b")
+# Preguntas que suelen responder los documentos del negocio (garantías, instalación, fichas).
+_RE_DOCS = re.compile(r"\b(garantia|garantias|instal\w*|manual|ficha|medidas?|compatib\w*|devolucion\w*|"
+                      r"cambio|cambios|mantenimiento|limpi\w*|repuesto para|como se (usa|coloca|instala))\b")
+# "Lo mismo que la otra vez", "mis compras anteriores": historial del cliente.
+_RE_HISTORY = re.compile(r"\b(lo mismo que (la otra vez|antes|la ultima)|(mi|mis) (ultima|ultimas|anterior|"
+                         r"anteriores) compras?|que (te|les) compre|compre antes|la otra vez)\b")
 _RE_PAID_CLAIM = re.compile(r"\bya (te )?(pague|abone|transferi|deposite)\b")
 _RE_STATUS = re.compile(r"\b(estado|salio|llego|llega|donde (esta|anda|viene)|seguimiento|tracking|"
                         r"cuando (llega|sale)|despach|como (va|viene|anda|sigue)|novedad)")
@@ -259,6 +268,7 @@ class _Turn:
         self.products: list[dict[str, Any]] = []
         self.payment: Optional[dict[str, Any]] = None
         self.requires_human = False
+        self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
 
     @property
@@ -290,9 +300,46 @@ class _Turn:
             self._profile = agent_profile.for_agent(self.tenant) or {}
         return self._profile
 
+    # -- memoria y conocimiento (ver docs/research/2026-10-27-arquitectura-agentes-personalizados.md) --
+    @property
+    def customer(self) -> Optional[str]:
+        if not hasattr(self, "_customer"):
+            self._customer = customer_memory.customer_of(self.tenant, self.conv) if self.conv else None
+        return self._customer
+
+    def memory(self) -> list[str]:
+        return customer_memory.facts(self.tenant, self.customer)
+
+    def customer_history(self) -> str:
+        """Memoria episódica just-in-time: pedidos anteriores del cliente con este negocio."""
+        past = [o for o in customer_memory.history(self.tenant, self.customer) if o.get("id")]
+        self.tool("historial_cliente", f"{len(past)} pedido(s) anterior(es)")
+        if not self.customer:
+            return "No tengo historial de este cliente (no lo reconozco de antes)."
+        if not past:
+            return "No tiene compras anteriores registradas con nosotros."
+        lines = [f"Pedido #{o['number']} ({o['status_label']}): "
+                 + ", ".join(f"{i['qty']} × {i['name']}" for i in o["items"]) for o in past]
+        return "Compras anteriores:\n" + "\n".join(lines)
+
+    def knowledge(self, query: str) -> Optional[str]:
+        """Documentos del negocio (RAG). None si no hay nada relevante."""
+        hits = knowledge.search(self.tenant, query)
+        self.tool("buscar_info_negocio", f"{len(hits)} fragmento(s)")
+        if not hits:
+            return None
+        # Los precios salen sólo del catálogo (vigencia, a pedido): un monto en un documento puede
+        # estar viejo, así que no se repite.
+        return "\n\n".join(f"Según «{h['title']}»: {_MONEY_IN_DOCS.sub('[precio: consultar]', h['content'][:600])}"
+                             for h in hits)
+
     def info(self, text: str) -> str:
         """Responde con lo que el negocio cargó en su perfil; si no lo tiene, no lo inventa."""
         p = self.profile
+        zones = (p.get("policies") or {}).get("delivery_zones") or []
+        named = next((z for z in zones if normalize(z) in text), None)
+        if named and agent_profile.tool_enabled(p, "consultar_envio"):
+            return self.shipping(named)
         words = {w for w in re.findall(r"[a-z]{4,}", text) if w not in _STOP}
         best, score = None, 0
         for item in p.get("faq") or []:
@@ -310,6 +357,9 @@ class _Turn:
         for prefix, field in topics:
             if any(w.startswith(prefix) for w in words) and p.get(field):
                 return p[field]
+        found = self.knowledge(text) if agent_profile.tool_enabled(p, "buscar_info_negocio") else None
+        if found:
+            return found
         self.requires_human = True
         return ("Eso no lo tengo cargado. Le paso tu consulta a una persona del equipo para que te "
                 "responda. ¿Te ayudo con algún producto mientras tanto?")
@@ -456,6 +506,10 @@ class _Turn:
         """Comparación con hechos de la ficha (nombre, precio, stock, specs, descripción); nada
         que no esté cargado. Productos: los números dados, los nombrados o toda la última lista,
         hasta el presupuesto si lo hay. None si ninguno entra (entonces se busca de nuevo)."""
+        if not agent_profile.tool_enabled(self.profile, "comparar_productos"):
+            self.requires_human = True
+            self.tool("comparar_productos", "deshabilitada por el negocio")
+            return "Para recomendarte entre estas opciones te ayuda una persona del equipo. Ya les aviso."
         shown = self._shown()
         if not shown:
             return None
@@ -537,7 +591,8 @@ class _Turn:
     def add_offer(self, o: dict[str, Any], qty: int) -> str:
         qty = max(1, int(qty))
         self.state["selected"] = o["id"]
-        res = orders.add_item(self.tenant, self.conv, o["id"], qty)
+        res = orders.add_item(self.tenant, self.conv, o["id"], qty,
+                              policies=(self.profile.get("policies") or {}) if self.dry_run else None)
         self.tool("agregar_al_carrito", f"{o['sku']} x{qty}: {res.status}")
         if res.status == "requires_human":
             self.requires_human = True
@@ -575,8 +630,44 @@ class _Turn:
             return f"La {o['name']} no estaba en tu carrito.\n" + self.cart_text(res.cart or cart)
         return f"Saqué la {o['name']}.\n" + self.cart_text(res.cart)
 
+    def _lead_only(self, cart: Optional[dict[str, Any]]) -> str:
+        """El negocio apagó la venta directa: se registra el interés y cierra una persona."""
+        self.requires_human = True
+        self.tool("preparar_compra", "venta directa deshabilitada por el negocio")
+        if cart and cart["items"]:
+            opportunities.upsert_opportunity(self.tenant, OpportunityInput(
+                conversation_id=self.conv, stage="para_cotizar", origin="venta_chat",
+                requirements={"productos": [f"{i['qty']} × {i['name']}" for i in cart["items"]]},
+                requires_human_quote=True, estimated_amount=cart["total"]))
+        return ("Para cerrar la compra te contacta una persona del equipo con el detalle de lo que "
+                "elegiste. ¿Querés consultar algo más mientras tanto?")
+
+    def _below_minimum(self, total: float) -> Optional[str]:
+        minimum = float((self.profile.get("policies") or {}).get("min_order_total") or 0)
+        if minimum and total < minimum:
+            self.tool("politica", f"compra mínima {_money(minimum)}")
+            return (f"La compra mínima es de {_money(minimum)} y tu carrito suma {_money(total)}. "
+                    "¿Querés sumar algo más?")
+        return None
+
+    def shipping(self, zone: str) -> str:
+        """¿Se envía a esta zona? Sale de las zonas que cargó el negocio, sin inventar costos."""
+        self.tool("consultar_envio", zone or "sin zona")
+        zones = (self.profile.get("policies") or {}).get("delivery_zones") or []
+        info = self.profile.get("shipping") or ""
+        if not zones:
+            return info or "Eso lo confirma una persona del equipo."
+        z = normalize(zone)
+        hit = next((x for x in zones if z and (normalize(x) in z or z in normalize(x))), None)
+        if hit:
+            return f"Sí, enviamos a {hit}." + (f" {info}" if info else "")
+        return (f"A {zone or 'esa zona'} no figura que enviemos. Las zonas de envío son: "
+                f"{', '.join(zones)}. Si querés, una persona del equipo lo revisa.")
+
     def prepare_checkout(self, text: str) -> str:
         cart = orders.get_cart(self.tenant, self.conv)
+        if not agent_profile.tool_enabled(self.profile, "preparar_compra"):
+            return self._lead_only(cart)
         if not cart or not cart["items"]:
             # Con un pedido ya esperando pago, "la compro" pide ese link; no arma otro carrito.
             pending = [o for o in orders.conversation_orders(self.tenant, self.conv)
@@ -597,6 +688,9 @@ class _Turn:
             if pending:
                 return self.pay_link(pending[0], "Ya tenés un pedido esperando el pago.")
             return "Todavía no agregaste nada al carrito. ¿Qué producto querés llevar?"
+        below = self._below_minimum(cart["total"])
+        if below:
+            return below
         self.state["pending"] = {"action": "checkout", "total": cart["total"]}
         return ("Te confirmo el pedido:\n" + self.cart_text(cart)
                 + "\nAl confirmar te aparto el stock y te paso el link de pago. ¿Confirmás? (sí / no)")
@@ -604,6 +698,14 @@ class _Turn:
     def confirm_checkout(self) -> str:
         pending = self.state.pop("pending", None) or {}
         cart = orders.get_cart(self.tenant, self.conv)
+        # El negocio pudo apagar la venta directa después del resumen: el "sí" no la reactiva.
+        if not agent_profile.tool_enabled(self.profile, "preparar_compra"):
+            return self._lead_only(cart)
+        # Evaluaciones: se verifica todo hasta acá, pero nunca se aparta stock ni se crea un cobro.
+        if self.dry_run:
+            self.tool("comprar", "simulado (evaluación): sin pedido ni link")
+            below = self._below_minimum(cart["total"]) if cart else None
+            return below or "[Prueba] Acá se confirmaría el pedido y se enviaría el link de pago."
         if cart and cart["items"] and abs(cart["total"] - float(pending.get("total") or 0)) > 0.005:
             # El carrito cambió después del resumen: el "sí" no vale para otro total.
             self.state["pending"] = {"action": "checkout", "total": cart["total"]}
@@ -622,6 +724,8 @@ class _Turn:
             return (f"Se agotó mientras lo confirmabas: de la {s['name']} quedan {s['available']} y "
                     f"pediste {s['requested']}. No aparté nada. ¿Querés ajustar la cantidad o ver "
                     "alternativas?")
+        if res.status == "below_minimum":
+            return self._below_minimum(res.shortage["total"]) or "No alcanza la compra mínima del negocio."
         if res.status == "empty":
             return "Tu carrito está vacío. ¿Qué querés llevar?"
         if res.status == "requires_human":
@@ -657,6 +761,10 @@ class _Turn:
         return until.astimezone(ZoneInfo("America/Argentina/Buenos_Aires")).strftime("%H:%M")
 
     def status(self, paid_claim: bool) -> str:
+        if not agent_profile.tool_enabled(self.profile, "estado_pedido"):
+            self.requires_human = True
+            self.tool("estado_pedido", "deshabilitada por el negocio")
+            return "El estado de tu pedido te lo confirma una persona del equipo. Ya les aviso."
         found = orders.conversation_orders(self.tenant, self.conv)
         self.tool("estado_pedido", f"{len(found)} pedido(s)")
         if not found:
@@ -755,6 +863,8 @@ def _rules_reply(turn: _Turn, text: str) -> str:
         reply = turn.thanks()
     elif _RE_COMPARE.search(text) and state.get("last_results") and (cmp := turn.compare(text, budget=budget)):
         reply = cmp
+    elif _RE_HISTORY.search(text) and agent_profile.tool_enabled(turn.profile, "historial_cliente"):
+        reply = turn.customer_history()
     elif _RE_INFO.search(text) and not _RE_ORDER_WORD.search(text):
         reply = turn.info(text)
     elif _RE_PAID_CLAIM.search(text):
@@ -773,6 +883,11 @@ def _rules_reply(turn: _Turn, text: str) -> str:
         reply = turn.add(text, choice=_choice(text))
     elif budget is None and _RE_STOCK_Q.search(text) and turn.state.get("last_results"):
         reply = turn.stock(text)
+    elif (_RE_DOCS.search(text) and not _RE_PRODUCT_ASK.search(text)
+          and not (_RE_ADD.search(text) and state.get("last_results"))
+          and agent_profile.tool_enabled(turn.profile, "buscar_info_negocio")
+          and (doc := turn.knowledge(text))):
+        reply = doc
     else:
         reply = None
         if budget is None and _RE_ADD.search(text) and (state.get("last_results") or state.get("selected")):
@@ -783,15 +898,19 @@ def _rules_reply(turn: _Turn, text: str) -> str:
 
 
 def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional[str] = None,
-                         planner: Optional[Any] = None) -> SalesReply:
+                         planner: Optional[Any] = None, profile_override: Optional[dict[str, Any]] = None,
+                         channel: str = "web_sandbox") -> SalesReply:
     """Un mensaje del cliente. Con LLM configurado (o un `planner` inyectado) el modelo elige las
     herramientas; si falla o su respuesta no pasa los controles, responde el planner por reglas."""
     from . import llm_sales
 
-    conv = opportunities.ensure_conversation(tenant_id, conversation_id)
+    conv = opportunities.ensure_conversation(tenant_id, conversation_id, channel)
     opportunities.add_message(tenant_id, conv, "inbound", message)
     state = _load_state(tenant_id, conv)
     turn = _Turn(ToolContext(tenant_id=tenant_id, conversation_id=conv), state)
+    if profile_override is not None:      # evaluaciones: borrador del perfil sin guardarlo
+        turn._profile = profile_override
+    turn.dry_run = channel == "eval"      # evaluaciones: sin pedidos, stock apartado ni cobros
     text = normalize(message)
     turn.text = text
     mode = "mock"
@@ -807,7 +926,8 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
 
     _save_state(tenant_id, conv, state)
     ui = _ui(turn)
-    opportunities.add_message(tenant_id, conv, "outbound", reply, ui or None)
+    opportunities.add_message(tenant_id, conv, "outbound", reply, ui or None,
+                              profile_version=turn.profile.get("version"))
     return SalesReply(
         reply=reply, conversation_id=conv, mode=mode, requires_human=turn.requires_human,
         cart=orders.get_cart(tenant_id, conv), orders=orders.conversation_orders(tenant_id, conv),

@@ -23,7 +23,7 @@ from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, user_tx
-from .domain import agent_profile, backoffice, catalog, opportunities, orders
+from .domain import agent_profile, backoffice, catalog, customer_memory, evals, knowledge, opportunities, orders
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
 from .schemas import (
@@ -350,18 +350,51 @@ def app_put_profile(body: dict = Body(...), uid: str = Depends(current_uid)) -> 
             data = {**agent_profile.template_profile(data.get("business_type", "generico"),
                                                      _business_name(cur, tenant)), **{
                 k: v for k, v in data.items() if k == "public_slug"}}
+        require_evals = bool(data.pop("require_evals", False))
         try:
             changes = agent_profile.validate(data)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+        # Con pruebas cargadas, una versión que no las pasa no se activa (el dueño puede forzarlo).
+        if require_evals:
+            cases = evals.list_cases(cur, tenant)
+            if cases:
+                result = evals.run(tenant, cases, {**agent_profile._get(cur, tenant), **changes})
+                if result["passed"] < result["total"]:
+                    raise HTTPException(status_code=409, detail=(
+                        f"No se guardó: {result['total'] - result['passed']} de {result['total']} pruebas "
+                        "fallaron. Revisalas con «Probar» o guardá igual."))
         # El link es único entre TODOS los negocios; bajo RLS no se ven los ajenos, así que lo
         # decide la restricción única de la base.
         try:
             with cur.connection.transaction():
-                profile = agent_profile._update(cur, tenant, changes)
+                profile = agent_profile._update(cur, tenant, changes, uid)
         except psycopg.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail="Ese link ya lo usa otro negocio.")
         opportunities._audit(cur, tenant, "agent_profile_updated", None, {"fields": sorted(changes)})
+        return profile
+
+
+@app.get("/app/agent-tools")
+def app_agent_tools(uid: str = Depends(current_uid)) -> list[dict]:
+    """Herramientas que el negocio puede apagar (buscar, consultar y carrito son fijas)."""
+    return [{"key": k, "label": v} for k, v in agent_profile.TOGGLEABLE_TOOLS.items()]
+
+
+@app.get("/app/agent-profile/versions")
+def app_profile_versions(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return agent_profile.list_versions(cur, tenant)
+
+
+@app.post("/app/agent-profile/versions/{version}/restore")
+def app_profile_restore(version: int, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        profile = agent_profile.restore(cur, tenant, version, uid)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="Versión no encontrada.")
+        opportunities._audit(cur, tenant, "agent_profile_restored", None,
+                             {"from_version": version, "new_version": profile["version"]})
         return profile
 
 
@@ -450,9 +483,15 @@ def _owned(tenant: str, conversation_id: str, token: str | None) -> None:
         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
 
 
+# Memoria del cliente en la tienda web: el navegador genera una clave aleatoria y la manda en
+# `X-Buyer-Key`; el servidor guarda sólo SHA-256(negocio + clave). Sin clave, no hay memoria.
+BUYER_KEY = "X-Buyer-Key"
+
+
 @app.post("/public/{slug}/chat")
 def public_chat(slug: str, req: ChatRequest,
-                token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
+                token: str | None = Header(None, alias=buyer_session.HEADER),
+                buyer_key: str | None = Header(None, alias=BUYER_KEY)) -> dict:
     store = _store(slug)
     tenant = store["tenant_id"]
     new_token = None
@@ -461,11 +500,25 @@ def public_chat(slug: str, req: ChatRequest,
         conv = req.conversation_id
     else:
         conv, new_token = buyer_session.start(tenant)
+    if buyer_key:
+        customer = customer_memory.identify(tenant, "web", buyer_key)
+        if customer:
+            customer_memory.link_conversation(tenant, conv, customer)
     res = sales_agent.handle_sales_message(tenant, req.message, conv)
     # El token se entrega sólo al crear la conversación.
     return {"reply": res.reply, "conversation_id": res.conversation_id, "conversation_token": new_token,
             "mode": res.mode, "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
             "payment": res.payment, "trace": res.trace, "ui": res.ui}
+
+
+@app.delete("/public/{slug}/me")
+def public_forget_me(slug: str, buyer_key: str | None = Header(None, alias=BUYER_KEY)) -> dict:
+    """"Olvidarme": borra lo que el negocio recuerda de este comprador en este navegador."""
+    store = _store(slug)
+    tenant = store["tenant_id"]
+    # Sólo busca: "olvidarme" con una clave desconocida no crea un cliente.
+    customer = customer_memory.identify(tenant, "web", buyer_key or "", create=False) if buyer_key else None
+    return {"forgotten": customer_memory.forget(tenant, customer)}
 
 
 @app.get("/public/{slug}/conversations/{conversation_id}")
@@ -477,3 +530,74 @@ def public_conversation(slug: str, conversation_id: UUID,
     return {"messages": opportunities.conversation_messages(store["tenant_id"], conv),
             "cart": orders.get_cart(store["tenant_id"], conv),
             "orders": orders.conversation_orders(store["tenant_id"], conv)}
+
+
+# --- Panel: base de conocimiento y evaluaciones del agente ---------------------
+@app.get("/app/knowledge")
+def app_knowledge(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return knowledge.list_documents(cur, tenant)
+
+
+@app.post("/app/knowledge")
+def app_add_knowledge(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    text = str(body.get("text") or "")
+    vectors = knowledge.embed(knowledge.chunk(text)) if text.strip() else None   # fuera de la transacción
+    with user_tx(uid) as (cur, tenant):
+        try:
+            doc = knowledge.add_document(cur, tenant, str(body.get("title") or ""), text, vectors)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        opportunities._audit(cur, tenant, "knowledge_added", doc["id"], {"chunks": doc["chunks"]})
+        return doc
+
+
+@app.delete("/app/knowledge/{document_id}")
+def app_delete_knowledge(document_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        if not knowledge.delete_document(cur, tenant, str(document_id)):
+            raise HTTPException(status_code=404, detail="Documento no encontrado.")
+        opportunities._audit(cur, tenant, "knowledge_deleted", str(document_id), {})
+        return {"deleted": True}
+
+
+@app.get("/app/agent-evals")
+def app_eval_cases(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return evals.list_cases(cur, tenant)
+
+
+@app.post("/app/agent-evals")
+def app_add_eval_case(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            return evals.add_case(cur, tenant, body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/app/agent-evals/{case_id}")
+def app_delete_eval_case(case_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        if not evals.delete_case(cur, tenant, str(case_id)):
+            raise HTTPException(status_code=404, detail="Caso no encontrado.")
+        return {"deleted": True}
+
+
+def _draft_profile(cur, tenant: str, draft: dict) -> dict:
+    """Perfil vigente con los cambios del borrador aplicados (sin guardarlo)."""
+    current = agent_profile._ensure(cur, tenant, _business_name(cur, tenant))
+    try:
+        return {**current, **agent_profile.validate(draft or {})}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/agent-evals/run")
+def app_run_evals(body: dict = Body(default={}), uid: str = Depends(current_uid)) -> dict:
+    """Corre los casos contra el perfil vigente o contra `profile` (borrador, sin guardar)."""
+    with user_tx(uid) as (cur, tenant):
+        cases = evals.list_cases(cur, tenant)
+        profile = _draft_profile(cur, tenant, body.get("profile")) if body.get("profile") else None
+    # Fuera de la transacción del panel: el agente abre las suyas (rol del backend, tenant fijo).
+    return evals.run(tenant, cases, profile)

@@ -65,7 +65,24 @@ TEMPLATES: dict[str, dict[str, Any]] = {
 }
 
 _FIELDS = ("business_type", "public_slug", "seller_name", "tone", "greeting", "faq", "rules",
-           "shipping", "hours", "payment_methods")
+           "shipping", "hours", "payment_methods", "policies", "disabled_tools")
+_JSON_FIELDS = ("faq", "rules", "policies", "disabled_tools")
+
+# Herramientas que el negocio puede apagar. Buscar, consultar y el carrito son la base del agente.
+TOGGLEABLE_TOOLS = {
+    "comparar_productos": "Comparar y recomendar entre opciones",
+    "preparar_compra": "Vender directo (resumen, confirmación y link de pago)",
+    "estado_pedido": "Informar el estado de los pedidos",
+    "consultar_envio": "Responder si se envía a una zona",
+    "buscar_info_negocio": "Buscar en los documentos del negocio",
+    "historial_cliente": "Consultar compras anteriores del cliente",
+}
+
+# Políticas: las hace cumplir el CÓDIGO (dominio de pedidos y herramientas), no el modelo.
+#   min_order_total        compra mínima para cerrar un pedido (pesos)
+#   delivery_zones         zonas a las que se envía (vacío = no se informa por zona)
+#   human_only_categories  categorías que sólo vende una persona (no entran al carrito)
+POLICY_KEYS = ("min_order_total", "delivery_zones", "human_only_categories")
 
 
 def slugify(text: str) -> str:
@@ -88,11 +105,12 @@ def template_profile(business_type: str, business_name: str) -> dict[str, Any]:
 
 
 def _row(row: dict[str, Any]) -> dict[str, Any]:
-    return {k: row[k] for k in _FIELDS} | {"updated_at": row["updated_at"].isoformat()}
+    return {k: row[k] for k in _FIELDS} | {"version": row["version"],
+                                            "updated_at": row["updated_at"].isoformat()}
 
 
 def _get(cur: Any, tenant_id: str) -> Optional[dict[str, Any]]:
-    cur.execute(f"select {', '.join(_FIELDS)}, updated_at from agent_profiles where tenant_id = %s",
+    cur.execute(f"select {', '.join(_FIELDS)}, version, updated_at from agent_profiles where tenant_id = %s",
                 (tenant_id,))
     row = cur.fetchone()
     return _row(row) if row else None
@@ -111,7 +129,9 @@ def _ensure(cur: Any, tenant_id: str, business_name: str) -> dict[str, Any]:
         (tenant_id, base["business_type"], slug, base["seller_name"], base["tone"], base["greeting"],
          json.dumps(base["faq"]), json.dumps(base["rules"])),
     )
-    return _get(cur, tenant_id)
+    profile = _get(cur, tenant_id)
+    _snapshot(cur, tenant_id, profile, None)
+    return profile
 
 
 def validate(data: dict[str, Any]) -> dict[str, Any]:
@@ -143,16 +163,105 @@ def validate(data: dict[str, Any]) -> dict[str, Any]:
         out["faq"] = [x for x in faq if x["q"] and x["a"]][:30]
     if "rules" in data:
         out["rules"] = [str(r).strip()[:300] for r in (data["rules"] or []) if str(r).strip()][:30]
+    if "disabled_tools" in data:
+        tools = [str(t) for t in (data["disabled_tools"] or [])]
+        unknown = [t for t in tools if t not in TOGGLEABLE_TOOLS]
+        if unknown:
+            raise ValueError(f"Herramienta desconocida: {unknown[0]}.")
+        out["disabled_tools"] = sorted(set(tools))
+    if "policies" in data:
+        out["policies"] = validate_policies(data["policies"] or {})
     return out
 
 
-def _update(cur: Any, tenant_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+def _words(values: Any, limit: int = 40) -> list[str]:
+    if isinstance(values, str):
+        values = values.split(",")
+    return [str(v).strip()[:80] for v in (values or []) if str(v).strip()][:limit]
+
+
+def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ValueError("Políticas inválidas.")
+    out: dict[str, Any] = {}
+    minimum = raw.get("min_order_total")
+    if minimum not in (None, ""):
+        try:
+            minimum = float(minimum)
+        except (TypeError, ValueError):
+            raise ValueError("La compra mínima debe ser un número.")
+        if minimum < 0:
+            raise ValueError("La compra mínima no puede ser negativa.")
+        if minimum:
+            out["min_order_total"] = minimum
+    zones = _words(raw.get("delivery_zones"))
+    if zones:
+        out["delivery_zones"] = zones
+    cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
+    if cats:
+        out["human_only_categories"] = cats
+    return out
+
+
+def policies(cur: Any, tenant_id: str) -> dict[str, Any]:
+    """Políticas vigentes del negocio (para el dominio de pedidos y las herramientas)."""
+    cur.execute("select policies from agent_profiles where tenant_id = %s", (tenant_id,))
+    row = cur.fetchone()
+    return dict(row["policies"] or {}) if row else {}
+
+
+def tool_enabled(profile: dict[str, Any], name: str) -> bool:
+    return name not in (profile.get("disabled_tools") or [])
+
+
+# --- Versiones ------------------------------------------------------------------------
+_VERSIONED = tuple(f for f in _FIELDS if f != "public_slug")
+
+
+def _snapshot(cur: Any, tenant_id: str, profile: dict[str, Any], created_by: Optional[str]) -> None:
+    cur.execute(
+        "insert into agent_profile_versions (tenant_id, version, content, created_by) "
+        "values (%s, %s, %s::jsonb, %s) on conflict do nothing",
+        (tenant_id, profile["version"], json.dumps({k: profile[k] for k in _VERSIONED}), created_by),
+    )
+
+
+def list_versions(cur: Any, tenant_id: str, limit: int = 30) -> list[dict[str, Any]]:
+    cur.execute(
+        "select version, content, created_at from agent_profile_versions where tenant_id = %s "
+        "order by version desc limit %s", (tenant_id, limit))
+    return [{"version": r["version"], "created_at": r["created_at"].isoformat(),
+             "seller_name": r["content"].get("seller_name"), "tone": r["content"].get("tone"),
+             "content": r["content"]} for r in cur.fetchall()]
+
+
+def restore(cur: Any, tenant_id: str, version: int, created_by: Optional[str]) -> Optional[dict[str, Any]]:
+    """Vuelve a una versión anterior creando una versión NUEVA (el historial no se reescribe).
+    El link público no se toca: restaurar no rompe la tienda compartida."""
+    cur.execute("select content from agent_profile_versions where tenant_id = %s and version = %s",
+                (tenant_id, version))
+    row = cur.fetchone()
+    if row is None:
+        return None
+    content = {k: v for k, v in row["content"].items() if k in _VERSIONED}
+    return _update(cur, tenant_id, validate(content), created_by)
+
+
+def _update(cur: Any, tenant_id: str, changes: dict[str, Any],
+            created_by: Optional[str] = None) -> dict[str, Any]:
+    """Aplica cambios y, si cambia algo del comportamiento, crea la versión siguiente."""
+    current = _get(cur, tenant_id)
+    changes = {k: v for k, v in changes.items() if current is None or current.get(k) != v}
     if changes:
-        sets = ", ".join(f"{k} = %({k})s" + ("::jsonb" if k in ("faq", "rules") else "") for k in changes)
-        params = {k: (json.dumps(v) if k in ("faq", "rules") else v) for k, v in changes.items()}
+        sets = ", ".join(f"{k} = %({k})s" + ("::jsonb" if k in _JSON_FIELDS else "") for k in changes)
+        params = {k: (json.dumps(v) if k in _JSON_FIELDS else v) for k, v in changes.items()}
         params["tenant"] = tenant_id
-        cur.execute(f"update agent_profiles set {sets}, updated_at = now() where tenant_id = %(tenant)s",
+        bump = any(k in _VERSIONED for k in changes)
+        cur.execute(f"update agent_profiles set {sets}, updated_at = now()"
+                    + (", version = version + 1" if bump else "") + " where tenant_id = %(tenant)s",
                     params)
+        if bump:
+            _snapshot(cur, tenant_id, _get(cur, tenant_id), created_by)
     return _get(cur, tenant_id)
 
 

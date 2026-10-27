@@ -39,3 +39,18 @@ Sin clientes ni validación comercial registrada. Investigación: toda Argentina
 Briefs cortos, un owner por archivo, revisión separada y evidencia en archivos según [economía de contexto](AI-WORKFLOW.md#economía-de-contexto). Tomi puede usar sólo Claude Code con revisión en contexto fresco.
 
 Codebase Memory se actualiza al cerrar sobre el commit fuente aprobado; [.codebase-memory/artifact.json](../.codebase-memory/artifact.json) registra revisión/fecha exactas. El commit del artefacto es posterior a la fuente. Modo fast excluye docs, E2E, migraciones y estáticos, incluido el checkpoint OCR: leerlos directamente. La CLI local sustituye al MCP cerrado; copia del mismo commit por compatibilidad Git/WSL. Git/Markdown son la verdad; el índice es derivado, no carga skills ni garantiza ahorro de tokens.
+
+## Rama `feat/agent-architecture` (27/10/2026, Tomi + Claude Code)
+
+Implementa la [investigación de arquitectura de agentes](research/2026-10-27-arquitectura-agentes-personalizados.md). Migración **`0007_agent_architecture.sql`** (local; **no** aplicada en remoto). Nota para la tarea de comprobantes: su migración pasa a ser **0008**.
+
+- **Versiones del perfil**: cada "Guardar" crea una versión; volver atrás crea una nueva; cada respuesta registra su versión.
+- **Políticas aplicadas por código**: compra mínima, zonas de envío, categorías que vende sólo una persona (dominio de pedidos, revalidadas al cobrar). **Herramientas por negocio**: 6 apagables (venta directa, comparar, estado, envío, documentos, historial).
+- **Memoria del cliente**: identidad por canal con hash por negocio; perfil semántico destilado en segundo plano por el worker (IA o reglas, saneado); historial de compras entre conversaciones; "Olvidarme" en la tienda.
+- **Compactación**: el worker resume la parte vieja de conversaciones largas (sin precios).
+- **Base de conocimiento**: documentos del negocio en fragmentos, búsqueda de texto en español + vectores opcionales (pgvector), herramienta `buscar_info_negocio`.
+- **Evaluaciones por negocio**: casos que corren sobre el borrador sin guardarlo; guardar no activa una versión que los falle (se puede forzar).
+- Arreglo: `pip install -e` fallaba por `backend/evals/` (descubrimiento de paquetes limitado a `app`).
+- **Revisión en contexto fresco**: sin fugas entre negocios ni bypass del token de conversación; 7 hallazgos corregidos con prueba (evaluaciones que podían crear pedidos/cobros reales → modo simulado; "sí" tras apagar la venta; documentos que tapaban "lo compro"; precios de documentos repetidos como verificados → se ocultan; borradores que no probaban sus políticas; memoria que dejaba pasar direcciones/montos; worker sin reclamo ni índices).
+- **Evidencia**: `PV_REQUIRE_DB=1 pytest -q` → **208 passed**; re-revisión de las correcciones: **aprobada**; 0007 reaplicada dos veces; `npm run build` limpio; Chrome: Mi agente con las secciones nuevas; modelo real (`gpt-oss:120b`): respuestas desde documentos (garantía, flexibles) y memoria destilada sin montos ni contactos.
+- **Pendiente**: retención de memoria; memoria opt-in (hoy aviso + "Olvidarme"); PDF en documentos; panel para ver/borrar la memoria de un cliente; identidad por teléfono cuando llegue WhatsApp.
