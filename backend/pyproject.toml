@@ -12,10 +12,18 @@ dependencies = [
     "psycopg_pool>=3.2",
     "httpx>=0.27",
     "pyjwt[crypto]>=2.8",
+    # OCR local de comprobantes (app/documents/ocr.py). Fijados: los modelos vienen en el wheel
+    # de rapidocr y sus SHA256 se verifican en ocr.MODELS. Ver tools/README.md.
+    "rapidocr==3.10.0",
+    "onnxruntime==1.31.0",
+    "opencv-python-headless>=4.5,<5",
+    "pypdfium2==5.14.0",
+    "Pillow>=10.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# reportlab: comprobantes sintéticos y su fuente Vera en tests/test_document_ocr.py.
+dev = ["pytest>=8.0", "reportlab==4.4.9"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
