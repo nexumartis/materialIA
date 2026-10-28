@@ -1,0 +1,11 @@
+{
+  "base": "de7abbe4755c498658c79a0a0d8c6e401d460026",
+  "source": "working tree post Codex R3; 269 tests passed; uncommitted",
+  "files": {
+    "backend/app/agent/sales_agent.py": "fa1c337218b99d1a369258f6f30fead555f7591801ded2cdb36f924bdb98a1c0",
+    "backend/app/agent/llm_sales.py": "0be59c3060bc412b12064fe92bb2f7e7c6e3d0f2d75fd87e0e44a643f54eb319",
+    "backend/app/agent/sales_skills.py": "ddfb57faf67338b18c47487a3243757afbe16ae2aa35e76b9591175148e90cfa",
+    "backend/app/domain/orders.py": "481423521cd16f1359270a651f16f30663768831c25a17d6700b413cafe84d61",
+    "backend/tests/test_sales_consent.py": "9159d6846bd98f0fd5952cb6c36e01c3e5aef49f3806139b91e5303ff7076a43"
+  }
+}

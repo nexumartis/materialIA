@@ -113,6 +113,13 @@ estas estos esas esos si no gracias porfa favor recomendas recomendarias recomen
 menos mas hasta mil lucas pesos maximo barato barata baratas economica economico mejor otra otro
 otras otros opciones opcion alternativa alternativas modelo modelos producto productos stock
 disponible tiene tenga hay ahi
+agrega agregame agregala agregalo agregalas agregalos agregar agregas suma sumame sumala sumalo sumas
+anota anotame dame mandame llevo pone poneme ponele saca sacame sacala sacalo sacalas sacalos quita
+quitame quitala quitalo borra borrame elimina dejame deja dejala dejalo nomas solo sola sean todas
+todos uno dos tres cuatro cinco seis siete ocho nueve diez par unidad unidades decime total queda
+bien tambien ademas nueva nuevo nuevas nuevos moderna moderno modernas modernos saldria saldrian
+costaria costarian cuanto armar carrito todavia comprar hoy numero nro disponibles
+espera perdon mmm bueno dale listo mira fijate igual porfa
 """.split())
 _WORD_NUMBERS = {"un": 1, "una": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
                  "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "par": 2}
@@ -155,10 +162,85 @@ _RE_ADD = re.compile(r"\b(agrega|agregame|agregala|agregalo|agregalas|agregalos|
                      r"sumala|anota|anotame|dame|mandame|me llevo|llevo|quiero|ponele|poneme|dale)\b")
 _RE_BUDGET = re.compile(r"(menos de|hasta|maximo|no mas de|por debajo de|debajo de|tope de?)\s*\$?\s*"
                         r"([\d][\d.,]*)\s*(mil|k|lucas)?")
-_RE_STOCK_Q = re.compile(r"\b(stock|disponib|quedan|queda|cuantas hay|cuantos hay|hay de)\b")
+_RE_STOCK_Q = re.compile(r"\b(stock|disponib\w*|quedan|queda|cuantas hay|cuantos hay|hay de)\b")
 # Agradecimiento o despedida sin otro pedido ("gracias!", "listo, muchas gracias, chau").
 _SOCIAL = set("""gracias muchas muchisimas mil genial perfecto buenisimo barbaro joya listo excelente
-bueno ok dale no chau saludos hasta luego nos vemos igualmente a vos por todo un abrazo crack capo""".split())
+bueno ok dale no chau saludos hasta luego nos vemos igualmente a vos por todo un abrazo crack capo
+igual despues veo vuelvo lo pienso adios nada""".split())
+
+# --- Consentimiento: qué puede cambiar el carrito en este mensaje -------------------------------
+# Una consulta, una pregunta o un "todavía no" no cambian el carrito; una orden explícita sí; un
+# "sí", "la 2" o "la Aquaflux" sólo acepta la última propuesta de agregar (state["offer"]).
+# Heurístico: cubre las formas habituales en español rioplatense, no toda la lengua.
+_RE_NO_CART = re.compile(r"\b(no (quiero|voy a|necesito|vamos a)\b|"
+                         r"todavia no|aun no|sin (agregar|armar|comprar)|"
+                         r"no (me )?(lo |la |los |las )?(agregues|sumes|pongas|anotes)|"
+                         r"solo (pregunto|consulto|queria saber|para saber)|por ahora no)\b")
+_RE_ADD_ORDER = re.compile(r"\b(agrega\w*|suma(me|la|lo|las|los|s)?|anota\w*|dame|mandame|me (llevo|quedo con)|"
+                           r"llevo|pone(me|le)|quiero|queria|necesito)\b")
+# Dentro de una pregunta sólo cuenta el pedido directo ("¿me agregás dos?"), no "¿hay para comprar?".
+_RE_IMPERATIVE = re.compile(r"\b(agrega\w*|suma(me|la|lo|las|los|s)?|anota\w*|pone(me|le)|saca\w*|quita\w*|"
+                            r"borra\w*|elimina\w*|deja(me|la|lo)?)\b")
+# "quiero alguna canilla", "qué tenés en negro": explorar, no agregar.
+_RE_EXPLORE = re.compile(r"\b(algun[ao]?s?|algo|opciones|que (tengas|tenes|tienen|haya)|mostra\w*|ver|busco|buscando)\b")
+_RE_YES = re.compile(r"^\s*(si|sii+|dale|ok|okey|de una|listo|va|perfecto)\b[\s,.!]*")
+_RE_PARTS = re.compile(r",?\s*\b(?:y tambien|y ademas|tambien|ademas)\b")
+_RE_SET = re.compile(r"\b(deja(me|la|lo)?|que sean?|mejor|solo|nomas|cambia\w*|en total)\b")
+_RE_LESS = re.compile(r"\b(\d+|una?|uno|dos|tres) menos\b(?!\s+de)")
+_RE_PRONOUN = re.compile(r"\b(saca|quita|borra)(la|lo|las|los)\b|\b(esa|ese|esas|esos)\b")
+# Números que no son unidades: precios, medidas, pesos, la opción elegida y "dos llaves".
+_RE_NOT_QTY = re.compile(r"\$\s?\d[\d.,]*|\d[\d.,]*\s?(mil|k|lucas|pesos|g|gr|grs|gramos|kg|kilos?|cm|mm|m|mts|"
+                         r"metros?|l|lts|litros?|w|watts?|v|pulgadas?|\"|%)(?![a-z])|\d+/\d+|"
+                         r"\b(la|el|opcion|numero|nro)\s*\.?\s*((numero|nro)\s*\.?\s*)?\d\b|\b(?:dos|2) llaves\b")
+_RE_OPTION = re.compile(r"\b(?:la|el|opcion|numero|nro)\s*\.?\s*(?:(?:numero|nro)\s*\.?\s*)?(\d)\b(?![/.,]\d)")
+_RE_PRICE_Q = re.compile(r"\b(cuanto|sale|salen|saldria|saldrian|cuesta|cuestan|costaria|costarian|precio)\b")
+_RE_CATALOG = re.compile(r"\b(que (productos|cosas|articulos)|que (tenes|tienen|venden|vendes|manejan)\b|catalogo)")
+# Pedido explícito de una persona; "es para una persona mayor" no lo es.
+_RE_HUMAN = re.compile(r"\b(pasa\w*|habla\w*|comunica\w*|deriva\w*|atiend\w*|atienda|contact\w*)\b[^.?!]{0,25}?"
+                       r"\b(persona|humano|alguien|vendedor\w*|asesor\w*|encargad\w*|dueno|duena)\b")
+_RE_NOTIFY = re.compile(r"\b(como|cuando|por donde|quien) (me )?(avisan|avisas|contactan|contactas|llaman|escriben|"
+                        r"responden|entero)\b|\bme (van a|vas a) (avisar|contactar|llamar|escribir)\b")
+
+
+def _parts(text: str) -> list[str]:
+    """«quiero un flexible y también alguna canilla» -> un pedido por parte."""
+    return [p.strip(" ,.") for p in _RE_PARTS.split(text) if p.strip(" ,.")] or [text]
+
+
+def _adds(part: str) -> bool:
+    """Orden de agregar: verbo explícito o "uno solo"/"que sean 2" sobre algo que se elige."""
+    edit = _edit(part)
+    return (not _RE_NO_CART.search(part)
+            and bool(_RE_ADD_ORDER.search(part) or (edit and edit[0] == "set"))
+            and not _RE_EXPLORE.search(part))
+
+
+def _consent(message: str, text: str, offer: Optional[dict[str, Any]]) -> str:
+    """'order' (orden de cambiar el carrito o comprar), 'pick' (puede aceptar la propuesta vigente) o
+    'read' (consulta: no cambia el carrito)."""
+    parts = [part for part in _parts(text) if not _RE_NO_CART.search(part)]
+    if not parts:
+        return "read"
+    text = " ".join(parts)
+    if "?" in message or "¿" in message:
+        buys = _RE_BUY.search(text) and not re.search(r"\b(para|puedo|se puede) (comprar|pagar)\b", text)
+        return "order" if _RE_IMPERATIVE.search(text) or buys else "read"
+    if (_RE_ADD_ORDER.search(text) or _RE_IMPERATIVE.search(text) or _RE_BUY.search(text)
+            or _RE_DONE.match(text) or _edit(text)):
+        return "order"
+    return "pick" if offer else "read"
+
+
+def _edit(text: str) -> Optional[tuple[str, int]]:
+    """Cambio de cantidad de una línea: ('set', n) fija, ('sub', n) resta, ('del', 0) la quita."""
+    if _RE_REMOVE.search(text):
+        n = _qty(text)
+        return ("del", 0) if n is None or re.search(r"\b(todas?|todos?)\b", text) else ("sub", n)
+    less = _RE_LESS.search(text)
+    if less:
+        return ("sub", _qty(less.group(0)) or 1)
+    n = _qty(text)
+    return ("set", n) if n is not None and _RE_SET.search(text) else None
 
 
 # Pedido de comparar o recomendar entre opciones: se responde con la ficha (no con rasgos libres).
@@ -201,6 +283,17 @@ def _choice(text: str) -> Optional[int]:
     return int(raw) if raw.isdigit() else _CHOICE_WORDS.get(raw)
 
 
+def _option(text: str) -> Optional[int]:
+    """Número de opción mencionado: "la 2", "la nro3", "nro. 3", "la tercera"."""
+    full = _choice(text)
+    if full is not None:
+        return full
+    m = _RE_OPTION.search(text)
+    if m:
+        return int(m.group(1))
+    return next((_ORDINALS[t] for t in re.findall(r"[a-z0-9]+", text) if t in _ORDINALS), None)
+
+
 def _budget(text: str) -> Optional[float]:
     m = _RE_BUDGET.search(text)
     if not m:
@@ -215,21 +308,29 @@ def _budget(text: str) -> Optional[float]:
     return value
 
 
-def _qty(text: str) -> int:
-    m = re.search(r"\b(\d{1,3})\b(?!\s*(mil|k|lucas))", text)
+def _units(text: str) -> Optional[int]:
+    """Unidades de un pedido; un mensaje que es sólo una opción ("2", "la 2") no las dice."""
+    return None if _choice(text) is not None else _qty(text)
+
+
+def _qty(text: str) -> Optional[int]:
+    """Unidades dichas en el texto, o None. Precios, medidas y el número de opción no cuentan."""
+    text = _RE_NOT_QTY.sub(" ", text)
+    m = re.search(r"\b(\d{1,3})\b", text)
     if m:
-        return max(1, int(m.group(1)))
+        return int(m.group(1))
     for word, n in _WORD_NUMBERS.items():
-        if re.search(rf"\b{word}\b", text) and word not in ("un", "una", "uno"):
+        if n > 1 and re.search(rf"\b{word}\b", text):
             return n
-    return 1
+    return 1 if re.search(r"\b(un|una|uno)\b", text) else None
 
 
 def _filters(text: str) -> dict[str, Any]:
     tokens = re.findall(r"[a-z0-9]+", text)
     color = next((_COLORS[t] for t in tokens if t in _COLORS), None)
     ambiente = next((_AMBIENTES[t] for t in tokens if t in _AMBIENTES), None)
-    keywords = []
+    # Una medida ("40 cm", "500 g") describe el producto: es un filtro, no una cantidad.
+    keywords = [f"{n} {u}" for n, u in re.findall(r"\b(\d+(?:,\d+)?)\s?(cm|mm|m|g|kg|w)\b", text)]
     for t in tokens:
         if t in _COLORS or t in _AMBIENTES or t in _STOP or t.isdigit() or len(t) < 3:
             continue
@@ -239,7 +340,7 @@ def _filters(text: str) -> dict[str, Any]:
             t = t[:-2] if t[-3] not in "aeiou" else t[:-1]
         elif len(t) > 3 and t.endswith("s"):
             t = t[:-1]
-        if t not in keywords:
+        if t not in keywords and t not in _STOP:
             keywords.append(t)
     return {"keywords": keywords, "color": color, "ambiente": ambiente}
 
@@ -270,6 +371,14 @@ class _Turn:
         self.requires_human = False
         self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
+        self.offer: Optional[dict[str, Any]] = None   # propuesta de agregar del turno anterior
+        self.consent = "read"   # ver _consent
+        self.no_cart = False    # "todavía no quiero carrito": no se propone agregar
+        self.blocked = False    # la última herramienta del modelo fue rechazada por el servidor
+        self.model_answered = False   # el modelo respondió al menos una vez (si no, el modo es mock)
+        self._plan: Optional[tuple[dict[str, int], list[tuple[list[dict[str, Any]], Optional[int]]]]] = None
+        self._edits: Optional[dict[str, int]] = None
+        self._added: set[str] = set()
 
     @property
     def tenant(self) -> str:
@@ -375,38 +484,55 @@ class _Turn:
         found = {o["id"]: o for o in inventory.offers(self.tenant, ids=ids, limit=len(ids))}
         return [found[i] for i in ids if i in found]
 
-    def resolve(self, text: str) -> Optional[dict[str, Any]]:
-        shown = self._shown()
-        tokens = re.findall(r"[a-z0-9]+", text)
-        for t in tokens:
-            if t in _ORDINALS and 0 < _ORDINALS[t] <= len(shown):
-                return shown[_ORDINALS[t] - 1]
-        if "ultima" in tokens or "ultimo" in tokens:
-            if shown:
-                return shown[-1]
-        m = re.search(r"\b(?:la|el|numero|nro|opcion)\s*(\d)\b", text)
-        if m and 0 < int(m.group(1)) <= len(shown):
-            return shown[int(m.group(1)) - 1]
+    def _named(self, text: str) -> bool:
+        """¿El texto nombra un producto (número de opción, rasgo, marca, color)?"""
         f = self.filters(text)
+        return _option(text) is not None or bool(f["keywords"] or f["color"])
+
+    def matches(self, text: str) -> list[dict[str, Any]]:
+        """Productos a los que se refiere el texto: número de la última lista, rasgos o marca dentro
+        de ella y, si ahí no hay, el catálogo. Varias coincidencias = ambiguo: no se elige al azar."""
+        shown = self._shown()
+        n = _option(text)
+        if n is not None:
+            return [shown[n - 1]] if 0 < n <= len(shown) else []
+        tokens = re.findall(r"[a-z0-9]+", text)
+        if shown and ("ultima" in tokens or "ultimo" in tokens):
+            return [shown[-1]]
+        f = self.filters(text)
+        found: list[dict[str, Any]] = []
         if shown and (f["color"] or f["keywords"]):
-            matches = [o for o in shown
-                       if (not f["color"] or o["specs"].get("color") == f["color"])
-                       and all(k in normalize(f"{o['name']} {o['brand']} {json.dumps(o['specs'])}")
-                               for k in f["keywords"] if k not in ("canilla",))]
-            if len(matches) == 1:
-                return matches[0]
-        if f["keywords"]:
+            found = [o for o in shown
+                     if (not f["color"] or o["specs"].get("color") == f["color"])
+                     and all(k in normalize(f"{o['name']} {o['brand']} {json.dumps(o['specs'])}")
+                             for k in f["keywords"] if k not in ("canilla",))]
+        if not found and f["keywords"]:
             found = inventory.offers(self.tenant, keywords=f["keywords"], color=f["color"],
                                      ambiente=f["ambiente"], limit=5)
-            if len(found) == 1:
-                return found[0]
-        if len(shown) == 1:
-            return shown[0]
-        sel = self.state.get("selected")
-        if sel and any(t in tokens for t in ("esa", "ese", "la", "lo", "agregala", "agregalo")):
-            found = inventory.offers(self.tenant, ids=[sel], limit=1)
+        # Entre varias, las que no se pueden llevar (sin stock) no compiten, y "un flexible" es el
+        # producto que ES un flexible, no la ducha "con flexible".
+        sellable = [o for o in found if o["pricing_mode"] != "fixed" or o["available"] > 0]
+        found = sellable if len(found) > 1 and sellable else found
+        kind = [o for o in found if normalize(o["name"]).split()[0] in f["keywords"]]
+        return kind if len(found) > 1 and len(kind) == 1 else found
+
+    def focus(self) -> Optional[dict[str, Any]]:
+        """El producto del que se viene hablando cuando el mensaje no nombra ninguno ("agregame
+        dos"): la única propuesta vigente, el último elegido o la única opción mostrada."""
+        ids = (self.offer or {}).get("ids") or []
+        pick = (ids[0] if len(ids) == 1 else None) if ids else self.state.get("selected")
+        if pick:
+            found = inventory.offers(self.tenant, ids=[pick], limit=1)
             return found[0] if found else None
-        return None
+        shown = self._shown()
+        return shown[0] if len(shown) == 1 else None
+
+    def _candidates(self, text: str) -> list[dict[str, Any]]:
+        return self.matches(text) if self._named(text) else [o for o in [self.focus()] if o]
+
+    def resolve(self, text: str) -> Optional[dict[str, Any]]:
+        found = self._candidates(text)
+        return found[0] if len(found) == 1 else None
 
     def pick(self, opcion: Optional[int] = None, consulta: str = "") -> Optional[dict[str, Any]]:
         """Producto por número de la última lista o por descripción (para el planner con LLM)."""
@@ -414,6 +540,110 @@ class _Turn:
             shown = self._shown()
             return shown[opcion - 1] if 0 < opcion <= len(shown) else None
         return self.resolve(normalize(consulta)) if consulta else None
+
+    # -- qué autorizó el cliente en este mensaje (lo usan las reglas y el planner con LLM) --
+    def _offer_qty(self, o: dict[str, Any]) -> Optional[int]:
+        offer = self.offer or {}
+        return offer.get("qty") if o["id"] in (offer.get("ids") or []) else None
+
+    def _picked(self, text: str) -> list[dict[str, Any]]:
+        """Lo que elige un "sí, la Aquaflux" / "la 2" entre la propuesta vigente."""
+        ids = (self.offer or {}).get("ids") or []
+        rest = _RE_YES.sub("", text, count=1).strip(" ,.!")
+        if rest and self._named(rest):
+            return [o for o in self.matches(rest) if o["id"] in ids]
+        return inventory.offers(self.tenant, ids=ids, limit=len(ids)) if ids and len(rest) < len(text) else []
+
+    def add_plan(self) -> tuple[dict[str, int], list[tuple[list[dict[str, Any]], Optional[int]]]]:
+        """Lo que el cliente pidió agregar según el servidor: {id: cantidad} y las elecciones que
+        quedaron ambiguas. El modelo sólo puede agregar eso."""
+        if self._plan is None:
+            ok: dict[str, int] = {}
+            unclear: list[tuple[list[dict[str, Any]], Optional[int]]] = []
+            parts = ([self.text] if self.consent == "pick" else
+                     [p for p in _parts(self.text) if _adds(p)] if self.consent == "order" else [])
+            if self.edit_plan():        # "dejame dos" corrige una línea: no autoriza agregar otra cosa
+                parts = [p for p in parts if _RE_ADD_ORDER.search(p)]
+            for part in parts:
+                found = self._picked(part) if self.consent == "pick" else self._candidates(part)
+                if len(found) == 1:
+                    ok[found[0]["id"]] = _units(part) or self._offer_qty(found[0]) or 1
+                elif found:
+                    unclear.append((found, _units(part)))
+            self._plan = (ok, unclear)
+        return self._plan
+
+    def edit_line(self, op: tuple[str, int], cart: Optional[dict[str, Any]]) -> tuple[Optional[dict[str, Any]], str]:
+        """Línea del carrito a la que se aplica un cambio de cantidad: (línea, "") o (None, motivo):
+        'absent' (nombra algo que no está), 'unclear' (varias posibles)."""
+        lines = cart["items"] if cart else []
+        if self._named(self.text):
+            ids = {o["id"] for o in self.matches(self.text)}
+            hit = [it for it in lines if it["item_id"] in ids]
+            return (hit[0], "") if len(hit) == 1 else (None, "unclear" if hit else "absent")
+        kind, n = op
+        hit = lines if len(lines) == 1 else [it for it in lines if kind == "set" and it["qty"] > n]
+        if len(hit) != 1:
+            # Sin producto nombrado: la línea que se viene corrigiendo o la que señala "sacala".
+            focus = self.state.get("edited") or (self.state.get("selected") if _RE_PRONOUN.search(self.text) else None)
+            hit = [it for it in lines if it["item_id"] == focus]
+        return (hit[0], "") if len(hit) == 1 else (None, "unclear")
+
+    def edit_plan(self) -> dict[str, int]:
+        """{línea: cantidad final} del cambio pedido. Se calcula una vez, con el carrito previo:
+        "sacá una" resta una aunque el modelo llame a dos herramientas."""
+        if self._edits is None:
+            self._edits = {}
+            op = _edit(self.text) if self.consent == "order" else None
+            line = self.edit_line(op, orders.get_cart(self.tenant, self.conv))[0] if op else None
+            if op and line:
+                kind, n = op
+                self._edits[line["item_id"]] = n if kind == "set" else max(0, line["qty"] - n) if kind == "sub" else 0
+        return self._edits
+
+    def refuse(self, name: str, why: str) -> str:
+        """Acción del modelo que el cliente no pidió: no se ejecuta y el modelo lo sabe."""
+        self.blocked = True
+        self.tool("control", f"{name} rechazada: {why}")
+        return f"No se ejecutó {name}: {why}."
+
+    def cart_tool(self, name: str, o: dict[str, Any]) -> str:
+        """Carrito pedido por el modelo. Qué producto y cuántas unidades lo decide el mensaje del
+        cliente (add_plan/edit_plan), no la propuesta del modelo."""
+        if self.consent == "read":
+            return self.refuse(name, "el cliente consultó o no pidió cambiar el carrito; respondé sin tocarlo")
+        edits = self.edit_plan()
+        if o["id"] in edits:
+            cart = orders.get_cart(self.tenant, self.conv)
+            current = next((it["qty"] for it in (cart or {}).get("items", []) if it["item_id"] == o["id"]), 0)
+            if current == edits[o["id"]]:
+                self.blocked = True         # ya hecho en este turno (p. ej. "quitar y volver a agregar")
+                return f"Ya quedó: {current} × {o['name']}."
+            return self.set_qty(o["id"], o["name"], edits[o["id"]])
+        if name == "agregar_al_carrito":
+            ok, unclear = self.add_plan()
+            if o["id"] in ok:
+                return self.add_offer(o, ok[o["id"]])
+            if unclear and not self.products:
+                return self.ask_which(*unclear[0])
+            return self.refuse(name, "el cliente no pidió agregar ese producto o no está claro cuál; preguntale")
+        return self.refuse(name, "no está claro qué línea ni cuántas unidades; preguntale")
+
+    def apply_plan(self) -> list[str]:
+        """Con LLM, lo que el cliente ordenó sin ambigüedad lo ejecuta el servidor antes del modelo:
+        el modelo podía omitirlo o apuntar a una lista que cambió en el mismo turno. Lo ambiguo
+        queda para que el modelo pregunte."""
+        if self.consent == "read":
+            return []
+        ok, unclear = self.add_plan()       # antes de cambiar nada: el foco todavía es el del turno
+        cart = orders.get_cart(self.tenant, self.conv)
+        names = {it["item_id"]: it["name"] for it in (cart or {}).get("items", [])}
+        out = [self.set_qty(i, names[i], qty) for i, qty in self.edit_plan().items()]
+        for o in inventory.offers(self.tenant, ids=list(ok), limit=len(ok)) if ok else []:
+            out.append(self.add_offer(o, ok[o["id"]], tail=False))
+        if unclear:     # la pregunta "¿cuál?" con la lista real: tarjetas, texto y "sí, la X" coinciden
+            out.append(self.ask_which(*unclear[0]))
+        return out
 
     # -- presentación --
     def _line(self, i: int, o: dict[str, Any]) -> str:
@@ -429,13 +659,43 @@ class _Turn:
         return f"{i}. {o['name']}{brand} · {tail}"
 
     def show(self, items: list[dict[str, Any]], intro: str) -> str:
-        # Varias búsquedas en un mismo turno continúan la numeración ("la 3" no es ambigua).
-        offset = len(self.products)
-        ids = [o["id"] for o in items]
-        self.state["last_results"] = (self.state.get("last_results") or [])[:offset] + ids if offset else ids
-        self.products = self.products + items
-        lines = [intro] + [self._line(i, o) for i, o in enumerate(items, offset + 1)]
+        # Repetir una búsqueda conserva las posiciones y actualiza cada producto una sola vez.
+        by_id = {o["id"]: o for o in self.products}
+        by_id.update((o["id"], o) for o in items)
+        self.products = list(by_id.values())
+        ids = [o["id"] for o in self.products]
+        self.state["last_results"] = ids
+        if not self.no_cart:        # mostrar opciones es proponerlas: "la 2" / "sí, esa" las acepta
+            self.state["offer"] = {"ids": ids, "qty": None}
+        lines = [intro] + [self._line(i, o) for i, o in enumerate(self.products, 1)]
         return "\n".join(lines)
+
+    def ask_which(self, items: list[dict[str, Any]], qty: Optional[int] = None) -> str:
+        text = self.show(items, f"Hay {len(items)} opciones que coinciden:")
+        if qty and self.state.get("offer"):
+            self.state["offer"]["qty"] = qty          # "tres de esa": al elegir, van las tres
+        return text + "\n¿Cuál te agrego? Decime el número."
+
+    def no_option(self, n: int) -> str:
+        shown = self._shown()
+        if not shown:
+            return "No tengo una lista de opciones abierta. ¿Qué estás buscando?"
+        if not self.no_cart:        # la pregunta vuelve a proponer la lista: "la 1" la responde
+            self.state["offer"] = {"ids": [o["id"] for o in shown], "qty": None}
+        return (f"No tengo una opción {n} en la última lista: hay {len(shown)}. "
+                f"¿Cuál querés? Elegí entre 1 y {len(shown)}.")
+
+    def overview(self) -> str:
+        """"¿Qué tenés?": las categorías reales del catálogo, sin suponer productos por el rubro."""
+        cats: dict[str, int] = {}
+        for o in inventory.offers(self.tenant, limit=500):
+            cats[o["category"]] = cats.get(o["category"], 0) + 1
+        self.tool("buscar_productos", f"categorías: {len(cats)}")
+        if not cats:
+            return "Todavía no hay productos cargados en el catálogo."
+        listed = ", ".join(f"{c.capitalize()} ({n})" for c, n in sorted(cats.items(), key=lambda x: (-x[1], x[0])))
+        return (f"Esto es lo que tenemos en el catálogo: {listed}. ¿Qué estás buscando? Contame el tipo de "
+                "producto o para qué lo necesitás y te muestro opciones.")
 
     def cart_text(self, cart: Optional[dict[str, Any]]) -> str:
         if not cart or not cart["items"]:
@@ -457,9 +717,13 @@ class _Turn:
             if budget is None and not drop_budget:
                 budget = last.get("budget")
         if not (query["keywords"] or query["color"] or query["ambiente"]):
+            if _RE_CATALOG.search(text) or not text.strip():
+                return self.overview()
             if self.state.get("last_results"):
                 return ("No te entendí. Si querés alguna de las opciones, decime el número "
                         "(por ejemplo \"la 2\"), o contame qué otra cosa buscás.")
+            if _RE_STOCK_Q.search(text) or _RE_PRICE_Q.search(text):
+                return "¿De qué producto querés saber? Decime cuál y te digo precio y disponible."
             return (self.profile.get("greeting") or
                     "¡Hola! Soy el asistente de ventas. Contame qué buscás.")
         self.state["last_query"] = {**query, "budget": budget}
@@ -484,8 +748,16 @@ class _Turn:
                 return text_out + "\nNinguna tiene stock ahora, así que no te las puedo prometer."
             best = in_stock[0]
             return (text_out + f"\nLa más conveniente con stock es la {best['name']} "
-                    f"({best.get('brand') or 'sin marca'}) a {_money(best['price'])}. ¿Te la agrego?")
-        return self.show(found, "Tengo estas opciones:") + "\n¿Querés que te agregue alguna?"
+                    f"({best.get('brand') or 'sin marca'}) a {_money(best['price'])}."
+                    + ("" if self.no_cart else " ¿Te la agrego?"))
+        listed = self.show(found, "Tengo estas opciones:")
+        if self.no_cart:
+            return listed
+        places = sorted({o["specs"].get("ambiente") for o in found} - {None})
+        if not query["ambiente"] and len(places) > 1:
+            # Falta el dato que cambia la elección: una pregunta concreta, sin descartar opciones.
+            return listed + f"\n¿Es para {' o para '.join(places)}? Si alguna ya te sirve, decime el número."
+        return listed + "\n¿Querés que te agregue alguna?"
 
     def out_of_stock(self, items: list[dict[str, Any]]) -> str:
         """Escenario D: no promete disponibilidad; ofrece sustitutos REALES con stock."""
@@ -564,36 +836,86 @@ class _Turn:
         o = self.resolve(text)
         if o is None:
             return self.search(text, None)
-        return self.stock_offer(o)
+        return self.stock_offer(o, _qty(text))
 
-    def stock_offer(self, o: dict[str, Any]) -> str:
+    def stock_offer(self, o: dict[str, Any], qty: Optional[int] = None) -> str:
+        """Disponible y precio; con cantidad, cotiza sin tocar el carrito y propone agregarla."""
         self.state["selected"] = o["id"]
         self.tool("consultar_stock", f"{o['sku']}: {o['available']} disponibles")
         if o["pricing_mode"] != "fixed":
             return f"La {o['name']} es a pedido: una persona del negocio te confirma plazo y precio."
         if o["available"] == 0:
             return self.out_of_stock([o])
-        return f"Sí, de la {o['name']} hay {o['available']} disponibles, a {_money(o['price'])} c/u."
+        qty = min(qty or 1, o["available"])
+        text = f"Sí, de la {o['name']} hay {o['available']} disponibles, a {_money(o['price'])} c/u."
+        if qty > 1 and o["price"] is not None:
+            text += f" {qty} salen {_money(o['price'] * qty)}."
+        if self.no_cart or o["price"] is None:
+            return text
+        self.state["offer"] = {"ids": [o["id"]], "qty": qty}
+        return text + (f" ¿Te agrego {qty}?" if qty > 1 else " ¿Te la agrego?")
 
-    def add(self, text: str, choice: Optional[int] = None) -> Optional[str]:
-        if choice is not None:
-            shown = self._shown()
-            if not 0 < choice <= len(shown):
-                return f"No tengo una opción {choice} en la lista. Elegí entre 1 y {len(shown)}."
-            o, qty = shown[choice - 1], 1
-        else:
-            o = self.resolve(text)
-            if o is None:
-                return None
-            qty = _qty(text)
-        return self.add_offer(o, qty)
+    def add(self, text: str, tail: bool = True) -> Optional[str]:
+        """Orden explícita de agregar ("quiero un flexible", "agregame 3 de la Aquaflux")."""
+        n = _option(text)
+        if n is not None and not 0 < n <= len(self._shown()):
+            return self.no_option(n)
+        found = self._candidates(text)
+        if not found:
+            if self._named(text) or not self.state.get("last_results"):
+                return None     # nombra algo que no está en la lista: se busca
+            return "¿Cuál querés que te agregue? Decime el número de la lista o el producto."
+        if len(found) > 1:
+            return self.ask_which(found, _units(text))
+        return self.add_offer(found[0], _units(text) or self._offer_qty(found[0]) or 1, tail)
 
-    def add_offer(self, o: dict[str, Any], qty: int) -> str:
+    def order(self, text: str) -> Optional[str]:
+        """Pedido compuesto: agrega cada parte identificable y explora el resto, en orden."""
+        parts = _parts(text)
+        if len(parts) == 1:
+            return self.add(text) if _adds(text) else None
+        out = []
+        for i, part in enumerate(parts):
+            if _RE_NO_CART.search(part):
+                continue
+            last = i == len(parts) - 1
+            done = self.add(part, tail=last) if _adds(part) else None
+            out.append(done or self.search(part, _budget(part)))
+        return "\n\n".join(out)
+
+    def take(self, text: str) -> Optional[str]:
+        """"Sí", "la 2", "sí, la Aquaflux" en respuesta a la propuesta vigente de agregar."""
+        rest = _RE_YES.sub("", text, count=1).strip(" ,.!")
+        n = _option(rest) if rest else None
+        if n is not None and not 0 < n <= len(self._shown()):
+            return self.no_option(n)
+        found = self._picked(text)
+        if not found:
+            return self.select(n) if n is not None else None
+        if len(found) > 1:
+            if rest and self._named(rest):
+                return self.ask_which(found)
+            self.state["offer"] = self.offer           # sigue vigente hasta que elija
+            return f"¿Cuál querés? Decime el número (1 a {len(found)})."
+        return self.add_offer(found[0], _units(rest) or self._offer_qty(found[0]) or 1)
+
+    def select(self, n: int) -> str:
+        """Elección sin propuesta de agregar vigente: muestra el producto y pregunta."""
+        shown = self._shown()
+        if not 0 < n <= len(shown):
+            return self.no_option(n)
+        return self.stock_offer(shown[n - 1])
+
+    def add_offer(self, o: dict[str, Any], qty: int, tail: bool = True) -> str:
+        if o["id"] in self._added:          # una orden se ejecuta una vez por mensaje
+            self.blocked = True
+            return f"Ya agregué la {o['name']} en este mensaje."
         qty = max(1, int(qty))
         self.state["selected"] = o["id"]
         res = orders.add_item(self.tenant, self.conv, o["id"], qty,
                               policies=(self.profile.get("policies") or {}) if self.dry_run else None)
         self.tool("agregar_al_carrito", f"{o['sku']} x{qty}: {res.status}")
+        self._added.add(o["id"])
         if res.status == "requires_human":
             self.requires_human = True
             self._lead_for_human(o)
@@ -605,30 +927,53 @@ class _Turn:
         if res.status == "insufficient_stock":
             if res.available == 0:
                 return self.out_of_stock([o])
-            return (f"De la {o['name']} sólo hay {res.available} disponible(s). "
-                    "¿Querés que te agregue esa cantidad?")
+            current = next((it["qty"] for it in (res.cart or {}).get("items", []) if it["item_id"] == o["id"]), 0)
+            more = res.available - current
+            if more <= 0:
+                return f"De la {o['name']} ya tenés en el carrito las {current} disponibles."
+            self.state["offer"] = {"ids": [o["id"]], "qty": more}
+            return (f"De la {o['name']} sólo hay {res.available} disponible(s)"
+                    + (f" y ya tenés {current} en el carrito" if current else "")
+                    + f". ¿Querés que te agregue {more}?")
         if res.status == "not_found":
             return "Ese producto ya no está disponible en el catálogo."
         return (f"Listo, agregué {qty} × {o['name']} ({_money(res.offer['price'])} c/u).\n"
                 + self.cart_text(res.cart)
-                + "\nEntrega: por ahora coordinamos retiro o envío con el equipo después del pago. "
-                  "¿Querés sumar algo más o lo comprás?")
+                + ("\nEntrega: por ahora coordinamos retiro o envío con el equipo después del pago. "
+                   "¿Querés sumar algo más o lo comprás?" if tail else ""))
 
-    def remove(self, text: str) -> str:
-        o = self.resolve(text)
+    def edit(self, op: tuple[str, int]) -> Optional[str]:
+        """"Dejame dos", "sacá una", "sacá todas": un único cambio de la línea, sin vaciar y volver
+        a cargar. None si fija la cantidad de algo que no está en el carrito (entonces se agrega)."""
         cart = orders.get_cart(self.tenant, self.conv)
-        if o is None and cart and len(cart["items"]) == 1:
-            o = {"id": cart["items"][0]["item_id"], "name": cart["items"][0]["name"]}
-        if o is None:
-            return "¿Cuál querés que saque?\n" + self.cart_text(cart)
-        return self.remove_offer(o, cart)
+        line, why = self.edit_line(op, cart)
+        if line is None:
+            if why == "absent":
+                return None if op[0] == "set" else "Eso no está en tu carrito.\n" + self.cart_text(cart)
+            return "¿De cuál producto? Tenés:\n" + self.cart_text(cart)
+        return self.set_qty(line["item_id"], line["name"], self.edit_plan()[line["item_id"]])
 
-    def remove_offer(self, o: dict[str, Any], cart: Optional[dict[str, Any]] = None) -> str:
-        res = orders.remove_item(self.tenant, self.conv, o["id"])
-        self.tool("quitar_del_carrito", res.status)
+    def set_qty(self, item_id: str, name: str, qty: int) -> str:
+        res = orders.set_item_qty(self.tenant, self.conv, item_id, qty,
+                                 policies=(self.profile.get("policies") or {}) if self.dry_run else None)
+        self.tool("cambiar_cantidad", f"{name} → {qty}: {res.status}")
+        if res.status == "insufficient_stock":
+            return (f"De la {name} sólo hay {res.available} disponible(s); no la puedo dejar en {qty}.\n"
+                    + self.cart_text(res.cart))
+        if res.status == "not_in_cart":
+            return f"La {name} no estaba en tu carrito.\n" + self.cart_text(res.cart)
+        if res.status == "requires_human":
+            self.requires_human = True
+            if not self.dry_run:
+                self._lead_for_human(res.offer)
+            return (f"La {name} necesita confirmación de una persona para aumentar la cantidad.\n"
+                    + self.cart_text(res.cart))
         if res.status != "ok":
-            return f"La {o['name']} no estaba en tu carrito.\n" + self.cart_text(res.cart or cart)
-        return f"Saqué la {o['name']}.\n" + self.cart_text(res.cart)
+            self.requires_human = res.status == "no_price"
+            return f"No pude cambiar la {name}: ya no tiene precio vigente cargado.\n" + self.cart_text(res.cart)
+        self.state["edited"] = self.state["selected"] = item_id
+        head = f"Saqué la {name}." if qty == 0 else f"Listo, quedan {qty} × {name}."
+        return head + "\n" + self.cart_text(res.cart)
 
     def _lead_only(self, cart: Optional[dict[str, Any]]) -> str:
         """El negocio apagó la venta directa: se registra el interés y cierra una persona."""
@@ -823,6 +1168,31 @@ class _Turn:
                     else f" Tu pedido #{o['number']} está {o['status_label']}.")
         return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
+    def handoff(self, again: bool = False) -> str:
+        """Pide una persona: queda registrado en oportunidades (lo que ve el equipo en el panel).
+        No hay bandeja ni aviso automático todavía: no se promete canal ni plazo."""
+        self.requires_human = True
+        self.state["handoff"] = True
+        hours = (f" Horario de atención: {self.profile['hours'].rstrip('. ')}." if self.profile.get("hours")
+                 else "")
+        if again:
+            self.tool("derivar_persona", "ya registrada")
+            return ("Tu pedido para hablar con una persona ya quedó registrado para el equipo del negocio. "
+                    "Desde este chat no tengo forma de avisarte por otro medio ni de darte un plazo."
+                    + hours + " Si querés, seguí contándome qué necesitás y te ayudo con productos, precios y stock.")
+        if not self.dry_run:
+            req = dict(opportunities.get_conversation_requirements(self.tenant, self.conv))
+            req["atencion"] = "pidió hablar con una persona"
+            cart = orders.get_cart(self.tenant, self.conv)
+            opp = opportunities.upsert_opportunity(self.tenant, OpportunityInput(
+                conversation_id=self.conv, stage="para_cotizar", origin="venta_chat", requirements=req,
+                requires_human_quote=True, estimated_amount=cart["total"] if cart and cart["items"] else None))
+            opportunities.log_activity(self.tenant, opp.id, "derivacion", "el cliente pidió hablar con una persona")
+        self.tool("derivar_persona", "registrada en oportunidades")
+        return ("Listo, dejé registrado para el equipo del negocio que querés hablar con una persona." + hours
+                + " Desde este chat no puedo avisarte por otro medio ni darte un plazo. Mientras tanto, si "
+                  "querés, te sigo ayudando con productos, precios y stock.")
+
     # -- CRM --
     def _lead_for_order(self, order: dict[str, Any]) -> None:
         opp = opportunities.upsert_opportunity(self.tenant, OpportunityInput(
@@ -852,11 +1222,22 @@ def _confirmation_reply(turn: _Turn, text: str) -> Optional[str]:
     return None
 
 
+def _human_reply(turn: _Turn, text: str, handoff: bool) -> Optional[str]:
+    """Pedido de una persona y su seguimiento ("dale, ¿cómo me avisan?"). Determinista también con
+    LLM: lo que se afirma de la derivación (registro, canal, plazo) no lo redacta el modelo."""
+    if _RE_HUMAN.search(text):
+        return turn.handoff()
+    if handoff and (_RE_NOTIFY.search(text) or (_RE_YES.match(text) and len(text.split()) <= 6)):
+        return turn.handoff(again=True)
+    return None
+
+
 def _rules_reply(turn: _Turn, text: str) -> str:
     """Planner determinista (modo mock): intención por reglas."""
     state, tenant_id, conv = turn.state, turn.tenant, turn.conv
     budget = _budget(text)
     cart_now = orders.get_cart(tenant_id, conv)
+    edit = _edit(text) if turn.consent == "order" else None
     if _RE_DONE.match(text) and cart_now and cart_now["items"]:
         reply = turn.prepare_checkout(text)
     elif _social(text):
@@ -871,16 +1252,25 @@ def _rules_reply(turn: _Turn, text: str) -> str:
         reply = turn.status(paid_claim=True)
     elif _RE_STATUS.search(text) and (_RE_ORDER_WORD.search(text) or "salio" in text or "llego" in text):
         reply = turn.status(paid_claim=False)
-    elif _RE_BUY.search(text):
+    elif _RE_CART.search(text) and turn.consent != "order" and not turn.no_cart:
+        turn.tool("ver_carrito", "vacío" if not cart_now else f"{len(cart_now['items'])} ítem(s)")
+        reply = turn.cart_text(cart_now)
+    elif (turn.consent == "read" and budget is None
+          and (_RE_STOCK_Q.search(text) or _RE_PRICE_Q.search(text) or re.search(r"\bhay\b", text))
+          and (o := turn.resolve(text))):
+        reply = turn.stock_offer(o, _qty(text))         # consultar/cotizar: no toca el carrito
+    elif _RE_BUY.search(text) and turn.consent == "order":
         reply = turn.prepare_checkout(text)
-    elif _RE_REMOVE.search(text):
-        reply = turn.remove(text)
-    elif _RE_CART.search(text):
-        cart = orders.get_cart(tenant_id, conv)
-        turn.tool("ver_carrito", "vacío" if not cart else f"{len(cart['items'])} ítem(s)")
-        reply = turn.cart_text(cart)
-    elif _choice(text) and state.get("last_results"):
-        reply = turn.add(text, choice=_choice(text))
+    elif edit and cart_now and cart_now["items"] and (done := turn.edit(edit)):
+        reply = done
+    elif _RE_REMOVE.search(text) and turn.consent == "order":
+        reply = "¿Cuál querés que saque?\n" + turn.cart_text(cart_now)
+    elif turn.consent == "order" and (done := turn.order(text)):
+        reply = done
+    elif turn.consent == "pick" and (done := turn.take(text)):
+        reply = done
+    elif state.get("last_results") and (n := _option(text)) is not None and len(text.split()) <= 3:
+        reply = turn.select(n)
     elif budget is None and _RE_STOCK_Q.search(text) and turn.state.get("last_results"):
         reply = turn.stock(text)
     elif (_RE_DOCS.search(text) and not _RE_PRODUCT_ASK.search(text)
@@ -889,11 +1279,7 @@ def _rules_reply(turn: _Turn, text: str) -> str:
           and (doc := turn.knowledge(text))):
         reply = doc
     else:
-        reply = None
-        if budget is None and _RE_ADD.search(text) and (state.get("last_results") or state.get("selected")):
-            reply = turn.add(text)
-        if reply is None:
-            reply = turn.search(text, budget)
+        reply = turn.search(text, budget)
     return reply
 
 
@@ -914,16 +1300,23 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     text = normalize(message)
     turn.text = text
     mode = "mock"
+    # Una propuesta de agregar vale sólo para el mensaje siguiente; la derivación, para su seguimiento.
+    turn.offer = state.pop("offer", None)
+    handoff = bool(state.pop("handoff", None))
+    turn.no_cart = all(_RE_NO_CART.search(part) for part in _parts(text))
+    turn.consent = _consent(message, text, turn.offer)
 
-    reply = _confirmation_reply(turn, text)
+    reply = _confirmation_reply(turn, text) or _human_reply(turn, text, handoff)
     if reply is None:
         planner = planner or llm_sales.default_planner()
         if planner is not None:
             reply = llm_sales.run(turn, message, conv, planner)
-            mode = "live" if reply is not None else "mock"
+            mode = "live" if reply is not None and turn.model_answered else "mock"
         if reply is None:
             reply = _rules_reply(turn, text)
 
+    if turn.requires_human:
+        state.pop("offer", None)          # "dale" después de derivar no es una compra
     _save_state(tenant_id, conv, state)
     ui = _ui(turn)
     opportunities.add_message(tenant_id, conv, "outbound", reply, ui or None,
