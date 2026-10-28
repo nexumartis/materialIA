@@ -179,32 +179,64 @@ def add_item(tenant_id: str, conversation_id: str, item_id: str, qty: int = 1,
             return CartResult("insufficient_stock", cart=_view(cur, cart) if cart else None,
                               offer=offer, available=offer["available"])
         cart = cart or _ensure_cart(cur, tenant_id, conversation_id)
-        cur.execute(
-            "insert into order_items (tenant_id, order_id, item_id, sku, name, qty, unit_price, line_total) "
-            "values (%(t)s, %(o)s, %(i)s, %(sku)s, %(name)s, %(q)s, %(p)s, %(q)s * %(p)s) "
-            "on conflict (order_id, item_id) do update set qty = %(q)s, unit_price = %(p)s, "
-            "line_total = %(q)s * %(p)s",
-            {"t": tenant_id, "o": cart["id"], "i": item_id, "sku": offer["sku"],
-             "name": offer["name"], "q": new_qty, "p": offer["price"]},
-        )
-        _recompute(cur, tenant_id, str(cart["id"]))
+        _write_line(cur, tenant_id, str(cart["id"]), offer, new_qty)
         return CartResult("ok", cart=_view(cur, _fetch(cur, tenant_id, str(cart["id"]))),
                           offer=offer, available=offer["available"])
 
 
-def remove_item(tenant_id: str, conversation_id: str, item_id: str) -> CartResult:
+def _write_line(cur: Any, tenant_id: str, order_id: str, offer: dict[str, Any], qty: int) -> None:
+    cur.execute(
+        "insert into order_items (tenant_id, order_id, item_id, sku, name, qty, unit_price, line_total) "
+        "values (%(t)s, %(o)s, %(i)s, %(sku)s, %(name)s, %(q)s, %(p)s, %(q)s * %(p)s) "
+        "on conflict (order_id, item_id) do update set qty = %(q)s, unit_price = %(p)s, "
+        "line_total = %(q)s * %(p)s",
+        {"t": tenant_id, "o": order_id, "i": offer["id"], "sku": offer["sku"],
+         "name": offer["name"], "q": qty, "p": offer["price"]},
+    )
+    _recompute(cur, tenant_id, order_id)
+
+
+def set_item_qty(tenant_id: str, conversation_id: str, item_id: str, qty: int,
+                 policies: Optional[dict[str, Any]] = None) -> CartResult:
+    """Fija cuántas unidades de una línea del carrito abierto quedan (0 la quita), en una sola
+    transacción: sin intermedios vacíos. Subir la cantidad valida precio y disponible como agregar."""
+    if qty < 0:
+        raise ValueError("la cantidad no puede ser negativa")
     with tenant_tx(tenant_id) as cur:
         cart = _open_cart_row(cur, tenant_id, conversation_id, lock=True)
         if cart is None:
             return CartResult("not_in_cart")
-        cur.execute(
-            "delete from order_items where tenant_id = %s and order_id = %s and item_id = %s",
-            (tenant_id, cart["id"], item_id),
-        )
-        if cur.rowcount == 0:
+        cur.execute("select qty from order_items where tenant_id = %s and order_id = %s and item_id = %s",
+                    (tenant_id, cart["id"], item_id))
+        current = cur.fetchone()
+        if current is None:
             return CartResult("not_in_cart", cart=_view(cur, cart))
-        _recompute(cur, tenant_id, str(cart["id"]))
-        return CartResult("ok", cart=_view(cur, _fetch(cur, tenant_id, str(cart["id"]))))
+        offer = None
+        if qty == 0:
+            cur.execute("delete from order_items where tenant_id = %s and order_id = %s and item_id = %s",
+                        (tenant_id, cart["id"], item_id))
+            _recompute(cur, tenant_id, str(cart["id"]))
+        elif qty < current["qty"]:
+            cur.execute("update order_items set qty = %s, line_total = %s * unit_price "
+                        "where tenant_id = %s and order_id = %s and item_id = %s",
+                        (qty, qty, tenant_id, cart["id"], item_id))
+            _recompute(cur, tenant_id, str(cart["id"]))
+        else:
+            offer = inventory._offer_by_id(cur, tenant_id, item_id)
+            if offer is None:
+                return CartResult("not_found", cart=_view(cur, cart))
+            if qty > current["qty"]:
+                rules = policies if policies is not None else agent_profile.policies(cur, tenant_id)
+                if (offer["pricing_mode"] != "fixed"
+                        or offer["category"].lower() in rules.get("human_only_categories", [])):
+                    return CartResult("requires_human", cart=_view(cur, cart), offer=offer)
+            if offer["price"] is None:
+                return CartResult("no_price", cart=_view(cur, cart), offer=offer)
+            if qty > offer["available"]:
+                return CartResult("insufficient_stock", cart=_view(cur, cart), offer=offer,
+                                  available=offer["available"])
+            _write_line(cur, tenant_id, str(cart["id"]), offer, qty)
+        return CartResult("ok", cart=_view(cur, _fetch(cur, tenant_id, str(cart["id"]))), offer=offer)
 
 
 # --- Checkout -----------------------------------------------------------------

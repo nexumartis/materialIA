@@ -25,9 +25,10 @@ import httpx
 
 from ..config import settings
 from ..db import tenant_tx
-from ..domain import opportunities, orders
+from ..domain import inventory, opportunities, orders
 from ..domain.inventory import normalize
 from .sales_agent import _RE_COMPARE, _Turn, _budget, _money, _social, _stems
+from .sales_skills import render as _guides
 
 log = logging.getLogger(__name__)
 
@@ -46,17 +47,25 @@ _TOOLS: list[dict[str, Any]] = [
          "precio_maximo": {"type": "number", "description": "presupuesto máximo en pesos, si lo dijo"}},
          "required": ["consulta"]}},
     {"name": "consultar_producto",
-     "description": "Disponible y precio de UN producto: por número de la última lista o por descripción.",
+     "description": "Disponible y precio de UN producto: por número de la última lista o por descripción. "
+                    "Con cantidad, cotiza esas unidades sin tocar el carrito.",
      "parameters": {"type": "object", "properties": {
-         "opcion": {"type": "integer"}, "consulta": {"type": "string"}}}},
+         "opcion": {"type": "integer"}, "consulta": {"type": "string"},
+         "cantidad": {"type": "integer", "minimum": 1}}}},
     {"name": "agregar_al_carrito",
      "description": "Agrega un producto al carrito: por número de la última lista ('la 2') o por descripción. "
                     "Suma la cantidad a la que ya había.",
      "parameters": {"type": "object", "properties": {
          "opcion": {"type": "integer"}, "consulta": {"type": "string"},
          "cantidad": {"type": "integer", "minimum": 1}}}},
+    {"name": "cambiar_cantidad",
+     "description": "Fija cuántas unidades de un producto del carrito quedan ('dejame 2', 'sacá una', "
+                    "'que sean 3'), en un solo paso.",
+     "parameters": {"type": "object", "properties": {
+         "opcion": {"type": "integer"}, "consulta": {"type": "string"},
+         "cantidad": {"type": "integer", "minimum": 0}}, "required": ["cantidad"]}},
     {"name": "quitar_del_carrito",
-     "description": "Quita un producto del carrito (por número de la última lista o descripción).",
+     "description": "Quita la línea completa de un producto del carrito (por número de la última lista o descripción).",
      "parameters": {"type": "object", "properties": {
          "opcion": {"type": "integer"}, "consulta": {"type": "string"}}}},
     {"name": "comparar_productos",
@@ -106,25 +115,15 @@ Reglas que no se rompen:
   y no das descuentos, plazos ni promesas que no figuren en lo que informa el negocio.
 - El "Contexto actual" (carrito, pedidos y su estado) manda sobre lo dicho antes en la charla:
   a un pedido pagado no se le pide pagar; uno en revisión lo resuelve una persona.
-- Si el cliente nombra una opción de la última lista ("la 2", "la primera", "esa negra"), usá
-  agregar_al_carrito o consultar_producto con ese número.
-- Si quiere comprar o dice que no quiere nada más y tiene carrito, usá preparar_compra.
-  Vos no generás links de pago ni confirmás pedidos.
+- Vos no generás links de pago ni confirmás pedidos: el "sí" al resumen lo procesa el servidor.
 - "Ya pagué" no confirma nada: usá estado_pedido con cliente_dice_que_pago=true.
 - Si una herramienta devuelve "texto", respondé con ese texto (podés acortarlo o hacerlo más
   natural, pero sin cambiar ni agregar números, productos ni links). Si mostrás opciones,
   usá exactamente la numeración que devolvió la herramienta. Si cambiaste el carrito,
-  incluí el total real.
+  incluí el total real. Preguntá sólo lo que haga falta para avanzar.
 
-Cómo conversar:
-- Si el cliente agradece o se despide, respondé breve y cálido, sin herramientas ni preguntas de venta.
-- Para comparar o recomendar entre opciones usá comparar_productos: sale de la ficha; no describas
-  rasgos, usos ni ventajas que no figuren.
-- Recomendá con la ficha (tipo, color, características), el precio y su presupuesto. Si un dato
-  (medida, compatibilidad) no figura, decilo y ofrecé que lo confirme una persona.
-- Si corrige algo (color, cantidad, presupuesto), conservá el resto de lo que pidió; si cambia de
-  tipo de producto, buscá de cero. Cambiar una cantidad: quitar_del_carrito y agregar_al_carrito.
-- Preguntá sólo lo que haga falta para avanzar.
+Guías del vendedor (aplicá la que corresponda al mensaje):
+{guias}
 Ejemplos de estilo (orientan, no se copian): «¡Gracias a vos! Que la disfrutes.» · «Con tu
 presupuesto, la negra mate es la que entra y tiene stock.» · «En cromo para cocina no tengo;
 ¿te sirve negra?»
@@ -234,6 +233,11 @@ def _context(turn: _Turn) -> str:
         lines.append("Búsqueda vigente: " + ", ".join(p for p in prefs if p))
     cart = orders.get_cart(turn.tenant, turn.conv)
     lines.append("Carrito: " + (turn.cart_text(cart).replace("\n", " | ") if cart else "vacío"))
+    if turn.consent == "read":
+        lines.append("Este mensaje es una consulta: no cambies el carrito ni prepares la compra.")
+    elif turn.offer:
+        lines.append(f"Tu último mensaje propuso agregar {len(turn.offer['ids'])} opción(es): un «sí» o "
+                     "una elección del cliente responde a eso.")
     from ..domain import agent_profile
     # Si el negocio apagó "estado del pedido", el modelo tampoco ve estados para repetirlos.
     recent = (orders.conversation_orders(turn.tenant, turn.conv, limit=3)
@@ -257,22 +261,25 @@ def _int(value: Any) -> Optional[int]:
 def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
     """Ejecuta la herramienta pedida con las funciones tenant-safe del agente. Devuelve el texto
     verificado que se le pasa al modelo (y que sirve de respuesta de respaldo)."""
+    from ..domain import agent_profile
+    if not agent_profile.tool_enabled(turn.profile, name):
+        turn.requires_human = True
+        return "Herramienta no habilitada por el negocio: decí que lo confirma una persona del equipo."
     opcion, consulta = _int(args.get("opcion")), str(args.get("consulta") or "")
     if name == "buscar_productos":
         budget = args.get("precio_maximo")
         budget = float(budget) if isinstance(budget, (int, float)) and budget > 0 else None
         from ..domain.inventory import normalize
         return turn.search(normalize(consulta), budget)
-    if name in ("consultar_producto", "agregar_al_carrito", "quitar_del_carrito"):
+    if name in ("consultar_producto", *_CART_TOOLS):
         o = turn.pick(opcion, consulta)
         if o is None:
+            turn.blocked = True
             return ("No identifiqué cuál producto. Pedile al cliente que elija un número de la lista "
                     "o que lo describa.")
         if name == "consultar_producto":
-            return turn.stock_offer(o)
-        if name == "agregar_al_carrito":
-            return turn.add_offer(o, _int(args.get("cantidad")) or 1)
-        return turn.remove_offer(o)
+            return turn.stock_offer(o, _int(args.get("cantidad")))
+        return turn.cart_tool(name, o)     # cuántas: lo dice el cliente, no el modelo
     if name == "ver_carrito":
         turn.tool("ver_carrito", "consulta")
         return turn.cart_text(orders.get_cart(turn.tenant, turn.conv))
@@ -283,9 +290,6 @@ def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
             return "No hay una lista de opciones para comparar: buscá primero."
         # Ninguna opción entra en el presupuesto: la búsqueda real con ese tope.
         return turn.compare("", picks, budget) or turn.search(turn.text, budget)
-    from ..domain import agent_profile
-    if not agent_profile.tool_enabled(turn.profile, name):
-        return "Herramienta no habilitada por el negocio: decí que lo confirma una persona del equipo."
     if name == "consultar_envio":
         return turn.shipping(str(args.get("zona") or ""))
     if name == "buscar_info_negocio":
@@ -293,6 +297,8 @@ def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
     if name == "historial_cliente":
         return turn.customer_history()
     if name == "preparar_compra":
+        if turn.consent == "read":
+            return turn.refuse(name, "el cliente consultó; no pidió comprar")
         return turn.prepare_checkout("")
     if name == "estado_pedido":
         return turn.status(paid_claim=bool(args.get("cliente_dice_que_pago")))
@@ -304,7 +310,7 @@ def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
 # y una redacción libre podría agregar otros. Un cambio de carrito puede redactarlo el modelo si
 # muestra el total real; si la herramienta no pudo cambiarlo, va su explicación tal cual.
 _VERBATIM = {"preparar_compra", "comparar_productos"}
-_CART_TOOLS = {"agregar_al_carrito", "quitar_del_carrito"}
+_CART_TOOLS = ("agregar_al_carrito", "cambiar_cantidad", "quitar_del_carrito")
 _PAID = {"PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"}
 
 
@@ -447,34 +453,118 @@ def _problem(reply: str, turn: _Turn, evidence: str, allowed: str) -> Optional[s
     return None
 
 
+_RE_CART_CLAIM = re.compile(r"\b(agregue|sume|anote|saque|quite|agregad[oa]s?|sumad[oa]s?)\b")
+_RE_CONFIRM_ASK = re.compile(r"\bconfirmas\b(?! que)")     # «¿confirmás (la compra)?», no «confirmar el pago»
+_RE_NUMBERED = re.compile(r"(?:^|\s)(\d)[.)]\s")
+_RE_CITED = re.compile(r"\b(?:opcion|numero|nro)\s*\.?\s*(\d)\b|\bla (\d)\b(?![.,]\d)")
+
+
+def _renumbered(low: str, turn: _Turn) -> Optional[str]:
+    """Una lista numerada en el texto tiene que coincidir con la que ve el cliente en las tarjetas y
+    a la que apuntan "la 2"/"la nro3": misma posición, mismo producto."""
+    shown = turn._shown()
+    marks = _marks({o["name"]: None for o in shown})
+    pieces = _RE_NUMBERED.split(low)
+    refs = [(int(n), seg, False) for n, seg in zip(pieces[1::2], pieces[2::2])]
+    if (any(_mentions(segment, marks) for _, segment, _ in refs)
+            and [n for n, _, _ in refs] != list(range(1, len(shown) + 1))):
+        return "no muestra la lista completa con la numeración que ve el cliente"
+    # «la número 3 (la de lavatorio)…»: la opción citada en prosa tiene que existir.
+    refs += [(int(m.group(1) or m.group(2)), low[m.end():m.end() + 80], True)
+             for m in _RE_CITED.finditer(low) if not _negated(low, m.start())]
+    for n, segment, cited in refs:
+        named = _mentions(segment, marks)
+        if (cited or named) and (n > len(shown) or (named and named[0][1] != shown[n - 1]["name"])):
+            return f"nombra la opción {n} distinto de la lista que ve el cliente"
+    return None
+
+
 def _fallback(turn: _Turn, message: str, outputs: list[str], cart_changed: bool) -> Optional[str]:
     """Respaldo según el turno: un agradecimiento lo cierra el planner por reglas (no una búsqueda);
     si no, el texto real de las herramientas de este turno, o las reglas si no se ejecutó nada."""
     if not outputs or (_social(normalize(message)) and not cart_changed):
         turn.products = []
         return None
-    return "\n\n".join(outputs[-2:])
+    if turn.products:
+        rendered = [turn._line(i, o) for i, o in enumerate(turn.products, 1)]
+        start = next((i for i in range(len(outputs) - 1, -1, -1)
+                      if all(line in outputs[i] for line in rendered)), None)
+        if start is None:
+            turn.state.pop("offer", None)    # sin propuesta entregada, un «sí» no autoriza agregar
+            selected = ["Tengo estas opciones:\n" + "\n".join(rendered)]
+        else:
+            selected = outputs[start:]
+        if cart_changed:
+            selected = [turn.cart_text(orders.get_cart(turn.tenant, turn.conv))] + selected
+        return "\n\n".join(selected)
+    return "\n\n".join(outputs if turn.state.get("offer") else outputs[-2:])
+
+
+def _keep_delivered_offer(turn: _Turn, reply: str) -> None:
+    offer = turn.state.get("offer")
+    if not offer:
+        return
+    from .sales_agent import _ui
+    cards = _ui(turn).get("products") or []
+    card_ids = {o["id"] for o, card in zip(turn.products, cards)
+                if (card.get("action") or {}).get("label") == "Agregar"}
+    if offer.get("qty") in (None, 1) and set(offer["ids"]).issubset(card_ids):
+        return
+    low = normalize(reply)
+    qty = offer.get("qty") or 1
+    questions = [f"¿te agrego {qty}?"]
+    if qty == 1:
+        questions += ["¿te la agrego?", "¿te lo agrego?",
+                      "¿queres que te agregue alguna?", "¿cual te agrego?"]
+    shown = turn._shown()
+    cited = {int(m.group(1) or m.group(2)) for m in _RE_CITED.finditer(low)
+             if not _negated(low, m.start())}
+    cited_ids = {shown[n - 1]["id"] for n in cited if 0 < n <= len(shown)}
+    order_choice = (bool(turn.add_plan()[1])
+                    and set(offer["ids"]).issubset(cited_ids)
+                    and not re.search(r"\b(?:agreg|sum)\w*\b", low))
+    if not any(question in low for question in questions) and not order_choice:
+        turn.state.pop("offer", None)
+        return
+    products = inventory.offers(turn.tenant, ids=offer["ids"], limit=len(offer["ids"]))
+    named = {name for _, name in _mentions(low, _marks({o["name"]: None for o in products}))}
+    visible = {o["id"] for o in products if o["name"] in named or o["id"] in cited_ids}
+    ids = [i for i in offer["ids"] if i in visible]
+    if ids:
+        turn.state["offer"] = {**offer, "ids": ids}
+    else:
+        turn.state.pop("offer", None)
 
 
 def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Optional[str]:
     """Bucle de herramientas. Devuelve la respuesta, o None si el modelo no está disponible y
     todavía no ejecutó nada (entonces responde el planner por reglas)."""
     history = opportunities.get_recent_messages(turn.tenant, conversation_id, limit=HISTORY)
+    before_plan = _cart_key(turn)
+    done = turn.apply_plan()           # la orden inequívoca del cliente no depende del modelo
     profile = turn.profile
     perfil = _profile_text(profile)
+    tools = _tools_for(turn)
     messages: list[dict[str, Any]] = [{"role": "system", "content": _SYSTEM.format(
         vendedor=profile.get("seller_name") or "el asistente", negocio=_business_name(turn.tenant),
         tono=_TONES.get(profile.get("tone") or "cercano", _TONES["cercano"]),
+        guias=_guides(t["name"] for t in tools),
         perfil=perfil, memoria=_memory_text(turn), contexto=_context(turn))}] + history
     if not history or history[-1].get("content") != message:
         messages.append({"role": "user", "content": message})
-    outputs: list[str] = []
+    if done:
+        messages.append({"role": "system", "content": "El servidor ya hizo en el carrito lo que el cliente "
+                         "pidió en este mensaje (no lo repitas con herramientas):\n" + "\n".join(done)
+                         + "\nContale qué quedó con el total real y seguí con el resto del mensaje."})
+    outputs: list[str] = list(done)
     verbatim: list[str] = []
-    cart_changed = False
+    cart_changed = _cart_key(turn) != before_plan
     reply = ""
     try:
+        refused = 0
         for _ in range(MAX_STEPS):
-            resp = planner(messages, _tools_for(turn))
+            resp = planner(messages, tools)
+            turn.model_answered = True
             calls = [c for c in resp.get("tool_calls") or [] if c.get("name")]
             if not calls:
                 reply = (resp.get("content") or "").strip()
@@ -482,22 +572,32 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             messages.append({"role": "assistant", "content": resp.get("content") or "",
                              "tool_calls": [{"function": {"name": c["name"], "arguments": c.get("arguments") or {}}}
                                             for c in calls]})
+            blocked = 0
             for c in calls:
                 before = _cart_key(turn) if c["name"] in _CART_TOOLS else None
+                turn.blocked = False
                 out = _execute(turn, c["name"], c.get("arguments") or {})
+                messages.append({"role": "tool", "tool_name": c["name"], "content": json.dumps({"texto": out}, ensure_ascii=False)})
+                if turn.blocked:
+                    blocked += 1
+                    continue    # rechazada o repetida: el modelo lo sabe, el cliente no lo lee
                 outputs.append(out)
                 if before is not None and _cart_key(turn) != before:
                     cart_changed = True
                 elif before is not None or c["name"] in _VERBATIM:
                     verbatim.append(out)
-                messages.append({"role": "tool", "tool_name": c["name"], "content": json.dumps({"texto": out}, ensure_ascii=False)})
             if verbatim:
                 break       # va tal cual: no se pide una redacción que se descartaría
+            # Insiste con acciones que el servidor rechaza: no se gastan más llamadas.
+            refused = refused + 1 if blocked == len(calls) else 0
+            if refused >= 2:
+                break
     except Exception:  # noqa: BLE001 - modelo caído o respuesta inválida
         log.exception("planner LLM de ventas falló")
         if not outputs:
             return _fallback(turn, message, outputs, cart_changed)
     if verbatim:
+        turn.state.pop("offer", None)
         return "\n\n".join(verbatim[-2:])
     cart = orders.get_cart(turn.tenant, turn.conv)
     evidence = "\n".join(outputs + [_context(turn), turn.cart_text(cart), perfil])
@@ -509,7 +609,14 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
     def problem(text: str) -> Optional[str]:
         if total and total not in text:
             return f"cambió el carrito y no muestra el total real ({total})"
-        return _problem(text, turn, evidence, allowed)
+        low = normalize(text)
+        claim = _RE_CART_CLAIM.search(low)
+        # «te agregué» afirma un cambio; «¿querés que te agregue?» no (mismo texto sin acentos).
+        if claim and not cart_changed and not _negated(low, claim.start(), _NEG | {"que", "si"}):
+            return f"dice «{claim.group(0)}» y el carrito no cambió en este turno"
+        if _RE_CONFIRM_ASK.search(low) and not turn.state.get("pending"):
+            return "pide confirmar una compra sin el resumen del servidor"
+        return _renumbered(low, turn) or _problem(text, turn, evidence, allowed)
 
     reply = reply.replace("**", "").replace("__", "")
     asks_choice = bool(_RE_COMPARE.search(normalize(message)))      # con o sin presupuesto
@@ -520,11 +627,12 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
         if asks_choice and text and _mentions(normalize(text), _marks(_catalog(turn))):
             turn.tool("control", "comparación/recomendación libre: responde la ficha")
             turn.products = []
+            turn.state.pop("offer", None)
             return True
         return False
 
     if free_choice(reply):
-        return None
+        return "\n\n".join(done) or None     # lo ya ejecutado no se vuelve a pedir a las reglas
     why = problem(reply) if reply else "sin respuesta"
     if why and reply:
         # Una sola reescritura, SIN herramientas: lo ejecutado no se repite aunque el modelo lo pida.
@@ -537,7 +645,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
                                         {"role": "system", "content": note}], [])
             reply = (again.get("content") or "").strip().replace("**", "").replace("__", "")
             if free_choice(reply):
-                return None
+                return "\n\n".join(done) or None
             why = problem(reply) if reply else "sin respuesta"
         except Exception:  # noqa: BLE001 - modelo caído al reescribir
             log.exception("reescritura del LLM de ventas falló")
@@ -545,6 +653,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             turn.tool("control", f"reescritura descartada: {why}")
     if why:
         return _fallback(turn, message, outputs, cart_changed)
+    _keep_delivered_offer(turn, reply)
     if _RE_HANDOFF.search(normalize(reply)):
         turn.requires_human = True
     if turn.payment and turn.payment["checkout_url"] not in reply:
