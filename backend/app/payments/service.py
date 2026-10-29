@@ -10,11 +10,12 @@ import json
 import logging
 import re
 import uuid
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from psycopg.errors import UniqueViolation
 
 from ..db import system_tx, tenant_tx
+from ..documents import store
 from ..domain import inventory, opportunities, orders, receipts
 from ..domain.inventory import OutOfStock
 from ..schemas import OpportunityInput
@@ -133,12 +134,13 @@ def apply_payment(provider_name: str, payment: ProviderPayment) -> str:
 
 
 def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
-                     amount: float, currency: str) -> str:
+                     amount: float, currency: str, document_ids: Sequence[str] = ()) -> str:
     """El dueño acredita una transferencia que cotejó en su banco. Mismo efecto que un pago
     verificado por el proveedor (stock, pedido, constancia), con actor y fecha auditados.
 
     `tenant_id` lo resuelve el servidor; igual se revalida la membresía de `uid` (PermissionError).
-    Pedido inexistente => LookupError; referencia ya usada en otro pedido => ReferenceInUse."""
+    Pedido inexistente => LookupError; referencia ya usada en otro pedido => ReferenceInUse.
+    `document_ids`: comprobantes del pedido que el dueño cotejó; quedan asociados al pago."""
     ref = re.sub(r"\s+", "", reference or "").upper()
     if not _TRANSFER_REF.fullmatch(ref):
         raise ValueError("referencia inválida (4 a 64 letras, números o guiones)")
@@ -156,9 +158,13 @@ def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
             if order is None:
                 raise LookupError("pedido inexistente")
             outcome, became_paid = _apply(cur, tenant_id, order, "transfer", payment, verified_by=uid)
+            cur.execute("select id from payments where tenant_id = %s and provider = 'transfer' "
+                        "and provider_payment_id = %s", (tenant_id, payment.id))
+            store.link(cur, tenant_id, uid, order_id, str(cur.fetchone()["id"]), list(document_ids))
             opportunities._audit(cur, tenant_id, "transfer_confirmed", order_id,
                                  {"actor": uid, "reference": ref, "amount": payment.amount,
-                                  "currency": payment.currency, "outcome": outcome})
+                                  "currency": payment.currency, "outcome": outcome,
+                                  "documents": list(document_ids)})
     except UniqueViolation:
         # Otra transacción ya registró esa referencia en otro pedido: rollback completo.
         raise ReferenceInUse("esa referencia ya acreditó otro pedido") from None

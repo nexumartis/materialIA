@@ -1,4 +1,4 @@
-# Comprobantes T1 (correcciones) + T2 — pedido de revisión
+# Comprobantes T1 (correcciones) + T2 + T3 — pedido de revisión
 
 **Rama:** `feat/comprobantes-ocr`, base `94f0c26`. **Implementó:** Claude Code (sesión de Tomi). **Revisa:** Mati con Codex, en contexto separado. **Estado: sin aprobar, sin integrar.** No se tocó Supabase remoto.
 
@@ -30,13 +30,33 @@ README de `backend/tools/` corregido: aislamiento por SO y sus límites, plazo t
 - **`backend/app/domain/receipts.py`:** instantánea con negocio (nombre existente), pedido, productos, importes, `paid_at`, origen y referencia (sin prefijo interno), y la leyenda «Constancia comercial de compra — no es factura fiscal». Sin datos fiscales.
 - **`backend/tests/test_receipts.py`** (13): doble confirmación y 4 hilos concurrentes ⇒ 1 constancia y 1 mensaje; webhook repetido con `_after_paid` que lanza ⇒ 1 y 1; referencia reutilizada ⇒ 409 sin tocar ninguno de los dos pedidos; importe o moneda incorrectos y pago tardío sin stock ⇒ sin PAID ni constancia y un solo aviso; reversión conserva la constancia y marca `reversed_at`; membresía revocada u otro negocio ⇒ rechazo; datos de transferencia inválidos.
 
-Aún **sin rutas HTTP ni UI**: `confirm_transfer` se expone en T3, con documentos, panel y CSV. El PDF de la constancia va en T4. Los adjuntos (`payment_documents`) se agregan a 0008 en T3, antes de integrar.
+## T3 — comprobantes del comprador, revisión del dueño y registro mensual
+
+- **0008 suma `payment_documents`:** original en `bytea` privado (atajo para la demo, como pide el plan) y `unique(tenant_id, sha256)`. FK compuestas a pedido y conversación del mismo negocio; estado de lectura, intentos y reclamo; `ocr jsonb`; decisión auditada (`linked`/`rejected`, actor y fecha) y `payment_id`. RLS igual que `receipts`. `app_user` tiene `select` y `update` sólo de las columnas de decisión.
+- **`backend/app/documents/store.py`:**
+  - `receive`: tipo por firma, pedido de ESA conversación y no `CART_OPEN`. El mismo archivo en el mismo pedido devuelve el registro existente; en otro pedido, 409. Máximo 10 por pedido.
+  - `process_pending`: reclamo con `for update skip locked` y OCR fuera de la transacción. Un fallo se reintenta en la vuelta **siguiente**, no en la misma. Máximo 3 intentos; un `processing` de más de 5 min se retoma.
+  - Vista del comprador: sólo campos sugeridos con sus candidatos; las líneas del archivo nunca salen.
+  - Panel: `list_month`, `original`, `reject` (no toca pagos ni un comprobante ya `linked`) y `link`.
+  - `month_csv`: `;` y BOM, hora argentina. Una fila por pago verificado (con la cantidad de comprobantes) y las devoluciones con signo negativo en su mes. Los comprobantes son filas aparte, sin sumarse, y hay un total por moneda. Las celdas de texto no confiable que empiezan con `= + - @ \t \r` llevan `'` adelante.
+- **`backend/app/main.py`:**
+  - `POST /public/{slug}/conversations/{id}/orders/{order}/documents`: cuerpo crudo; el token del comprador se valida antes de leer; `Content-Length` y lectura acotada a 10 MiB (413); tipo inválido 415; ajeno 404.
+  - `GET /public/.../conversations/{id}` suma `documents`.
+  - Panel: `GET /app/payment-documents?month=`, `GET …/{id}/original` (attachment, `nosniff`, `no-store`), `POST …/{id}/reject`, `POST /app/orders/{id}/confirm-transfer` (`TransferConfirm`, con `document_ids`) y `GET /app/payments/register.csv?month=`.
+- **`backend/app/worker.py`:** `run_once` agrega `payment_documents_read`.
+- **`backend/tests/test_payment_documents.py`** (9 tests): recepción, dedupe y lectura sin acreditar pago, sin texto del archivo en `messages` ni en la vista; OCR real a través del worker; 404 sin token, con token ajeno, pedido ajeno u otro negocio; 415, 413 y 409 por archivo reutilizado; dueño que lista, descarga, confirma y asocia, contra un ajeno que recibe 404; rechazo que no altera un pago aprobado; validaciones y membresía revocada (403); reintentos y reclamo caído; CSV con límite de mes argentino, ARS y USD, 3 comprobantes de un pago contados una vez, devolución en su mes y fórmula escapada.
+
+Sin UI todavía: T4 suma el chat, el panel y el PDF de la constancia, con prueba en navegador.
 
 ## Evidencia (macOS, Python 3.14, 28/10/2026)
 
 - OCR: `pytest --noconftest tests/test_document_ocr.py` ⇒ **26 passed**, tres corridas. `python -m tools.prepare_ocr` ⇒ lectura real sin red, aislamiento por SO.
-- Suite completa en DB descartable `127.0.0.1:55436` (contenedor `materialia-test-pg`, `supabase/postgres:17.11.0.003`, migraciones 0001–0008 + seed): **308 passed, 0 failed, 0 skipped**, dos corridas. Warnings históricos: httpx/Starlette y JWT corto de tests.
-- Demo local (54322): se aplicaron 0004–0007, que faltaban en el historial aunque las tablas existían, y 0008. Sin reset.
+- Suite completa en DB descartable `127.0.0.1:55436` (contenedor `materialia-test-pg`, `supabase/postgres:17.11.0.003`, migraciones 0001–0008 + seed):
+  - con T2: **308 passed**, dos corridas;
+  - con T3: **317 passed, 0 failed, 0 skipped**, tres corridas.
+
+  Una corrida tardó 15 min de reloj con 36 s de ejecución y 3% de CPU: el proceso quedó suspendido por el SO, no por un bloqueo. Warnings históricos: httpx/Starlette y JWT corto de tests.
+- Demo local (54322): se aplicaron 0004–0007, que faltaban en el historial aunque las tablas existían, y 0008, reaplicada a mano tras sumar `payment_documents`. Sin reset. La API levanta y expone las rutas nuevas.
 
 ## Para el revisor
 

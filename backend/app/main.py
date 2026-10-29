@@ -15,7 +15,8 @@ import psycopg
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
 from . import buyer_session
@@ -23,6 +24,7 @@ from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, user_tx
+from .documents import ocr, store as documents
 from .domain import agent_profile, backoffice, catalog, customer_memory, evals, knowledge, opportunities, orders
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
@@ -34,6 +36,7 @@ from .schemas import (
     OpportunitySummary,
     OpportunityUpdate,
     ProductSummary,
+    TransferConfirm,
 )
 
 # Allowlist de empresas demo (sandbox). Coinciden con supabase/seed.sql.
@@ -458,6 +461,70 @@ def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depend
         return order
 
 
+# --- Panel: comprobantes, transferencias y registro mensual --------------------------
+# El dueño revisa los archivos y acredita sólo lo que cotejó en su banco (confirm_transfer).
+@app.get("/app/payment-documents")
+def app_payment_documents(month: str = Query(..., description="AAAA-MM, hora Argentina"),
+                          uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            return documents.list_month(cur, tenant, month)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/app/payment-documents/{document_id}/original")
+def app_payment_document_original(document_id: UUID, uid: str = Depends(current_uid)) -> Response:
+    with user_tx(uid) as (cur, tenant):
+        found = documents.original(cur, tenant, str(document_id))
+    if found is None:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    mime, content = found
+    ext = {"image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf"}[mime]
+    return Response(content, media_type=mime, headers={
+        "Content-Disposition": f'attachment; filename="comprobante-{document_id}.{ext}"',
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
+
+
+@app.post("/app/payment-documents/{document_id}/reject")
+def app_payment_document_reject(document_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        if not documents.reject(cur, tenant, uid, str(document_id)):
+            raise HTTPException(status_code=404, detail="Comprobante no encontrado o ya asociado a un pago.")
+        opportunities._audit(cur, tenant, "payment_document_rejected", str(document_id), {"actor": uid})
+    return {"rejected": True}
+
+
+@app.post("/app/orders/{order_id}/confirm-transfer")
+def app_confirm_transfer(order_id: UUID, req: TransferConfirm, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (_, tenant):
+        pass   # el negocio sale de la membresía; confirm_transfer la revalida al bloquear el pedido
+    try:
+        outcome = payments.confirm_transfer(tenant, uid, str(order_id), req.reference, req.amount,
+                                            req.currency, [str(d) for d in req.document_ids])
+    except payments.ReferenceInUse as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Tu cuenta no tiene acceso a este negocio.")
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"outcome": outcome, "order": orders.get_order(tenant, str(order_id))}
+
+
+@app.get("/app/payments/register.csv")
+def app_payment_register(month: str = Query(..., description="AAAA-MM, hora Argentina"),
+                         uid: str = Depends(current_uid)) -> Response:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            body = documents.month_csv(cur, tenant, month)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return Response(body, media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="pagos-{month}.csv"', "Cache-Control": "private, no-store"})
+
+
 # --- Link público del agente de cada negocio ---------------------------------
 # El negocio sale del slug (identificador público de la tienda) resuelto en el servidor.
 def _store(slug: str) -> dict:
@@ -529,7 +596,39 @@ def public_conversation(slug: str, conversation_id: UUID,
     _owned(store["tenant_id"], conv, token)
     return {"messages": opportunities.conversation_messages(store["tenant_id"], conv),
             "cart": orders.get_cart(store["tenant_id"], conv),
-            "orders": orders.conversation_orders(store["tenant_id"], conv)}
+            "orders": orders.conversation_orders(store["tenant_id"], conv),
+            "documents": documents.for_conversation(store["tenant_id"], conv)}
+
+
+@app.post("/public/{slug}/conversations/{conversation_id}/orders/{order_id}/documents")
+async def public_upload_document(slug: str, conversation_id: UUID, order_id: UUID, request: Request,
+                                 token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
+    """Comprobante de pago (JPG/PNG/PDF) como cuerpo crudo. Queda para que el negocio lo revise:
+    recibirlo o leerlo NO acredita el pago."""
+    store = await run_in_threadpool(_store, slug)
+    tenant, conv = store["tenant_id"], str(conversation_id)
+    await run_in_threadpool(_owned, tenant, conv, token)   # antes de leer el archivo
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Content-Length inválido.")
+    too_big = HTTPException(status_code=413, detail=f"El archivo supera {ocr.MAX_BYTES // (1024 * 1024)} MiB.")
+    if declared > ocr.MAX_BYTES:
+        raise too_big
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > ocr.MAX_BYTES:
+            raise too_big
+    try:
+        doc = await run_in_threadpool(documents.receive, tenant, conv, str(order_id), bytes(data))
+    except ocr.DocumentRejected as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
+    except (documents.DuplicateDocument, documents.TooManyDocuments) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    return {"document": doc, "note": "Recibimos tu comprobante. El negocio lo revisa antes de confirmar el pago."}
 
 
 # --- Panel: base de conocimiento y evaluaciones del agente ---------------------
