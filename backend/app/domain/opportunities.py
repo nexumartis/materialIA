@@ -58,18 +58,24 @@ def add_message(tenant_id: str, conversation_id: str, direction: str, content: s
                 payload: Optional[dict[str, Any]] = None, profile_version: Optional[int] = None) -> None:
     """`profile_version`: versión del perfil del agente que generó la respuesta (auditoría)."""
     with tenant_tx(tenant_id) as cur:
+        _add_message(cur, tenant_id, conversation_id, direction, content, payload, profile_version)
+
+
+def _add_message(cur: Any, tenant_id: str, conversation_id: str, direction: str, content: str,
+                 payload: Optional[dict[str, Any]] = None, profile_version: Optional[int] = None) -> None:
+    """Igual que add_message, dentro de una transacción del llamador (p. ej. la del cobro)."""
+    cur.execute(
+        "insert into messages (tenant_id, conversation_id, direction, content, payload, profile_version) "
+        "values (%s, %s, %s, %s, %s::jsonb, %s)",
+        (tenant_id, conversation_id, direction, content,
+         json.dumps(payload) if payload else None, profile_version),
+    )
+    if direction == "inbound":
         cur.execute(
-            "insert into messages (tenant_id, conversation_id, direction, content, payload, profile_version) "
-            "values (%s, %s, %s, %s, %s::jsonb, %s)",
-            (tenant_id, conversation_id, direction, content,
-             json.dumps(payload) if payload else None, profile_version),
+            "update conversations set last_customer_message_at = now() "
+            "where tenant_id = %s and id = %s",
+            (tenant_id, conversation_id),
         )
-        if direction == "inbound":
-            cur.execute(
-                "update conversations set last_customer_message_at = now() "
-                "where tenant_id = %s and id = %s",
-                (tenant_id, conversation_id),
-            )
 
 
 # --- Oportunidades --------------------------------------------------------

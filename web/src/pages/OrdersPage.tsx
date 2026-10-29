@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, type DocField, type Order, type PaymentDocument } from "../lib/api";
 import { openBlob, saveBlob } from "../lib/download";
-import { fmtAmount } from "../lib/format";
+import { fmtAmount, parseAmount } from "../lib/format";
 
 // Avance operativo que hace el negocio (igual que FULFILLMENT_NEXT en el backend).
 const NEXT: Record<string, { status: string; label: string }[]> = {
@@ -221,12 +221,15 @@ function TransferForm({ order, docs, onCancel, onDone }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    const value = parseAmount(amount);
+    if (Number.isNaN(value) || value <= 0) {
+      setResult("Importe inválido. Escribilo como en el banco, por ejemplo 12.345,50.");
+      return;
+    }
     setBusy(true);
     setResult(null);
     try {
-      const r = await api.confirmTransfer(order.id, {
-        reference, amount: Number(amount.replace(",", ".")), currency, document_ids: linked,
-      });
+      const r = await api.confirmTransfer(order.id, { reference, amount: value, currency, document_ids: linked });
       if (r.outcome === "pedido pagado" || r.outcome === "ya estaba pagado") onDone();
       else setResult(`No se acreditó: ${r.outcome}.`);
     } catch (err) {

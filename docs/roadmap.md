@@ -26,8 +26,11 @@ integración.
 
 ## Etapas
 
-1. **Comprobantes de pago** (en curso, tarea de Tomi): transferencias con foto/PDF, OCR, revisión
-   del dueño y constancia. Migración 0008.
+1. ~~**Comprobantes de pago**~~ **Hecho** (29/10/2026, PRs #16 y #17): transferencias con foto/PDF,
+   OCR local, revisión del dueño, constancia en PDF y registro mensual. Migraciones 0008 y 0009
+   (no aplicadas en la nube). Decisiones en
+   [decisions/2026-10-29](decisions/2026-10-29-comprobantes-implementacion.md). Antes de un piloto
+   real: almacenamiento privado de originales y retención.
 2. **Bandeja y toma de control humana**: ver todas las conversaciones, filtros (derivadas, con
    pedido, sin responder), **tomar el control** (el agente se pausa en esa conversación),
    responder, devolverla al agente. El agente sugiere respuestas al humano. Base para WhatsApp.
@@ -55,6 +58,6 @@ integración.
 
 ## Orden sugerido
 
-1 → 2 → 6 (en paralelo, es front) → 3 → 4 → 5 → 7. La bandeja humana va antes que WhatsApp porque
+~~1~~ → **2** → 6 (en paralelo, es front) → 3 → 4 → 5 → 7. La bandeja humana va antes que WhatsApp porque
 sin ella lo que el agente deriva queda sin atender; el asistente paso a paso puede avanzar en
 paralelo porque no depende de los canales.

@@ -6,7 +6,6 @@ nunca del cuerpo del aviso. Aplicar el mismo pago dos veces no tiene efecto.
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
@@ -25,6 +24,7 @@ log = logging.getLogger(__name__)
 
 _FINAL_FAILURES = {"rejected", "cancelled"}
 _REVERSALS = {"refunded", "charged_back"}
+_PAID_STATES = ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED")
 
 
 def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
@@ -140,7 +140,9 @@ def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
 
     `tenant_id` lo resuelve el servidor; igual se revalida la membresía de `uid` (PermissionError).
     Pedido inexistente => LookupError; referencia ya usada en otro pedido => ReferenceInUse.
-    `document_ids`: comprobantes del pedido que el dueño cotejó; quedan asociados al pago."""
+    `document_ids`: comprobantes del pedido que el dueño cotejó; se asocian sólo si el pago queda
+    acreditado. Importe/moneda distintos del pedido o un pedido ya pagado => ValueError sin escribir
+    nada: el dueño sólo acredita lo que cubre el pedido (un error de tipeo no es plata recibida)."""
     ref = re.sub(r"\s+", "", reference or "").upper()
     if not _TRANSFER_REF.fullmatch(ref):
         raise ValueError("referencia inválida (4 a 64 letras, números o guiones)")
@@ -157,10 +159,22 @@ def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
             order = orders._fetch(cur, tenant_id, order_id, lock=True)
             if order is None:
                 raise LookupError("pedido inexistente")
+            cur.execute("select order_id from payments where provider = 'transfer' and provider_payment_id = %s",
+                        (payment.id,))
+            same = cur.fetchone()
+            if same is not None and str(same["order_id"]) != order_id:
+                raise ReferenceInUse("esa referencia ya acreditó otro pedido")
+            if same is None:   # transferencia nueva: tiene que cubrir exactamente un pedido impago
+                if order["status"] in _PAID_STATES:
+                    raise ValueError("el pedido ya figura pagado")
+                if abs(payment.amount - float(order["total"])) > 0.005 or payment.currency != order["currency"]:
+                    raise ValueError(f"el importe o la moneda no coinciden con el pedido "
+                                     f"({float(order['total']):.2f} {order['currency']})")
             outcome, became_paid = _apply(cur, tenant_id, order, "transfer", payment, verified_by=uid)
-            cur.execute("select id from payments where tenant_id = %s and provider = 'transfer' "
-                        "and provider_payment_id = %s", (tenant_id, payment.id))
-            store.link(cur, tenant_id, uid, order_id, str(cur.fetchone()["id"]), list(document_ids))
+            if became_paid or outcome == "ya estaba pagado":
+                cur.execute("select id from payments where tenant_id = %s and provider = 'transfer' "
+                            "and provider_payment_id = %s", (tenant_id, payment.id))
+                store.link(cur, tenant_id, uid, order_id, str(cur.fetchone()["id"]), list(document_ids))
             opportunities._audit(cur, tenant_id, "transfer_confirmed", order_id,
                                  {"actor": uid, "reference": ref, "amount": payment.amount,
                                   "currency": payment.currency, "outcome": outcome,
@@ -181,11 +195,19 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
     payment_id = _record_payment(cur, tenant_id, order_id, provider_name, payment, verified_by)
 
     if payment.status in _REVERSALS:
-        if order["status"] in ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"):
-            cur.execute(
-                "update orders set status = 'REFUNDED', updated_at = now() "
-                "where tenant_id = %s and id = %s", (tenant_id, order_id))
-            _attention(cur, tenant_id, order, f"payment_{payment.status}", notify=False)
+        if order["status"] in _PAID_STATES:
+            if _other_valid_payment(cur, tenant_id, order, payment.id):
+                # Se devolvió un cobro sobrante (p. ej. el duplicado): otro pago sigue cubriendo el pedido.
+                if order["attention_reason"] == "duplicate_payment":
+                    cur.execute("update orders set attention_reason = null, updated_at = now() "
+                                "where tenant_id = %s and id = %s", (tenant_id, order_id))
+                    opportunities._audit(cur, tenant_id, "order_attention_resolved", order_id,
+                                         {"reason": "duplicate_payment"})
+            else:
+                cur.execute(
+                    "update orders set status = 'REFUNDED', updated_at = now() "
+                    "where tenant_id = %s and id = %s", (tenant_id, order_id))
+                _attention(cur, tenant_id, order, f"payment_{payment.status}", notify=False)
         return f"pago {payment.status}", None
     if payment.status != "approved":
         # pending / in_process / rejected / cancelled: el pedido sigue esperando pago hasta
@@ -193,19 +215,11 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
         return f"pago {payment.status}" + (" (sin cambios en el pedido)"
                                             if payment.status in _FINAL_FAILURES else ""), None
 
-    # Sólo cuenta como cobro previo un pago aprobado por el monto y la moneda del pedido
-    # (uno con monto distinto ya quedó en revisión y no cumple el pedido).
-    cur.execute(
-        "select 1 from payments where tenant_id = %s and order_id = %s and status = 'approved' "
-        "and provider_payment_id is distinct from %s and abs(amount - %s) <= 0.005 "
-        "and currency = %s limit 1",
-        (tenant_id, order_id, payment.id, order["total"], order["currency"]),
-    )
-    if cur.fetchone():
+    if _other_valid_payment(cur, tenant_id, order, payment.id):
         # Otro pago aprobado distinto para el mismo pedido: cobro doble => una persona.
         _attention(cur, tenant_id, order, "duplicate_payment")
         return "pago duplicado: requiere devolución", None
-    if order["status"] in ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"):
+    if order["status"] in _PAID_STATES:
         return "ya estaba pagado", None
     if (abs(payment.amount - float(order["total"])) > 0.005
             or payment.currency != order["currency"]):
@@ -244,6 +258,17 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
     became_paid = orders._view(cur, orders._fetch(cur, tenant_id, order_id))
     became_paid["conversation_id"] = str(order["conversation_id"]) if order["conversation_id"] else None
     return "pedido pagado", became_paid
+
+
+def _other_valid_payment(cur: Any, tenant_id: str, order: dict[str, Any], payment_id: str) -> bool:
+    """¿Otro pago aprobado (no éste) cubre el pedido? Uno con monto o moneda distintos no lo cubre."""
+    cur.execute(
+        "select 1 from payments where tenant_id = %s and order_id = %s and status = 'approved' "
+        "and provider_payment_id is distinct from %s and abs(amount - %s) <= 0.005 "
+        "and currency = %s limit 1",
+        (tenant_id, str(order["id"]), payment_id, order["total"], order["currency"]),
+    )
+    return cur.fetchone() is not None
 
 
 def _record_payment(cur: Any, tenant_id: str, order_id: str, provider_name: str,
@@ -301,11 +326,7 @@ def _attention(cur: Any, tenant_id: str, order: dict[str, Any], reason: str, not
 
 
 def _message(cur: Any, tenant_id: str, conversation_id: Any, content: str, payload: dict[str, Any]) -> None:
-    cur.execute(
-        "insert into messages (tenant_id, conversation_id, direction, content, payload) "
-        "values (%s, %s, 'outbound', %s, %s::jsonb)",
-        (tenant_id, conversation_id, content, json.dumps(payload)),
-    )
+    opportunities._add_message(cur, tenant_id, str(conversation_id), "outbound", content, payload)
 
 
 def _after_paid(tenant_id: str, order: dict[str, Any]) -> None:

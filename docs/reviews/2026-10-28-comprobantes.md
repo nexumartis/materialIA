@@ -81,3 +81,22 @@ Control visual: PDF renderizado a PNG y captura del panel a 1280 px, revisados.
 2. ¿Puntaje < 0,90 ⇒ sin valor sugerido es el criterio correcto, o se precarga marcado?
 3. `verified_by` referencia `auth.users` con `on delete set null`: la auditoría conserva el actor en `audit_events`.
 4. Deduplicar `order_needs_attention` por motivo cambia el conteo de auditorías ante reintentos del proveedor.
+
+## Revisión en contexto fresco (Claude, 29/10/2026) y correcciones
+
+La hizo `/code-review high` sobre `94f0c26..ba3259a`, en un contexto separado del implementador. No reemplaza la revisión de Mati: no aporta diversidad de modelo ni de cuenta. Los 10 hallazgos se corrigieron en `fix/comprobantes-revision`, cada uno con su test:
+
+| # | Hallazgo | Corrección |
+|---|---|---|
+| 1 | Devolver el pago duplicado reintegraba el pedido entero | Se reintegra sólo si ningún otro pago aprobado cubre el pedido; devolver el duplicado limpia `duplicate_payment` |
+| 2 | Una confirmación con error de tipeo dejaba un pago «verificado» (CSV inflado) y avisaba al cliente | `confirm_transfer` valida importe, moneda y que el pedido no esté pagado **antes** de escribir: `ValueError`, sin filas ni avisos |
+| 3 | Los comprobantes se asociaban aunque el pago no se acreditara | Se asocian sólo con «pedido pagado» o «ya estaba pagado» |
+| 4 | La constancia de un pedido reintegrado seguía válida | `receipts.get` informa `voided`; el PDF dice «ANULADA» (la instantánea se conserva) |
+| 5 | Un PDF con texto y logo pasaba igual por OCR, que volvía dudoso un dato exacto | Una página con capa de texto suficiente se lee sólo por su texto. Límite documentado: una imagen pegada en esa página no se lee |
+| 6 | Subir el mismo archivo a la vez en dos pedidos daba 500 | `receive` reintenta ante `UniqueViolation`: mismo pedido ⇒ mismo registro; otro pedido ⇒ 409 |
+| 7 | El panel no aceptaba `12.345,50` | `parseAmount` en `lib/format.ts` (formato argentino, miles con punto) y mensaje claro |
+| 8 | El OCR podía frenar el worker varios minutos | `process_pending(budget_s=20)`: deja de reclamar pasado el tope (al menos uno por vuelta) |
+| 9 | `CLAUDE.md` decía «sólo pago verificado del proveedor» | La invariante suma la transferencia cotejada por el dueño (auditada) y mantiene que un comprobante u OCR nunca acreditan |
+| 10 | Referencia, origen y el INSERT de mensajes estaban duplicados | `receipts.payment_reference` y `ORIGINS` compartidos; `opportunities._add_message(cur, …)` |
+
+**Evidencia posterior:** 325 passed; `e2e:comprobantes` 17/17; `e2e` 36 PASS, 0 FAIL.

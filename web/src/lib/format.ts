@@ -62,3 +62,11 @@ export function pedidoText(req: Requirements | undefined): {
     sub: [med, extra].filter(Boolean).join(" · "),
   };
 }
+
+/** Importe como lo muestra el banco: "12.345,50", "12345,5" o "12345.50". NaN si no es un número. */
+export function parseAmount(text: string): number {
+  const t = text.trim().replace(/\s|\$/g, "");
+  // Con coma, la coma es el decimal; sin coma, "6.800" (grupos de 3) son miles, no decimales.
+  const normalized = t.includes(",") || /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t;
+  return /^\d+(\.\d{1,2})?$/.test(normalized) ? Number(normalized) : NaN;
+}

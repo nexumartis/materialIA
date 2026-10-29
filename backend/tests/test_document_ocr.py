@@ -209,3 +209,19 @@ def test_reference_label_does_not_take_a_number_from_the_next_page():
 def test_low_score_value_is_a_candidate_not_a_suggestion():
     fields = ocr.suggest_fields([{"page": 1, "text": "N° de operación 98765432105", "score": 0.64}])["fields"]
     assert fields["reference"] == {"value": None, "score": None, "candidates": ["98765432105"]}
+
+
+def test_text_pdf_with_a_logo_uses_only_its_text():
+    """Un PDF de banco con capa de texto y un logo: el OCR del logo no vuelve dudoso un dato exacto."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    logo = io.BytesIO()
+    _image(["BANCO DEMO"]).save(logo, "PNG")
+    from reportlab.lib.utils import ImageReader
+    c.drawImage(ImageReader(io.BytesIO(logo.getvalue())), 72, 780, width=200, height=40)
+    for i, text in enumerate(RECEIPT):
+        c.drawString(72, 740 - 22 * i, text)
+    c.save()
+    result = ocr.read_document(buf.getvalue())
+    assert {ln["source"] for ln in result["lines"]} == {"pdf_text"}
+    assert _values(result) == EXPECTED and result["needs_review"] is False

@@ -15,7 +15,8 @@ pedidos, aunque el archivo diga «pagado» y el puntaje sea alto.
   subproceso la bloquea el **sistema operativo**: `sandbox-exec` en macOS y `unshare --net` en
   Linux (si el SO lo permite). En Windows, o si eso no está disponible, queda sólo el bloqueo
   de Python, que no es una garantía del SO; el campo `engine` del resultado dice cuál se usó.
-  El texto del PDF se usa sin OCR; se renderizan las páginas escaneadas o que tienen imágenes.
+  Una página de PDF con capa de texto se lee sólo por su texto (sin OCR); se renderizan y leen con
+  OCR sólo las páginas sin texto (escaneadas).
 - Windows necesita Microsoft Visual C++ Redistributable 2015+ x64, que pide onnxruntime.
 
 ## Límites de la demo
@@ -29,7 +30,8 @@ candidatos y va a revisión: un valor mal leído nunca queda precargado. Un impo
 12 dígitos enteros sólo aparece como candidato.
 
 Sin cubrir todavía: memoria del decodificador de imágenes embebidas en un PDF, aislamiento del
-filesystem, página con texto e imagen a la vez y comprobantes reales de bancos argentinos.
+filesystem, el contenido de una imagen pegada en una página que además tiene texto (no se lee: si
+faltan datos, el comprobante va a revisión) y comprobantes reales de bancos argentinos.
 
 ## Preparar y verificar
 

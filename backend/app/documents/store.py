@@ -13,10 +13,14 @@ import io
 import json
 import logging
 import re
+import time
 from datetime import date
 from typing import Any, Optional
 
+from psycopg.errors import UniqueViolation
+
 from ..db import system_tx, tenant_tx
+from ..domain import receipts
 from . import ocr
 
 log = logging.getLogger(__name__)
@@ -41,6 +45,15 @@ def receive(tenant_id: str, conversation_id: str, order_id: str, data: bytes) ->
     """Guarda el comprobante de un pedido de ESTA conversación. Mismo archivo => mismo registro.
 
     LookupError si el pedido no es de la conversación; ocr.DocumentRejected si el tipo no sirve."""
+    try:
+        return _receive(tenant_id, conversation_id, order_id, data)
+    except UniqueViolation:
+        # Otra subida simultánea del mismo archivo ganó la carrera: ahora se la encuentra
+        # (mismo pedido => mismo registro; otro pedido => DuplicateDocument).
+        return _receive(tenant_id, conversation_id, order_id, data)
+
+
+def _receive(tenant_id: str, conversation_id: str, order_id: str, data: bytes) -> dict[str, Any]:
     mime = MIMES[ocr.sniff(data)]
     digest = hashlib.sha256(data).hexdigest()
     with tenant_tx(tenant_id) as cur:
@@ -97,16 +110,18 @@ def for_conversation(tenant_id: str, conversation_id: str) -> list[dict[str, Any
 
 
 # --- Lectura en segundo plano (worker) ---------------------------------------------
-def process_pending(limit: int = 5) -> int:
+def process_pending(limit: int = 5, budget_s: float = 20.0) -> int:
     """Lee hasta `limit` comprobantes pendientes. Cada uno se reclama con `skip locked` (varios
     workers no leen el mismo) y el OCR corre fuera de la transacción. Un fallo se reintenta en la
-    vuelta siguiente del worker, no en esta."""
+    vuelta siguiente del worker, no en esta. Pasado `budget_s` no reclama más: el resto de las
+    tareas del worker (p. ej. liberar reservas vencidas) espera como mucho eso + una lectura."""
+    started = time.monotonic()
     with system_tx() as cur:   # reclamos caídos que agotaron intentos: no quedan colgados
         cur.execute("update payment_documents set status = 'unreadable', error = 'no se pudo leer' "
                     f"where status = 'processing' and claimed_at < now() - interval '{STALE_CLAIM}' "
                     "and attempts >= %s", (MAX_ATTEMPTS,))
     seen: list[str] = []
-    while len(seen) < limit:
+    while len(seen) < limit and (not seen or time.monotonic() - started < budget_s):
         with system_tx() as cur:
             cur.execute(
                 "update payment_documents set status = 'processing', attempts = attempts + 1, claimed_at = now() "
@@ -198,7 +213,6 @@ def link(cur: Any, tenant_id: str, uid: str, order_id: str, payment_id: str, doc
 
 # --- Registro mensual (CSV para Excel) ----------------------------------------------
 _RISKY = ("=", "+", "-", "@", "\t", "\r")
-ORIGINS = {"mercadopago": "Mercado Pago", "simulated": "Simulado", "transfer": "Transferencia"}
 
 
 def _text(value: Any) -> str:
@@ -239,10 +253,9 @@ def month_csv(cur: Any, tenant_id: str, month: str) -> str:
                 "comprobantes", "detalle"])
     totals: dict[str, float] = {}
     for p in payments:
-        ref = (p["provider_payment_id"] or "").split(":", 1)[-1] if p["provider"] == "transfer" \
-            else p["provider_payment_id"]
+        ref = receipts.payment_reference(p["provider"], p["provider_payment_id"])
         totals[p["currency"]] = totals.get(p["currency"], 0.0) + float(p["amount"])
-        w.writerow([p["kind"], p["at"], p["number"], ORIGINS.get(p["provider"], p["provider"]), _text(ref),
+        w.writerow([p["kind"], p["at"], p["number"], receipts.ORIGINS.get(p["provider"], p["provider"]), _text(ref),
                     _money(float(p["amount"])), p["currency"], p["docs"], ""])
     for d in documents:
         f = {k: (v or {}).get("value") for k, v in (d["fields"] or {}).items()}
