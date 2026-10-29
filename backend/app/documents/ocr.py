@@ -232,7 +232,6 @@ def _read(data: bytes) -> dict[str, Any]:
         return {"pages": 1, "lines": ocr(img, 1)}
 
     import pypdfium2 as pdfium
-    import pypdfium2.raw as pdfium_c
     try:
         pdf = pdfium.PdfDocument(data)
     except pdfium.PdfiumError as exc:
@@ -247,8 +246,9 @@ def _read(data: bytes) -> dict[str, Any]:
         if len(text.strip()) >= MIN_PDF_TEXT:
             lines += [{"page": n, "text": t.strip(), "score": 1.0, "source": "pdf_text"}
                       for t in text.splitlines() if t.strip()]
-        has_images = any(True for _ in page.get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_IMAGE,)))
-        if has_images or len(text.strip()) < MIN_PDF_TEXT:
+        # Con capa de texto suficiente se usa sólo el texto: hacer OCR además (p. ej. por el logo
+        # del banco) suma lecturas ruidosas que vuelven dudoso un dato exacto.
+        if len(text.strip()) < MIN_PDF_TEXT:
             w, h = page.get_size()
             if w <= 0 or h <= 0:
                 return {"rejected": "PDF dañado o ilegible"}

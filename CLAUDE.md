@@ -25,7 +25,9 @@ uvicorn app.main:app --port 8077 --reload    # /docs para Swagger
 - **Multi-tenant:** el `tenant_id` lo resuelve el servidor (`ToolContext`, allowlist C/D en
   `main.py`, membresía en el panel); **nunca** se confía un tenant del cliente/LLM. Toda query filtra por tenant.
 - **Honestidad:** no inventar precios, stock ni medidas. `custom_quote`/precio vencido/sin
-  precio ⇒ `requires_human`. Un pedido es pagado sólo con el pago verificado del proveedor.
+  precio ⇒ `requires_human`. Un pedido es pagado sólo con el pago verificado del proveedor o con una
+  transferencia que el dueño cotejó en su banco (`confirm_transfer`, auditada). Un comprobante o su
+  OCR nunca acreditan un pago.
   Sin LLM ⇒ `mode:"mock"` explícito, nunca fingir modelo real.
 - **Secretos:** jamás commitear `.env`, DB passwords ni `service_role`. Sólo `.env.example`.
 - **Esquema:** una sola fuente de verdad = migraciones SQL en `supabase/migrations/`. No ORM.

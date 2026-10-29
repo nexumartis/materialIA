@@ -327,3 +327,41 @@ def test_unpaid_order_has_no_receipt(client, shop_a):
     assert orders.get_order(shop_a["tenant"], order["id"])["receipt_id"] is None
     r = client.get(f"/app/orders/{order['id']}/receipt.pdf", headers=bearer(shop_a["uid"]))
     assert r.status_code == 404
+
+
+# --- Correcciones de la revisión ---------------------------------------------------
+def test_failed_confirmation_does_not_link_the_documents(client, shop_a, fake_ocr, raw_conn):
+    conv, token, order = _order(shop_a)
+    doc_id = _upload(client, shop_a, conv, token, order["id"], _png("tipeo")).json()["document"]["id"]
+    owner = bearer(shop_a["uid"])
+    r = client.post(f"/app/orders/{order['id']}/confirm-transfer", headers=owner,
+                    json={"reference": "BCO-TIPEO", "amount": order["total"] / 10, "document_ids": [doc_id]})
+    assert r.status_code == 400 and "no coinciden" in r.json()["detail"]
+    view = client.get(f"/public/{shop_a['slug']}/conversations/{conv}", headers={HDR: token}).json()
+    assert view["documents"][0]["decision"] is None and view["orders"][0]["status"] == "PENDING_PAYMENT"
+    assert client.post(f"/app/payment-documents/{doc_id}/reject", headers=owner).status_code == 200
+
+
+def test_same_file_uploaded_concurrently_for_two_orders_never_500s(client, shop_a, fake_ocr):
+    import threading
+    a_conv, a_token, a_order = _order(shop_a)
+    b_conv, b_token, b_order = _order(shop_a)
+    png, codes, barrier = _png("carrera"), [], threading.Barrier(2)
+
+    def go(conv, token, order):
+        barrier.wait()
+        codes.append(_upload(TestClient(app), shop_a, conv, token, order["id"], png).status_code)
+    threads = [threading.Thread(target=go, args=args) for args in ((a_conv, a_token, a_order), (b_conv, b_token, b_order))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(codes) == [200, 409]
+
+
+def test_worker_stops_claiming_after_its_time_budget(client, shop_a, fake_ocr, raw_conn):
+    conv, token, order = _order(shop_a)
+    for i in range(3):
+        _upload(client, shop_a, conv, token, order["id"], _png(f"presupuesto {i}"))
+    assert store.process_pending(limit=5, budget_s=0) == 1     # al menos uno por vuelta, nunca más del tope
+    assert store.process_pending(limit=5) == 2

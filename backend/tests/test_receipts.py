@@ -41,6 +41,11 @@ def _counts(raw_conn, order_id, conv):
     return n_receipts, msgs
 
 
+def _pdf_text(data: bytes) -> str:
+    import pypdfium2 as pdfium
+    return "\n".join(p.get_textpage().get_text_bounded() for p in pdfium.PdfDocument(data))
+
+
 def _receipt(shop, order_id):
     from app.db import tenant_tx
     with tenant_tx(shop["tenant"]) as cur:
@@ -123,15 +128,53 @@ def test_reference_already_used_in_another_order_is_rejected_and_touches_nothing
 
 
 @pytest.mark.parametrize("amount_delta, currency", [(-100, "ARS"), (0, "USD")], ids=["importe", "moneda"])
-def test_wrong_amount_or_currency_never_pays_and_notifies_once(shop, owner, raw_conn, amount_delta, currency):
+def test_wrong_amount_or_currency_is_refused_without_writing_anything(shop, owner, raw_conn, amount_delta, currency):
+    """Un error de tipeo del dueño no es plata recibida: no queda pago verificado ni aviso al cliente."""
     conv, order = _pending(shop)
-    for _ in range(2):
-        outcome = service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-MAL",
-                                           order["total"] + amount_delta, currency)
-        assert outcome == "monto o moneda no coinciden: requiere revisión"
-    flagged = orders.get_order(shop["tenant"], order["id"])
-    assert flagged["status"] == "PENDING_PAYMENT" and flagged["attention_reason"] == "amount_mismatch"
-    assert _counts(raw_conn, order["id"], conv) == (0, {"payment_attention": 1})
+    with pytest.raises(ValueError, match="no coinciden"):
+        service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-MAL", order["total"] + amount_delta, currency)
+    still = orders.get_order(shop["tenant"], order["id"])
+    assert still["status"] == "PENDING_PAYMENT" and still["attention_reason"] is None and still["payment"] is None
+    assert _counts(raw_conn, order["id"], conv) == (0, {})
+    # Corregido el tipeo, con OTRA o la MISMA referencia, se acredita normalmente.
+    assert service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-MAL", order["total"], "ARS") == "pedido pagado"
+
+
+def test_a_new_transfer_on_an_already_paid_order_is_refused(shop, owner, raw_conn):
+    conv, order = _pending(shop)
+    service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-UNO", order["total"], "ARS")
+    with pytest.raises(ValueError, match="ya figura pagado"):
+        service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-DOS", order["total"], "ARS")
+    assert service.confirm_transfer(shop["tenant"], owner, order["id"], "REF-UNO", order["total"], "ARS") \
+        == "ya estaba pagado"
+    with raw_conn.cursor() as cur:
+        cur.execute("select count(*) n from payments where order_id = %s", (order["id"],))
+        assert cur.fetchone()["n"] == 1
+    raw_conn.commit()
+    assert orders.get_order(shop["tenant"], order["id"])["attention_reason"] is None
+
+
+def test_refunding_the_duplicate_payment_keeps_the_order_paid(shop, raw_conn):
+    conv, order = _pending(shop)
+    pref = service.start_payment(shop["tenant"], order["id"])["checkout_url"].rsplit("/", 1)[1]
+    sim = SimulatedProvider()
+    h1, b1 = sim.pay(pref, "approved")
+    service.receive_notification("simulated", h1, {}, b1)
+    h2, b2 = sim.pay(pref, "approved")                    # el comprador pagó dos veces
+    assert service.receive_notification("simulated", h2, {}, b2)[1] == "pago duplicado: requiere devolución"
+    with raw_conn.cursor() as cur:                         # el negocio devuelve el duplicado, como se le pidió
+        cur.execute("update sim_provider_payments set status = 'refunded' where id = %s", (b2["data"]["id"],))
+    raw_conn.commit()
+    assert service.receive_notification("simulated", h2, {}, b2)[1] == "pago refunded"
+    kept = orders.get_order(shop["tenant"], order["id"])
+    assert kept["status"] == "PAID" and kept["attention_reason"] is None
+    assert _receipt(shop, order["id"])["voided"] is False
+    with raw_conn.cursor() as cur:                         # y si después se devuelve el pago bueno, sí se reintegra
+        cur.execute("update sim_provider_payments set status = 'refunded' where id = %s", (b1["data"]["id"],))
+    raw_conn.commit()
+    service.receive_notification("simulated", h1, {}, b1)
+    assert orders.get_order(shop["tenant"], order["id"])["status"] == "REFUNDED"
+    assert _receipt(shop, order["id"])["voided"] is True
 
 
 def test_late_transfer_without_stock_has_no_receipt_and_notifies_once(shop, owner, raw_conn):
@@ -161,6 +204,8 @@ def test_reversal_keeps_the_receipt_and_marks_the_payment(shop, raw_conn):
     assert service.receive_notification("simulated", headers, {}, body)[1] == "pago refunded"
     assert orders.get_order(shop["tenant"], order["id"])["status"] == "REFUNDED"
     assert _counts(raw_conn, order["id"], conv) == (1, {"receipt": 1})   # sin aviso de "revisión"
+    voided = _receipt(shop, order["id"])
+    assert voided["voided"] is True and "ANULADA" in _pdf_text(receipts.render_pdf(voided))
     with raw_conn.cursor() as cur:
         cur.execute("select reversed_at, verified_at from payments where order_id = %s", (order["id"],))
         pay = cur.fetchone()

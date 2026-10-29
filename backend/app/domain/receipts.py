@@ -23,12 +23,16 @@ ORIGINS = {
 }
 
 
+def payment_reference(provider: str, provider_payment_id: Optional[str]) -> str:
+    """Referencia visible de un pago (una transferencia se guarda como '<negocio>:<referencia>')."""
+    reference = provider_payment_id or ""
+    return reference.split(":", 1)[-1] if provider == "transfer" else reference
+
+
 def _snapshot(cur: Any, tenant_id: str, order: dict[str, Any], payment: dict[str, Any]) -> dict[str, Any]:
     cur.execute("select name from tenants where id = %s", (tenant_id,))
     business = cur.fetchone()["name"]
-    reference = payment["provider_payment_id"] or ""
-    if payment["provider"] == "transfer":
-        reference = reference.split(":", 1)[-1]   # sin el prefijo interno del negocio
+    reference = payment_reference(payment["provider"], payment["provider_payment_id"])
     return {
         "legend": LEGEND,
         "business": business,
@@ -61,11 +65,14 @@ def issue(cur: Any, tenant_id: str, order_id: str, payment_id: str) -> Optional[
 
 
 def get(cur: Any, tenant_id: str, order_id: str) -> Optional[dict[str, Any]]:
-    cur.execute("select id, snapshot, issued_at from receipts where tenant_id = %s and order_id = %s",
+    """Constancia del pedido. `voided`: el pago se devolvió (pedido reintegrado); la instantánea
+    se conserva como historia y el PDF la muestra ANULADA."""
+    cur.execute("select r.id, r.snapshot, r.issued_at, o.status from receipts r join orders o "
+                "on o.tenant_id = r.tenant_id and o.id = r.order_id where r.tenant_id = %s and r.order_id = %s",
                 (tenant_id, order_id))
     row = cur.fetchone()
-    return ({"id": str(row["id"]), "issued_at": row["issued_at"].isoformat(), **row["snapshot"]}
-            if row else None)
+    return ({"id": str(row["id"]), "issued_at": row["issued_at"].isoformat(), **row["snapshot"],
+             "voided": row["status"] == "REFUNDED"} if row else None)
 
 
 def in_conversation(cur: Any, tenant_id: str, conversation_id: str, receipt_id: str) -> Optional[dict[str, Any]]:
@@ -125,6 +132,10 @@ def render_pdf(receipt: dict[str, Any]) -> bytes:
 
     line(receipt["business"], 16, bold, step=22)
     line(LEGEND, 11, bold, step=26)
+    if receipt.get("voided"):
+        c.setFillColorRGB(0.75, 0.1, 0.1)
+        line("ANULADA: el pago de esta compra fue devuelto. No acredita una compra pagada.", 12, bold, step=26)
+        c.setFillColorRGB(0, 0, 0)
     line(f"Pedido #{receipt['order_number']}", 11, bold)
     line(f"Pagado: {_when(receipt['paid_at'])}")
     line(f"Emitida: {_when(receipt['issued_at'])}", step=24)
