@@ -1,37 +1,53 @@
 # Estado actual — materialIA
 
-**Primera lectura, cierre 28/10/2026.** Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md), skills en [SKILLS.md](SKILLS.md). Git/Markdown son la verdad; Codebase Memory es derivado.
+**Primera lectura, cierre 29/10/2026.** Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md), skills en [SKILLS.md](SKILLS.md), etapas en [roadmap.md](roadmap.md). Git y Markdown son la verdad; Codebase Memory es derivado y **no** se reindexó en este cierre.
 
-## Entrega
+## Entrega: comprobantes de clientes (roadmap etapa 1, hecha)
 
-Base `de7abbe`, rama `fix/sales-intent-and-playbooks`. Conversación comercial: consentimiento antes de mutar, cantidades atómicas, selección en la última lista, pedidos compuestos, derivación registrada y tres guías internas del vendedor. Sin migraciones, dependencias ni UI nuevas. [Spec](superpowers/specs/2026-10-27-venta-confiable-y-habilidades-design.md), [plan](superpowers/plans/2026-10-27-venta-confiable-y-habilidades.md) y [reporte](reviews/2026-10-28-venta-confiable.md).
+En `main` con los PRs #16 (T1+T2) y #17 (T3+T4); las correcciones de la revisión van en la rama `fix/comprobantes-revision`. Lo implementó Claude Code en la sesión de Tomi.
 
-Claude Code implementó el corte inicial; Codex personal revisó y corrigió R1; root coordinó/documentó, aplicó los parches exactos del autor y ejecutó pruebas. **Código y documentación aprobados por Claude en revisión cruzada del snapshot post R3.** [Dictamen](reviews/2026-10-28-venta-confiable-claude.md). Matías autorizó publicar a Git y dejar continuidad para Tomi.
+- **T1 — OCR local:** RapidOCR/ONNX en CPU, modelos fijados por hash, plazo total de 60 s y red bloqueada por el SO (macOS/Linux).
+- **T2 — Pago y constancia:** el dueño confirma la transferencia que cotejó en su banco, con el mismo efecto que un pago del proveedor. Constancia y aviso en la misma transacción. Migración 0008.
+- **T3 — Comprobantes:** el comprador sube el comprobante al pedido y el worker lo lee. El panel lista, muestra el original, descarta y confirma asociando comprobantes. CSV mensual en hora argentina. Migración 0009.
+- **T4 — PDF y pantallas:** constancia en PDF, chat del comprador y panel del dueño. Aceptación en navegador.
 
-## Evidencia y límites
+Un archivo o su OCR **nunca** acreditan un pago. Las decisiones y alternativas están en [decisions/2026-10-29](decisions/2026-10-29-comprobantes-implementacion.md); el detalle, en la [revisión](reviews/2026-10-28-comprobantes.md).
 
-Root ejecutó **269 passed, 0 failed, 0 skipped**, 62,71s, DB local descartable 55436, migraciones 0001–0007, pagos simulados y planner guionado. Dos warnings históricos: httpx/Starlette y clave JWT corta exclusiva de tests. No hubo cambios de UI, por lo que no se repitió build web.
+## Revisión
 
-Playwright + Ollama Cloud `gpt-oss:120b-cloud`: seis mensajes del recorrido real, una sola corrida, 12 llamadas adicionales (42 acumuladas de aceptación). Resultado: un flexible/par $6.800 + una Aquaflux mate $89.900 = **$96.700**, sin productos ajenos. «La nro3» aclara que la lista vigente tiene dos opciones, sin duplicar. T1–T5 live; **T6 mock**, después de rechazar respuesta y reescritura que citaban mal la opción 3. Aceptación funcional cumplida; aceptación íntegramente live incompleta. [Transcripción y captura](reviews/2026-10-28-venta-confiable-ui.md).
+T1–T4 entraron a `main` **sin** la revisión cruzada de Mati, porque Tomi mergeó los PRs. Después hubo una revisión de Claude en un contexto separado (`/code-review high` sobre `94f0c26..ba3259a`), que no acredita diversidad de modelo ni de cuenta. Encontró 10 problemas y los 10 se corrigieron en `fix/comprobantes-revision`, cada uno con su test:
 
-Las guías `asesorar_catalogo`, `gestionar_carrito`, `cerrar_o_derivar` orientan al planner; no instalan plugins de desarrollo, conceden permisos ni entrenan al modelo. Hay límites heurísticos del lenguaje y afirmaciones libres que pueden ser inexactas. «Quiero/necesito un X» inequívoco puede agregar al carrito; crear pedido/link conserva confirmación explícita. La derivación registra una oportunidad, sin bandeja completa ni aviso externo.
+- devolver un pago duplicado reintegraba el pedido entero;
+- una confirmación con error de tipeo dejaba plata fantasma en el CSV y asociaba los comprobantes;
+- una constancia de un pedido reintegrado seguía mostrándose válida (ahora sale ANULADA);
+- un PDF con texto y logo se pasaba igual por OCR;
+- subir el mismo archivo a la vez en dos pedidos daba 500;
+- el panel no aceptaba importes con formato argentino;
+- el OCR podía frenar el worker;
+- `CLAUDE.md` no contemplaba las transferencias verificadas por el dueño;
+- había lógica duplicada.
 
-## Arquitectura y datos
+**Pendiente:** revisión de Mati con Codex sobre todo el conjunto.
 
-Tomi incorporó perfiles versionados, políticas del servidor, capacidades apagables, memoria/compactación, documentos y evaluaciones en dry-run. [Investigación](research/2026-10-27-arquitectura-agentes-personalizados.md). **0007_agent_architecture.sql existe en Git** y se aplicó localmente; su aplicación remota no se verificó.
+## Evidencia (29/10/2026, macOS, Python 3.14)
 
-No se cambió Supabase remoto ni el `.env` del usuario. Demo de esta PC: Supabase local 54321/54322, Auth local y pagos simulados. Ollama Cloud usa el cliente local autenticado; no convierte la DB en remota. El worker conserva mock para evitar llamadas cloud de fondo. Tests/reset/seed sólo en DB descartable 55436; aceptación aislada 8078/4174. No ejecutar pytest/reset sobre demo ni nube. Los puertos locales no implican que los servicios estén activos en otra PC.
+- **Backend:** **325 passed, 0 failed, 0 skipped** en una DB descartable (`127.0.0.1:55436`, contenedor `materialia-test-pg`, 0001–0009 + seed). Warnings históricos: httpx/Starlette y JWT corto de tests.
+- **Navegador** (entorno aislado: API 8078, web 4174, worker, LLM `mock`, pagos simulados):
+  - `npm run e2e:comprobantes`: **17/17**;
+  - `npm run e2e`: **36 PASS, 0 FAIL**.
+- **Control visual:** PDF de la constancia y panel de pedidos.
 
-## Continuidad para Tomi
+## Datos y entornos
 
-[Pase con mensaje listo para su Claude](handoffs/2026-10-28-tomi-continuidad.md). Puede elegir la siguiente entrega del [roadmap](roadmap.md). Pendientes: calibrar selección/numeración del modelo real y probar otros compradores; bandeja humana; retención/opt-in/vista y borrado de memoria; PDF en documentos; WhatsApp, Mercado Pago real por negocio y logística.
+- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): según `supabase migration list --linked` del 29/10, tiene 0001–0005 y le faltan **0006–0009**. 0006 (privacidad del chat) ya estaba pendiente antes de este corte. Si la app corre contra la nube con el código actual, los pagos y comprobantes fallan. Aplicar requiere instrucción expresa.
+- **Demo local de esta PC:** Supabase 54321/54322 con 0001–0009 (0004–0007 se registraron porque las tablas ya existían; sin reset), API 8077 y web 5173. El worker no corre solo: `python -m app.worker`.
+- **Antes de un piloto real:**
+  - almacenamiento privado para los originales (hoy `bytea`) y una política de retención;
+  - comprobantes de bancos argentinos reales;
+  - decidir si, sin aislamiento de red del SO (Windows), el OCR debe negarse a leer.
 
-[Comprobantes de clientes](handoffs/2026-10-26-tomi-comprobantes.md): checkpoint OCR en ZIP con hashes, fuera del backend, **no integrado ni aprobado**. Su próxima migración disponible es **0008**. Una imagen/OCR recibido no verifica un pago ni reemplaza su confirmación por proveedor.
+## Próximo paso
 
-Primer producto: catálogo/fotos/precio/stock para comercios que usan Excel/WhatsApp, asesoramiento, pedidos y panel. Sin clientes ni validación comercial registrada; investigación para toda Argentina. Definir fuente principal de inventario antes de mostrador/reportes. Negociación, reposición, diseño y renders son ampliaciones. Carpeta comercial/video anterior en paquete local externo; sin campañas ni contacto público agregado.
+Etapa 2 del roadmap: **bandeja y toma de control humana**. Hoy una derivación sólo marca `requires_human` y crea una oportunidad: nadie toma la conversación ni responde desde el panel. Spec a acordar entre los socios antes de implementar.
 
-## Memoria
-
-El cierre usa [.codebase-memory/artifact.json](../.codebase-memory/artifact.json): consultar ahí revisión/fecha exactas. El commit del artefacto puede ser posterior al commit fuente indexado. Modo fast excluye docs, E2E, migraciones y estáticos; leerlos directamente. No instala skills ni garantiza ahorro de tokens. Tomi puede usar sólo Claude con revisión en contexto fresco, sin las cuentas de Mati.
-
-Historial: [estado previo](state-history-2026-10-27-before-sales-intent.md). Los conteos antiguos no validan este diff.
+Historial: [estado previo](state-history-2026-10-28-before-comprobantes.md). Los conteos antiguos no validan este diff.
