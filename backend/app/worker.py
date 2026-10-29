@@ -3,7 +3,8 @@
 Cada vuelta (todas idempotentes; el estado vive en la base):
 - libera el stock de pedidos impagos con la reserva vencida (`for update skip locked`);
 - destila la memoria de clientes cuya conversación quedó inactiva (fuera de la respuesta);
-- resume la parte vieja de las conversaciones largas.
+- resume la parte vieja de las conversaciones largas;
+- lee con OCR local los comprobantes de pago recibidos (nunca acreditan el pago).
 
     python -m app.worker            # bucle cada WORKER_INTERVAL_S segundos (default 60)
     python -m app.worker --once     # una sola vuelta (cron, tests)
@@ -16,6 +17,7 @@ import sys
 import time
 
 from .agent import compaction
+from .documents import store as documents
 from .domain import customer_memory, orders
 
 log = logging.getLogger("app.worker")
@@ -24,7 +26,8 @@ log = logging.getLogger("app.worker")
 def run_once() -> dict[str, int]:
     return {"expired_reservations": orders.expire_reservations(),
             "customer_memories": customer_memory.refresh_due(),
-            "compacted_conversations": compaction.compact_due()}
+            "compacted_conversations": compaction.compact_due(),
+            "payment_documents_read": documents.process_pending()}
 
 
 def main(argv: list[str]) -> None:

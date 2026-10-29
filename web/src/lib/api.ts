@@ -82,7 +82,7 @@ export function setAuth(token: () => string | null, unauthorized: () => void): v
   onUnauthorized = unauthorized;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, as: "json" | "blob" = "json"): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, init);
@@ -100,11 +100,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, detail);
   }
-  return (await res.json()) as T;
+  return (as === "blob" ? await res.blob() : await res.json()) as T;
 }
 
 /** Llamada al panel autenticado. Sin token o con 401 => se cierra la sesión. */
-async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function authed<T>(path: string, init: RequestInit = {}, as: "json" | "blob" = "json"): Promise<T> {
   const token = getToken();
   if (!token) {
     onUnauthorized();
@@ -113,7 +113,7 @@ async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
   try {
-    return await request<T>(path, { ...init, headers });
+    return await request<T>(path, { ...init, headers }, as);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) onUnauthorized();
     throw e;
@@ -171,6 +171,20 @@ export const api = {
       body: JSON.stringify({ csv }),
     }),
   orders: () => authed<Order[]>("/app/orders"),
+  // Comprobantes: el dueño revisa los archivos y acredita sólo lo que cotejó en su banco.
+  paymentDocuments: (month: string) =>
+    authed<PaymentDocument[]>(`/app/payment-documents?month=${encodeURIComponent(month)}`),
+  documentOriginal: (id: string) => authed<Blob>(`/app/payment-documents/${id}/original`, {}, "blob"),
+  rejectDocument: (id: string) => authed<{ rejected: boolean }>(`/app/payment-documents/${id}/reject`, { method: "POST" }),
+  confirmTransfer: (orderId: string, body: TransferConfirm) =>
+    authed<{ outcome: string; order: Order }>(`/app/orders/${orderId}/confirm-transfer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  paymentRegister: (month: string) =>
+    authed<Blob>(`/app/payments/register.csv?month=${encodeURIComponent(month)}`, {}, "blob"),
+  orderReceipt: (orderId: string) => authed<Blob>(`/app/orders/${orderId}/receipt.pdf`, {}, "blob"),
   advanceOrder: (id: string, status: string) =>
     authed<Order>(`/app/orders/${id}/status?status=${status}`, { method: "POST" }),
 
@@ -216,6 +230,19 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(profile ? { profile } : {}),
     }),
+
+  /** Comprobante de pago del comprador: el archivo va crudo en el cuerpo, el token en el header. */
+  uploadDocument: (slug: string, ref: ConversationRef, orderId: string, file: File) =>
+    request<{ document: BuyerDocument; note: string }>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/orders/${orderId}/documents`,
+      { method: "POST", headers: { "content-type": file.type || "application/octet-stream", ...buyerHeader(ref) }, body: file },
+    ),
+  storeReceipt: (slug: string, ref: ConversationRef, receiptId: string) =>
+    request<Blob>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/receipts/${receiptId}/pdf`,
+      { headers: buyerHeader(ref) },
+      "blob",
+    ),
 
   storeConversation: (slug: string, ref: ConversationRef) =>
     request<SalesConversation>(
@@ -363,6 +390,52 @@ export interface Order {
   reserved_until: string | null;
   attention_reason: string | null;
   payment: { provider: string; checkout_url: string | null; status: string } | null;
+  /** Constancia de compra emitida (sólo pedidos pagados). */
+  receipt_id: string | null;
+}
+
+/** Campo leído de un comprobante: sugerido o, si es dudoso, sólo candidatos. */
+export interface DocField {
+  value: string | null;
+  candidates: string[];
+}
+
+/** Lo que el comprador ve de su comprobante (nunca el texto completo del archivo). */
+export interface BuyerDocument {
+  id: string;
+  order_number: number;
+  status: "received" | "processing" | "read" | "unreadable";
+  decision: "linked" | "rejected" | null;
+  fields: Record<string, DocField>;
+  needs_review: boolean | null;
+  received_at: string;
+}
+
+export interface PaymentDocument {
+  id: string;
+  order_id: string;
+  order_number: number;
+  total: number;
+  currency: string;
+  order_status: string;
+  mime: string;
+  size: number;
+  pages: number | null;
+  status: BuyerDocument["status"];
+  error: string | null;
+  fields: Record<string, DocField & { score: number | null }> | null;
+  needs_review: boolean | null;
+  decision: BuyerDocument["decision"];
+  decided_at: string | null;
+  payment_id: string | null;
+  received_at: string;
+}
+
+export interface TransferConfirm {
+  reference: string;
+  amount: number;
+  currency: string;
+  document_ids: string[];
 }
 
 export interface QuickReply {
@@ -388,6 +461,9 @@ export interface MessageUI {
   products?: ProductCard[];
   quick_replies?: QuickReply[];
   payment?: { url: string; provider: string };
+  /** Mensaje de pago confirmado con su constancia. */
+  type?: string;
+  receipt_id?: string;
 }
 
 export interface SalesResponse {
@@ -408,6 +484,8 @@ export interface SalesConversation {
   messages: { role: "user" | "assistant"; content: string; ui: MessageUI | null }[];
   cart: Order | null;
   orders: Order[];
+  /** Sólo tienda pública. */
+  documents?: BuyerDocument[];
 }
 
 export { ApiError };

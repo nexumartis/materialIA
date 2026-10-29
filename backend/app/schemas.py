@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -86,3 +87,12 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
 
 
+
+
+# --- Comprobantes ---------------------------------------------------------
+class TransferConfirm(BaseModel):
+    """Lo que el dueño cotejó en su banco (la referencia, el importe y la moneda reales)."""
+    reference: str = Field(min_length=1, max_length=100)
+    amount: float = Field(gt=0)
+    currency: str = Field(default="ARS", min_length=3, max_length=3)
+    document_ids: list[UUID] = Field(default_factory=list, max_length=20)

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   api,
+  type BuyerDocument,
   type ConversationRef,
   type Health,
   type MessageUI,
@@ -10,6 +11,7 @@ import {
   type SalesConversation,
   type SalesResponse,
 } from "../lib/api";
+import { saveBlob } from "../lib/download";
 import { fmtAmount } from "../lib/format";
 
 const money = (n: number) => `$${fmtAmount(n)}`;
@@ -183,6 +185,22 @@ export interface ChatSource {
   customerView?: boolean;
   /** Clave de sessionStorage donde la pestaña recuerda la conversación (una por tienda). */
   storageKey?: string;
+  /** Tienda pública: el comprador adjunta su comprobante y baja su constancia. */
+  uploadDocument?: (ref: ConversationRef, orderId: string, file: File) => Promise<unknown>;
+  receipt?: (ref: ConversationRef, receiptId: string) => Promise<Blob>;
+}
+
+const DOC_STATUS: Record<BuyerDocument["status"], string> = {
+  received: "recibido, en lectura",
+  processing: "recibido, en lectura",
+  read: "recibido, lo revisa el negocio",
+  unreadable: "no se pudo leer; lo revisa el negocio",
+};
+
+function docLabel(d: BuyerDocument): string {
+  if (d.decision === "linked") return "asociado al pago confirmado";
+  if (d.decision === "rejected") return "el negocio no lo tomó; consultá en el chat";
+  return DOC_STATUS[d.status];
 }
 
 // La referencia vive en sessionStorage: sobrevive a recargas y a ir y volver entre tiendas o del
@@ -228,6 +246,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   const [orders, setOrders] = useState<Order[]>([]);
   const [trace, setTrace] = useState<{ name: string; summary: string }[]>([]);
   const [detail, setDetail] = useState<ProductCard | null>(null);
+  const [documents, setDocuments] = useState<BuyerDocument[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // Generación de la conversación: "Nueva conversación" y desmontar la incrementan, y toda
   // respuesta (o error) de una generación anterior se descarta. `reads` además invalida las
@@ -257,6 +278,8 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     setOrders([]);
     setTrace([]);
     setDetail(null);
+    setDocuments([]);
+    setFileNote(null);
   }
 
   // Relee la conversación (al montar con una referencia guardada y al volver del checkout: el
@@ -272,6 +295,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
         setMessages(toMsgs(c));
         setCart(c.cart);
         setOrders(c.orders);
+        setDocuments(c.documents ?? []);
       })
       .catch((e) => {
         if (!current()) return;
@@ -293,6 +317,38 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, [conv, source]);
+
+  // Mientras un comprobante se lee en segundo plano, se relee la conversación cada pocos segundos.
+  const reading = documents.some((d) => d.status === "received" || d.status === "processing");
+  useEffect(() => {
+    if (!conv || !reading) return;
+    const t = window.setInterval(() => reload(conv), 4000);
+    return () => window.clearInterval(t);
+  }, [conv, reading]);
+
+  async function attach(o: Order, file: File) {
+    if (!conv || !source.uploadDocument) return;
+    setUploading(o.id);
+    setFileNote(null);
+    try {
+      await source.uploadDocument(conv, o.id, file);
+      setFileNote(`Recibimos tu comprobante del pedido #${o.number}. El negocio lo revisa antes de confirmar el pago.`);
+      reload(conv);
+    } catch (e) {
+      setFileNote(e instanceof ApiError ? e.message : "No pude subir el comprobante.");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function downloadReceipt(receiptId: string, number?: number) {
+    if (!conv || !source.receipt) return;
+    try {
+      saveBlob(await source.receipt(conv, receiptId), number ? `constancia-pedido-${number}.pdf` : "constancia.pdf");
+    } catch {
+      setFileNote("No pude descargar la constancia. Probá de nuevo.");
+    }
+  }
 
   async function send(text: string) {
     const msg = text.trim();
@@ -391,6 +447,12 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                     {m.ui.payment.provider === "simulated" ? "Pagar (prueba, no cobra)" : "Pagar con Mercado Pago"}
                   </a>
                 )}
+                {m.ui?.type === "receipt" && m.ui.receipt_id && source.receipt && (
+                  <button className="btn primary paybtn" type="button"
+                    onClick={() => void downloadReceipt(m.ui!.receipt_id!, orders.find((o) => o.receipt_id === m.ui!.receipt_id)?.number)}>
+                    Descargar constancia (PDF)
+                  </button>
+                )}
                 {i === lastBot && !sending && m.ui?.quick_replies && (
                   <div className="quick">
                     {m.ui.quick_replies.map((q) => (
@@ -459,22 +521,51 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             {orders.length ? (
               <div className="kv">
                 {orders.map((o) => (
-                  <div className="row" key={o.id}>
-                    <span className="k">
-                      #{o.number} · {money(o.total)}
-                      {o.attention_reason && <span className="pill warn">revisión</span>}
-                    </span>
-                    <span className="v">
-                      {o.status === "PENDING_PAYMENT" && o.payment?.checkout_url ? (
-                        <a href={o.payment.checkout_url} target="_blank" rel="noopener noreferrer">
-                          Pagar
-                        </a>
-                      ) : (
-                        o.status_label
+                  <div className="order-block" key={o.id}>
+                    <div className="row">
+                      <span className="k">
+                        #{o.number} · {money(o.total)}
+                        {o.attention_reason && <span className="pill warn">revisión</span>}
+                      </span>
+                      <span className="v">
+                        {o.status === "PENDING_PAYMENT" && o.payment?.checkout_url ? (
+                          <a href={o.payment.checkout_url} target="_blank" rel="noopener noreferrer">
+                            Pagar
+                          </a>
+                        ) : (
+                          o.status_label
+                        )}
+                      </span>
+                    </div>
+                    {documents.filter((d) => d.order_number === o.number).map((d) => (
+                      <div className="doc-line muted small" key={d.id}>Comprobante: {docLabel(d)}</div>
+                    ))}
+                    <div className="order-actions">
+                      {o.receipt_id && source.receipt && (
+                        <button className="btn sm" type="button" onClick={() => void downloadReceipt(o.receipt_id!, o.number)}>
+                          Constancia (PDF)
+                        </button>
                       )}
-                    </span>
+                      {source.uploadDocument && (o.status === "PENDING_PAYMENT" || o.status === "CANCELLED") && (
+                        <label className={`btn sm${uploading === o.id ? " disabled" : ""}`}>
+                          {uploading === o.id ? "Subiendo…" : "Adjuntar comprobante"}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,application/pdf"
+                            hidden
+                            disabled={uploading !== null}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (f) void attach(o, f);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 ))}
+                {fileNote && <p className="note" role="status">{fileNote}</p>}
               </div>
             ) : (
               <div className="empty-box">Sin pedidos.</div>

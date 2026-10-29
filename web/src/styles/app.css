@@ -450,10 +450,20 @@ label.btn.disabled { opacity:.5; cursor:default; }
 .cfield input { width:100%; padding:5px 7px; }
 .cstate, .ostate { display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
 .cactions { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+/* Comprobantes y transferencias */
+.docs-head { margin-top:28px; }
+.grid3 { display:grid; grid-template-columns:1.4fr 1fr 110px; gap:12px; }
+.transfer-form { margin:0 0 12px; }
+.order-block { padding:7px 0; border-top:1px solid var(--rule); }
+.order-block:first-child { border-top:0; }
+.order-block .row { border-top:0; padding:0; }
+.order-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.order-actions:empty { display:none; }
+.doc-line { margin-top:4px; }
 .store { min-height:100vh; background:var(--ground); padding:16px; }
 .store .sheet { max-width:1100px; margin:0 auto; }
 @media (max-width: 760px) {
-  .grid2 { grid-template-columns:1fr; }
+  .grid2, .grid3 { grid-template-columns:1fr; }
   .faq-row { grid-template-columns:1fr auto; }
   .faq-row textarea { grid-column:1 / 2; }
   .crow { grid-template-columns:48px minmax(0,1fr) auto; }
