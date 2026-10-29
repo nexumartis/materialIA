@@ -1,6 +1,6 @@
 # Comprobantes T1 (correcciones) + T2 + T3 — pedido de revisión
 
-**Rama:** `feat/comprobantes-ocr`, base `94f0c26`. **Implementó:** Claude Code (sesión de Tomi). **Revisa:** Mati con Codex, en contexto separado. **Estado: sin aprobar, sin integrar.** No se tocó Supabase remoto.
+**Rama:** `feat/comprobantes-ocr`. T1+T2 se integraron en `main` con el PR #16 (`994783d`) **sin la revisión de Mati**: esta revisión los cubre igual. T3 va en un PR nuevo sobre `994783d`. **Implementó:** Claude Code (sesión de Tomi). **Revisa:** Mati con Codex, en contexto separado. **Estado: T3 sin aprobar ni integrar.** No se tocó Supabase remoto.
 
 Sigue [el pase de comprobantes](../handoffs/2026-10-26-tomi-comprobantes.md): primero los cuatro hallazgos de [revision-ocr-t1](../handoffs/comprobantes/revision-ocr-t1.md) y después T2 del [plan](../handoffs/comprobantes/plan-continuacion.md). La migración es **0008** (0007 ya la usa la arquitectura).
 
@@ -32,7 +32,7 @@ README de `backend/tools/` corregido: aislamiento por SO y sus límites, plazo t
 
 ## T3 — comprobantes del comprador, revisión del dueño y registro mensual
 
-- **0008 suma `payment_documents`:** original en `bytea` privado (atajo para la demo, como pide el plan) y `unique(tenant_id, sha256)`. FK compuestas a pedido y conversación del mismo negocio; estado de lectura, intentos y reclamo; `ocr jsonb`; decisión auditada (`linked`/`rejected`, actor y fecha) y `payment_id`. RLS igual que `receipts`. `app_user` tiene `select` y `update` sólo de las columnas de decisión.
+- **`supabase/migrations/0009_payment_documents.sql`** (aparte porque 0008 ya está en `main` con el PR #16): original en `bytea` privado (atajo para la demo, como pide el plan) y `unique(tenant_id, sha256)`. FK compuestas a pedido y conversación del mismo negocio; estado de lectura, intentos y reclamo; `ocr jsonb`; decisión auditada (`linked`/`rejected`, actor y fecha) y `payment_id`. RLS igual que `receipts`. `app_user` tiene `select` y `update` sólo de las columnas de decisión.
 - **`backend/app/documents/store.py`:**
   - `receive`: tipo por firma, pedido de ESA conversación y no `CART_OPEN`. El mismo archivo en el mismo pedido devuelve el registro existente; en otro pedido, 409. Máximo 10 por pedido.
   - `process_pending`: reclamo con `for update skip locked` y OCR fuera de la transacción. Un fallo se reintenta en la vuelta **siguiente**, no en la misma. Máximo 3 intentos; un `processing` de más de 5 min se retoma.
@@ -51,12 +51,12 @@ Sin UI todavía: T4 suma el chat, el panel y el PDF de la constancia, con prueba
 ## Evidencia (macOS, Python 3.14, 28/10/2026)
 
 - OCR: `pytest --noconftest tests/test_document_ocr.py` ⇒ **26 passed**, tres corridas. `python -m tools.prepare_ocr` ⇒ lectura real sin red, aislamiento por SO.
-- Suite completa en DB descartable `127.0.0.1:55436` (contenedor `materialia-test-pg`, `supabase/postgres:17.11.0.003`, migraciones 0001–0008 + seed):
+- Suite completa en DB descartable `127.0.0.1:55436` (contenedor `materialia-test-pg`, `supabase/postgres:17.11.0.003`, migraciones 0001–0009 + seed):
   - con T2: **308 passed**, dos corridas;
-  - con T3: **317 passed, 0 failed, 0 skipped**, tres corridas.
+  - con T3: **317 passed, 0 failed, 0 skipped**, cuatro corridas (la última sobre una base recreada desde cero con 0001–0009).
 
   Una corrida tardó 15 min de reloj con 36 s de ejecución y 3% de CPU: el proceso quedó suspendido por el SO, no por un bloqueo. Warnings históricos: httpx/Starlette y JWT corto de tests.
-- Demo local (54322): se aplicaron 0004–0007, que faltaban en el historial aunque las tablas existían, y 0008, reaplicada a mano tras sumar `payment_documents`. Sin reset. La API levanta y expone las rutas nuevas.
+- Demo local (54322): se aplicaron 0004–0007, que faltaban en el historial aunque las tablas existían, 0008 y 0009. Sin reset. La API levanta y expone las rutas nuevas.
 
 ## Para el revisor
 
