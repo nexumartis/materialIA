@@ -65,6 +65,8 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         (tenant_id, order_id),
     )
     pay = cur.fetchone()
+    cur.execute("select id from receipts where tenant_id = %s and order_id = %s", (tenant_id, order_id))
+    receipt = cur.fetchone()
     return {
         "id": order_id, "number": row["number"], "status": row["status"],
         "status_label": STATUS_LABELS[row["status"]], "currency": row["currency"],
@@ -76,6 +78,7 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "items": _items(cur, tenant_id, order_id),
         "payment": ({"provider": pay["provider"], "checkout_url": pay["checkout_url"],
                      "status": pay["status"]} if pay else None),
+        "receipt_id": str(receipt["id"]) if receipt else None,   # constancia de compra emitida
     }
 
 

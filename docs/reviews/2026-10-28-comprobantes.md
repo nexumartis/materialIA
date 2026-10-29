@@ -1,6 +1,6 @@
-# Comprobantes T1 (correcciones) + T2 + T3 — pedido de revisión
+# Comprobantes T1–T4 — pedido de revisión
 
-**Rama:** `feat/comprobantes-ocr`. T1+T2 se integraron en `main` con el PR #16 (`994783d`) **sin la revisión de Mati**: esta revisión los cubre igual. T3 va en un PR nuevo sobre `994783d`. **Implementó:** Claude Code (sesión de Tomi). **Revisa:** Mati con Codex, en contexto separado. **Estado: T3 sin aprobar ni integrar.** No se tocó Supabase remoto.
+**Rama:** `feat/comprobantes-ocr`. T1+T2 se integraron en `main` con el PR #16 (`994783d`) **sin la revisión de Mati**: esta revisión los cubre igual. T3 y T4 van en el PR #17. **Implementó:** Claude Code (sesión de Tomi). **Revisa:** Mati con Codex, en contexto separado. **Estado: T3 y T4 sin aprobar ni integrar.** No se tocó Supabase remoto.
 
 Sigue [el pase de comprobantes](../handoffs/2026-10-26-tomi-comprobantes.md): primero los cuatro hallazgos de [revision-ocr-t1](../handoffs/comprobantes/revision-ocr-t1.md) y después T2 del [plan](../handoffs/comprobantes/plan-continuacion.md). La migración es **0008** (0007 ya la usa la arquitectura).
 
@@ -46,9 +46,25 @@ README de `backend/tools/` corregido: aislamiento por SO y sus límites, plazo t
 - **`backend/app/worker.py`:** `run_once` agrega `payment_documents_read`.
 - **`backend/tests/test_payment_documents.py`** (9 tests): recepción, dedupe y lectura sin acreditar pago, sin texto del archivo en `messages` ni en la vista; OCR real a través del worker; 404 sin token, con token ajeno, pedido ajeno u otro negocio; 415, 413 y 409 por archivo reutilizado; dueño que lista, descarga, confirma y asocia, contra un ajeno que recibe 404; rechazo que no altera un pago aprobado; validaciones y membresía revocada (403); reintentos y reclamo caído; CSV con límite de mes argentino, ARS y USD, 3 comprobantes de un pago contados una vez, devolución en su mes y fórmula escapada.
 
-Sin UI todavía: T4 suma el chat, el panel y el PDF de la constancia, con prueba en navegador.
+## T4 — constancia en PDF, chat del comprador y panel del dueño
 
-## Evidencia (macOS, Python 3.14, 28/10/2026)
+- **`backend/app/domain/receipts.py`:**
+  - `render_pdf`: A4 armado a demanda desde la instantánea, con fuente Vera de reportlab (acentos sin depender de la PC) y hora argentina. Lleva negocio, pedido, productos, total, moneda, origen y referencia del pago, y la leyenda. Sin datos fiscales.
+  - `in_conversation`: el comprador sólo baja constancias de pedidos de SU conversación.
+  - `reportlab==4.4.9` pasa de `dev` a las dependencias del runtime.
+- **`backend/app/domain/orders.py`:** `_view` agrega `receipt_id`.
+- **`backend/app/main.py`:** `GET /public/{slug}/conversations/{id}/receipts/{receipt}/pdf` (token del comprador) y `GET /app/orders/{id}/receipt.pdf`. Ambos como attachment, con `nosniff` y `no-store`.
+- **Web:**
+  - `api.ts` suma los tipos y llamadas nuevos; `download.ts`, `saveBlob` y `openBlob` (los archivos viajan con credencial en el header, nunca en la URL).
+  - Chat (`Sales.tsx`/`Store.tsx`): «Adjuntar comprobante» en pedidos pendientes o vencidos y estado del comprobante en lenguaje simple, releyendo cada 4 s mientras se lee. Botón «Descargar constancia (PDF)» en el mensaje de pago y en el pedido.
+  - Panel (`OrdersPage.tsx`): confirmar transferencia (referencia, importe, moneda y comprobantes a asociar, ya tildados), constancia por pedido, comprobantes del mes con los campos leídos o dudosos (candidatos entre `¿…?`), ver original, descartar y registro CSV.
+- **`web/e2e/comprobantes.mjs`** (`npm run e2e:comprobantes`, documentado en `e2e/README.md`): 17 comprobaciones del flujo completo en Chrome. Adjuntar ⇒ recibido y leído por el worker sin pagar; el dueño confirma con doble clic; una sola constancia tras recargar y PDF descargado; sin token, 404; CSV; 390 px sin desborde; sin tokens en URLs.
+- **`backend/tests/test_payment_documents.py`:** el texto del PDF (pypdfium2) incluye todos los datos pedidos; descarga del comprador, el dueño, otro comprador u otro negocio (404); pedido impago sin constancia.
+
+Control visual: PDF renderizado a PNG y captura del panel a 1280 px, revisados.
+
+
+## Evidencia (macOS, Python 3.14, 28–29/10/2026)
 
 - OCR: `pytest --noconftest tests/test_document_ocr.py` ⇒ **26 passed**, tres corridas. `python -m tools.prepare_ocr` ⇒ lectura real sin red, aislamiento por SO.
 - Suite completa en DB descartable `127.0.0.1:55436` (contenedor `materialia-test-pg`, `supabase/postgres:17.11.0.003`, migraciones 0001–0009 + seed):
@@ -56,6 +72,7 @@ Sin UI todavía: T4 suma el chat, el panel y el PDF de la constancia, con prueba
   - con T3: **317 passed, 0 failed, 0 skipped**, cuatro corridas (la última sobre una base recreada desde cero con 0001–0009).
 
   Una corrida tardó 15 min de reloj con 36 s de ejecución y 3% de CPU: el proceso quedó suspendido por el SO, no por un bloqueo. Warnings históricos: httpx/Starlette y JWT corto de tests.
+- Con T4: **319 passed, 0 failed, 0 skipped**. En navegador, entorno aislado (API 8078 y web 4174 sobre la DB descartable, worker cada 2 s, LLM `mock`, pagos simulados): `e2e:comprobantes` **17/17** en dos corridas y `e2e` (chat público, sin regresiones) **36 PASS, 0 FAIL**.
 - Demo local (54322): se aplicaron 0004–0007, que faltaban en el historial aunque las tablas existían, 0008 y 0009. Sin reset. La API levanta y expone las rutas nuevas.
 
 ## Para el revisor

@@ -19,11 +19,12 @@ dependencies = [
     "opencv-python-headless>=4.5,<5",
     "pypdfium2==5.14.0",
     "Pillow>=10.1",
+    # PDF de la constancia de compra (app/domain/receipts.py), con su fuente Vera incluida.
+    "reportlab==4.4.9",
 ]
 
 [project.optional-dependencies]
-# reportlab: comprobantes sintéticos y su fuente Vera en tests/test_document_ocr.py.
-dev = ["pytest>=8.0", "reportlab==4.4.9"]
+dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

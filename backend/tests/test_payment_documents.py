@@ -284,3 +284,46 @@ def test_monthly_register(client, shop_a, raw_conn):
         ("devolucion", "R-DEV", "-200,00"), ("pago", "R-NOV", "999,00")]
     assert {x[6]: x[5] for x in nov if x[0] == "total"} == {"ARS": "799,00"}
     assert client.get("/app/payments/register.csv?month=2026-13", headers=owner).status_code == 400
+
+
+# --- Constancia en PDF (T4) ---------------------------------------------------------
+def _pdf_text(data: bytes) -> str:
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(data)
+    return "\n".join(page.get_textpage().get_text_bounded() for page in pdf)
+
+
+def test_receipt_pdf_for_buyer_and_owner(client, shop_a, accounts, raw_conn):
+    conv, token, order = _order(shop_a)
+    other_conv, other_token, _ = _order(shop_a)
+    owner = bearer(shop_a["uid"])
+    client.post(f"/app/orders/{order['id']}/confirm-transfer", headers=owner,
+                json={"reference": "BCO-PDF-1", "amount": order["total"]})
+    view = client.get(f"/public/{shop_a['slug']}/conversations/{conv}", headers={HDR: token}).json()
+    receipt_id = view["orders"][0]["receipt_id"]
+    assert receipt_id and any((m["ui"] or {}).get("receipt_id") == receipt_id for m in view["messages"])
+
+    url = f"/public/{shop_a['slug']}/conversations/{conv}/receipts/{receipt_id}/pdf"
+    r = client.get(url, headers={HDR: token})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+    text = _pdf_text(r.content)
+    for expected in ("Tienda Comprobantes", "Constancia comercial de compra — no es factura fiscal",
+                     f"Pedido #{order['number']}", "Canilla de cocina negra", "$ 89.900,00", "ARS",
+                     "Transferencia verificada por el negocio", "BCO-PDF-1", "hora Argentina"):
+        assert expected in text, expected
+    assert client.get(url).status_code == 404                                        # sin token
+    assert client.get(url, headers={HDR: other_token}).status_code == 404            # otro comprador
+    other_url = f"/public/{shop_a['slug']}/conversations/{other_conv}/receipts/{receipt_id}/pdf"
+    assert client.get(other_url, headers={HDR: other_token}).status_code == 404      # no es su pedido
+
+    panel = client.get(f"/app/orders/{order['id']}/receipt.pdf", headers=owner)
+    assert panel.status_code == 200 and "BCO-PDF-1" in _pdf_text(panel.content)
+    stranger_uid, _ = accounts("Ajeno PDF")
+    assert client.get(f"/app/orders/{order['id']}/receipt.pdf", headers=bearer(stranger_uid)).status_code == 404
+
+
+def test_unpaid_order_has_no_receipt(client, shop_a):
+    conv, token, order = _order(shop_a)
+    assert orders.get_order(shop_a["tenant"], order["id"])["receipt_id"] is None
+    r = client.get(f"/app/orders/{order['id']}/receipt.pdf", headers=bearer(shop_a["uid"]))
+    assert r.status_code == 404

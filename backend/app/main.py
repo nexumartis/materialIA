@@ -23,9 +23,10 @@ from . import buyer_session
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
-from .db import NoMembership, db_healthcheck, user_tx
+from .db import NoMembership, db_healthcheck, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import agent_profile, backoffice, catalog, customer_memory, evals, knowledge, opportunities, orders
+from .domain import (agent_profile, backoffice, catalog, customer_memory, evals, knowledge, opportunities, orders,
+                     receipts)
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
 from .schemas import (
@@ -525,6 +526,13 @@ def app_payment_register(month: str = Query(..., description="AAAA-MM, hora Arge
         "Content-Disposition": f'attachment; filename="pagos-{month}.csv"', "Cache-Control": "private, no-store"})
 
 
+@app.get("/app/orders/{order_id}/receipt.pdf")
+def app_receipt_pdf(order_id: UUID, uid: str = Depends(current_uid)) -> Response:
+    with user_tx(uid) as (cur, tenant):
+        receipt = receipts.get(cur, tenant, str(order_id))
+    return _receipt_pdf(receipt)
+
+
 # --- Link público del agente de cada negocio ---------------------------------
 # El negocio sale del slug (identificador público de la tienda) resuelto en el servidor.
 def _store(slug: str) -> dict:
@@ -629,6 +637,25 @@ async def public_upload_document(slug: str, conversation_id: UUID, order_id: UUI
     except LookupError:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
     return {"document": doc, "note": "Recibimos tu comprobante. El negocio lo revisa antes de confirmar el pago."}
+
+
+def _receipt_pdf(receipt: dict | None) -> Response:
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+    return Response(receipts.render_pdf(receipt), media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="constancia-pedido-{receipt["order_number"]}.pdf"',
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
+
+
+@app.get("/public/{slug}/conversations/{conversation_id}/receipts/{receipt_id}/pdf")
+def public_receipt_pdf(slug: str, conversation_id: UUID, receipt_id: UUID,
+                       token: str | None = Header(None, alias=buyer_session.HEADER)) -> Response:
+    """Constancia de compra del comprador (sólo de los pedidos de SU conversación)."""
+    store = _store(slug)
+    tenant, conv = store["tenant_id"], str(conversation_id)
+    _owned(tenant, conv, token)
+    with tenant_tx(tenant) as cur:
+        return _receipt_pdf(receipts.in_conversation(cur, tenant, conv, str(receipt_id)))
 
 
 # --- Panel: base de conocimiento y evaluaciones del agente ---------------------

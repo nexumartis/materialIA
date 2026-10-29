@@ -41,3 +41,25 @@
 | `E2E_HEADED` | `1` para ver el navegador |
 
 `playwright-core` no descarga navegadores. Para usar uno propio de Playwright: `npx playwright-core install chromium` y apuntá `E2E_CHROME_PATH` a ese ejecutable.
+
+# Aceptación en navegador — comprobantes y constancia
+
+`comprobantes.mjs` recorre el flujo completo:
+
+1. El comprador arma un pedido y adjunta un comprobante sintético dibujado en el navegador. Queda recibido, el worker lo lee y el pedido **no** se marca pagado.
+2. El dueño inicia sesión y ve el comprobante leído. Confirma la transferencia con doble clic: el pedido queda pagado y el comprobante, asociado.
+3. El comprador recarga y ve **una** constancia, que descarga en PDF. Sin token, no se abren ni su conversación ni la constancia.
+4. El dueño descarga el registro del mes en CSV.
+5. Sin desborde horizontal a 390 px, ni para el comprador ni para el dueño.
+6. Sin tokens del comprador en las URLs.
+
+Mismas salvaguardas que `chat-publico.mjs`: sólo loopback, `APP_ENV=local`, pagos `simulated` y LLM `mock`. Cada corrida usa una referencia bancaria y un archivo únicos, y consume una unidad del flexible del seed C.
+
+Además necesita:
+
+- **El worker corriendo** contra la misma base, para leer el comprobante: `WORKER_INTERVAL_S=2 python -m app.worker`.
+- **Un dueño de la tienda C** que pueda iniciar sesión en el Supabase Auth local y tenga su membresía en la base de la API. Pasale las credenciales por variables; no van en el repo:
+
+```bash
+E2E_OWNER_EMAIL=… E2E_OWNER_PASSWORD=… npm run e2e:comprobantes
+```
