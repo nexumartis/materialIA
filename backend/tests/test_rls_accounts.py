@@ -129,12 +129,33 @@ def test_no_uid_sees_nothing(raw_conn, accounts):
 
 def test_app_user_has_no_access_to_out_of_scope_tables(raw_conn, accounts):
     uid_a, _ = accounts("A")
-    # Catálogo, precios, stock, pedidos y perfil son del panel desde 0005; la conversación con el
-    # cliente y los avisos de pago, no.
-    for table in ("conversations", "messages", "demo_customers", "payment_notifications",
-                  "sim_provider_payments"):
+    # Catálogo, precios, stock, pedidos y perfil son del panel desde 0005, y la conversación desde
+    # 0010 (bandeja); los clientes demo y los avisos de pago, no.
+    for table in ("demo_customers", "payment_notifications", "sim_provider_payments"):
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             _as_app_user(raw_conn, uid_a, f"select 1 from {table}")
+    # De la conversación, nunca el hash del token del comprador ni el estado interno del agente.
+    for column in ("access_token_hash", "agent_state", "summary"):
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            _as_app_user(raw_conn, uid_a, f"select {column} from conversations")
+
+
+def test_inbox_conversations_are_isolated_by_business(raw_conn, accounts):
+    uid_a, t_a = accounts("A")
+    _, t_b = accounts("B")
+    with raw_conn.cursor() as cur:
+        cur.execute("insert into conversations (tenant_id, channel) values (%s, 'web_public') returning id", (t_b,))
+        conv_b = str(cur.fetchone()["id"])
+        cur.execute("insert into messages (tenant_id, conversation_id, direction, content) "
+                    "values (%s, %s, 'inbound', 'hola B')", (t_b, conv_b))
+    raw_conn.commit()
+    assert _as_app_user(raw_conn, uid_a, "select id from conversations where id = %s", (conv_b,)) == []
+    assert _as_app_user(raw_conn, uid_a, "select id from messages where conversation_id = %s", (conv_b,)) == []
+    assert _as_app_user(raw_conn, uid_a, "update conversations set taken_by = %s where id = %s",
+                        (uid_a, conv_b)) == 0
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):   # RLS: no escribe en el negocio B
+        _as_app_user(raw_conn, uid_a, "insert into messages (tenant_id, conversation_id, direction, content) "
+                     "values (%s, %s, 'outbound', 'intruso')", (t_b, conv_b))
 
 
 def test_activity_cannot_point_to_foreign_opportunity(raw_conn, accounts):

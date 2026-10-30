@@ -1,6 +1,6 @@
 # Estado actual — materialIA
 
-**Primera lectura, cierre 29/10/2026.** Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md), skills en [SKILLS.md](SKILLS.md), etapas en [roadmap.md](roadmap.md). Git y Markdown son la verdad; Codebase Memory es derivado y **no** se reindexó en este cierre.
+**Primera lectura, 29/10/2026.** Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md), skills en [SKILLS.md](SKILLS.md), etapas en [roadmap.md](roadmap.md). Git y Markdown son la verdad; Codebase Memory es derivado y **no** se reindexó en este cierre.
 
 ## Entrega: comprobantes de clientes (roadmap etapa 1, hecha)
 
@@ -39,15 +39,31 @@ T1–T4 entraron a `main` **sin** la revisión cruzada de Mati, porque Tomi merg
 
 ## Datos y entornos
 
-- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): según `supabase migration list --linked` del 29/10, tiene 0001–0005 y le faltan **0006–0009**. 0006 (privacidad del chat) ya estaba pendiente antes de este corte. Si la app corre contra la nube con el código actual, los pagos y comprobantes fallan. Aplicar requiere instrucción expresa.
-- **Demo local de esta PC:** Supabase 54321/54322 con 0001–0009 (0004–0007 se registraron porque las tablas ya existían; sin reset), API 8077 y web 5173. El worker no corre solo: `python -m app.worker`.
+- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): según `supabase migration list --linked` del 29/10, tiene 0001–0005 y le faltan **0006–0010**. 0006 (privacidad del chat) ya estaba pendiente antes de este corte. Si la app corre contra la nube con el código actual, los pagos y comprobantes fallan. Aplicar requiere instrucción expresa.
+- **Demo local de esta PC:** Supabase 54321/54322 con 0001–0010 (0004–0007 se registraron porque las tablas ya existían; sin reset), API 8077 y web 5173. El worker no corre solo: `python -m app.worker`.
 - **Antes de un piloto real:**
   - almacenamiento privado para los originales (hoy `bytea`) y una política de retención;
   - comprobantes de bancos argentinos reales;
   - decidir si, sin aislamiento de red del SO (Windows), el OCR debe negarse a leer.
 
+## Entrega en curso: bandeja y toma de control humana (roadmap etapa 2)
+
+Rama `feat/bandeja-humana`; [spec](superpowers/specs/2026-10-29-bandeja-humana-design.md) y [revisión](reviews/2026-10-29-bandeja.md). Tomi pidió avanzar sin ronda de preguntas, así que lo marcado como «decisión de Claude» en la spec está pendiente de acuerdo entre los socios.
+
+- **Panel:** página Conversaciones con filtros (derivadas, sin responder, mías, con pedido, todas), y acciones para tomar el control, responder como persona y devolver al asistente.
+- **Agente:** si la conversación está tomada, no responde, ni siquiera cuando se la toman a mitad de un turno. Los mensajes de una persona no entran al historial del modelo.
+- **Comprador:** ve «Equipo de <negocio>» y el aviso «Te está atendiendo una persona del negocio».
+- **Migración 0010:** el panel lee conversaciones por columnas, sin `access_token_hash` ni `agent_state`. Además: `needs_human_reason` (`asked`/`quote`) y la toma de control.
+- **Revisión** `/code-review high` en contexto fresco: 10 hallazgos, todos corregidos con test.
+- **Evidencia (29/10):**
+  - backend **339 passed**;
+  - `e2e:bandeja` **11/11** (dos corridas), `e2e:comprobantes` **17/17**, `e2e` **36 PASS, 0 FAIL**.
+- **Fuera del corte:** sugerencias del agente al humano y notificaciones.
+
+**Entorno:** las corridas completas de pytest tardan a veces más de 10 minutos de reloj, aunque pytest mide 22–42 s; un volcado de `faulthandler` no mostró ningún test colgado. Además, un `python -m app.worker` que queda corriendo contra la base de pytest compite con los tests: frenarlo al terminar un e2e (`pkill -f app.worker`).
+
 ## Próximo paso
 
-Etapa 2 del roadmap: **bandeja y toma de control humana**. Hoy una derivación sólo marca `requires_human` y crea una oportunidad: nadie toma la conversación ni responde desde el panel. Spec a acordar entre los socios antes de implementar.
+Revisión de Mati de los PRs de comprobantes y de la bandeja. Después, según el [roadmap](roadmap.md): etapa 6 (asistente paso a paso, front) en paralelo, o etapa 3 (WhatsApp, que requiere cambiar el alcance en CLAUDE.md con ambos socios). Aplicar 0006–0010 en la nube requiere instrucción expresa.
 
 Historial: [estado previo](state-history-2026-10-28-before-comprobantes.md). Los conteos antiguos no validan este diff.

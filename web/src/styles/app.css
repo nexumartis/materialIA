@@ -461,9 +461,33 @@ label.btn.disabled { opacity:.5; cursor:default; }
 .order-actions:empty { display:none; }
 .doc-line { margin-top:4px; }
 .store { min-height:100vh; background:var(--ground); padding:16px; }
+/* Bandeja de conversaciones */
+.inbox { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); gap:var(--gap); min-height:0; }
+.inbox > * { min-width:0; }
+.inbox-list { display:flex; flex-direction:column; gap:10px; }
+.chip.on { background:var(--active); border-color:var(--accent); }
+.inbox-items { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.inbox-item { width:100%; text-align:left; background:none; border:0; border-top:1px solid var(--rule); padding:10px 8px;
+  display:flex; flex-direction:column; gap:4px; cursor:pointer; font:inherit; color:inherit; border-radius:6px; }
+.inbox-item:hover, .inbox-item.active { background:var(--raised); }
+.inbox-row { display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap; }
+.inbox-row.pills { justify-content:flex-start; }
+.inbox-preview { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.inbox-detail { display:flex; flex-direction:column; gap:8px; min-height:420px; }
+.inbox-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.inbox-actions { margin-left:auto; }
+.inbox-back { display:none; }
+.inbox-log { max-height:52vh; border:1px solid var(--rule); border-radius:var(--radius-card); padding:10px; }
+.bubble.human { border:1px solid var(--accent); }
+.human-note { align-self:center; font-size:12px; color:var(--muted); background:var(--raised); border-radius:999px; padding:4px 10px; }
+.msg-author { font-size:12px; color:var(--muted); }
 .store .sheet { max-width:1100px; margin:0 auto; }
 @media (max-width: 760px) {
   .grid2, .grid3 { grid-template-columns:1fr; }
+  .inbox { grid-template-columns:1fr; }
+  .inbox.has-selection .inbox-list { display:none; }
+  .inbox:not(.has-selection) .inbox-detail { display:none; }
+  .inbox-back { display:inline-flex; }
   .faq-row { grid-template-columns:1fr auto; }
   .faq-row textarea { grid-column:1 / 2; }
   .crow { grid-template-columns:48px minmax(0,1fr) auto; }

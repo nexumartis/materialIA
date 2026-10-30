@@ -29,9 +29,12 @@ def ensure_conversation(tenant_id: str, conversation_id: Optional[str], channel:
 def get_recent_messages(tenant_id: str, conversation_id: str, limit: int = 8) -> list[dict[str, str]]:
     """Historial reciente como [{role, content}] (para el LLM en modo live)."""
     with tenant_tx(tenant_id) as cur:
+        # Sin los mensajes de una persona del negocio (bandeja): el modelo no los toma como propios
+        # ni repite o amplía lo que esa persona prometió.
         cur.execute(
             "select direction, content from messages "
             "where tenant_id = %s and conversation_id = %s "
+            "and payload->>'type' is distinct from 'human' "
             "order by created_at desc limit %s",
             (tenant_id, conversation_id, limit),
         )
@@ -43,15 +46,21 @@ def get_recent_messages(tenant_id: str, conversation_id: str, limit: int = 8) ->
 def conversation_messages(tenant_id: str, conversation_id: str, limit: int = 200) -> list[dict[str, Any]]:
     """Historial para mostrar en el chat, con el contenido interactivo de cada mensaje."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            "select direction, content, payload from messages "
-            "where tenant_id = %s and conversation_id = %s order by created_at, id limit %s",
-            (tenant_id, conversation_id, limit),
-        )
-        rows = cur.fetchall()
+        rows = _conversation_messages(cur, tenant_id, conversation_id, limit)
     role = {"inbound": "user", "outbound": "assistant"}
     return [{"role": role.get(r["direction"], "user"), "content": r["content"], "ui": r["payload"]}
             for r in rows]
+
+
+def _conversation_messages(cur: Any, tenant_id: str, conversation_id: str, limit: int) -> list[dict[str, Any]]:
+    """Los `limit` mensajes MÁS RECIENTES, en orden cronológico (una conversación larga muestra lo último)."""
+    cur.execute(
+        "select direction, content, payload, created_at from (select direction, content, payload, created_at, id "
+        "from messages where tenant_id = %s and conversation_id = %s order by created_at desc, id desc limit %s) m "
+        "order by created_at, id",
+        (tenant_id, conversation_id, limit),
+    )
+    return cur.fetchall()
 
 
 def add_message(tenant_id: str, conversation_id: str, direction: str, content: str,

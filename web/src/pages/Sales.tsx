@@ -249,6 +249,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   const [documents, setDocuments] = useState<BuyerDocument[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [attended, setAttended] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   // Generación de la conversación: "Nueva conversación" y desmontar la incrementan, y toda
   // respuesta (o error) de una generación anterior se descarta. `reads` además invalida las
@@ -280,6 +281,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     setDetail(null);
     setDocuments([]);
     setFileNote(null);
+    setAttended(false);
   }
 
   // Relee la conversación (al montar con una referencia guardada y al volver del checkout: el
@@ -296,6 +298,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
         setCart(c.cart);
         setOrders(c.orders);
         setDocuments(c.documents ?? []);
+        setAttended(!!c.attended_by_human);
       })
       .catch((e) => {
         if (!current()) return;
@@ -319,7 +322,8 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   }, [conv, source]);
 
   // Mientras un comprobante se lee en segundo plano, se relee la conversación cada pocos segundos.
-  const reading = documents.some((d) => d.status === "received" || d.status === "processing");
+  // Lo mismo mientras una persona del negocio atiende la conversación (sus respuestas llegan solas).
+  const reading = documents.some((d) => d.status === "received" || d.status === "processing") || attended;
   useEffect(() => {
     if (!conv || !reading) return;
     const t = window.setInterval(() => reload(conv), 4000);
@@ -362,7 +366,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       const j = await source.chat(msg, conv);
       if (g !== gen.current) return;
       remember(j.conversation_id === conv?.id ? conv : { id: j.conversation_id, token: j.conversation_token ?? null });
-      setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
+      // Con una persona atendiendo, el asistente no responde: no hay burbuja vacía.
+      if (j.mode === "human") setAttended(true);
+      else setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
       setCart(j.cart);
       setOrders(j.orders);
       setTrace(j.trace);
@@ -434,8 +440,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             )}
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role === "me" ? "me" : "bot"}`}>
+                {m.ui?.type === "human" && <span className="msg-author">Equipo de {source.title}</span>}
                 {visibleText(m) && (
-                  <div className={`bubble ${m.role === "me" ? "me" : "bot"}`}>
+                  <div className={`bubble ${m.role === "me" ? "me" : "bot"}${m.ui?.type === "human" ? " human" : ""}`}>
                     <Linkified text={m.ui?.payment ? visibleText(m).replace(m.ui.payment.url, "").trim() : visibleText(m)} />
                   </div>
                 )}
@@ -465,6 +472,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
               </div>
             ))}
             {sending && <div className="bubble bot typing">Escribiendo…</div>}
+            {attended && (
+              <div className="human-note" role="status">Te está atendiendo una persona del negocio.</div>
+            )}
           </div>
 
           <form

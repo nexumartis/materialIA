@@ -63,3 +63,18 @@ Además necesita:
 ```bash
 E2E_OWNER_EMAIL=… E2E_OWNER_PASSWORD=… npm run e2e:comprobantes
 ```
+
+# Aceptación en navegador — bandeja y toma de control
+
+`bandeja.mjs` (`npm run e2e:bandeja`) recorre el flujo:
+
+1. El cliente pide una persona.
+2. El dueño la ve en «Derivadas» y toma el control.
+3. El cliente escribe: el asistente **no** responde y aparece «Te está atendiendo una persona del negocio».
+4. El dueño responde y el cliente lo ve como «Equipo de <negocio>».
+5. El dueño la devuelve y el asistente vuelve a responder.
+6. Sin desborde horizontal a 390 px, ni para el cliente ni para el dueño.
+
+Mismas salvaguardas y variables (`E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD`) que `comprobantes.mjs`. No necesita el worker.
+
+**Al terminar, frená el worker y la API de prueba** (`pkill -f app.worker`). Un worker que queda corriendo contra la base de pytest compite con los tests.
