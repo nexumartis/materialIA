@@ -8,7 +8,10 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 from typing import Any, Optional
+
+import psycopg
 
 from . import inventory, orders
 
@@ -110,6 +113,9 @@ def _number(raw: str, field: str, integer: bool = False) -> Optional[float]:
         value = float(raw)
     except ValueError:
         raise ValueError(f"{field} inválido: {raw!r}")
+    # Una celda rara («1e999», un número gigante) es un error de ESA fila, no de toda la importación.
+    if not math.isfinite(value) or value > (MAX_STOCK if integer else MAX_PRICE):
+        raise ValueError(f"{field} fuera de rango: {raw!r}")
     if value < 0:
         raise ValueError(f"{field} no puede ser negativo")
     if integer and value != int(value):
@@ -117,9 +123,17 @@ def _number(raw: str, field: str, integer: bool = False) -> Optional[float]:
     return value
 
 
-def import_csv(cur: Any, tenant_id: str, text: str) -> dict[str, Any]:
+MAX_PRICE = 99_999_999_999.99    # numeric(14,2)
+MAX_STOCK = 10_000_000
+
+
+def import_csv(cur: Any, tenant_id: str, text: str, from_sheet: bool = False) -> dict[str, Any]:
     """Alta/actualización del catálogo desde CSV (upsert por sku). Cada fila se aplica en su
-    propio savepoint: una fila con error no frena al resto y se informa con su número."""
+    propio savepoint: una fila con error no frena al resto y se informa con su número.
+
+    `from_sheet` (Google Sheets conectada): el stock de una fila se aplica sólo si cambió desde la
+    última lectura de la planilla (`sheet_stock`), para no borrar lo vendido. Informa además los
+    SKU del catálogo que ya no están en la planilla (no se pausan solos)."""
     sample = text[:2048]
     try:
         dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
@@ -134,6 +148,9 @@ def import_csv(cur: Any, tenant_id: str, text: str) -> dict[str, Any]:
         raise ValueError(f"Faltan columnas obligatorias: {', '.join(missing)}.")
     created = updated = 0
     errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+    changes = {"prices": 0, "stock": 0}
+    seen: set[str] = set()
     for line, raw in enumerate(reader, start=2):
         if line - 1 > MAX_ROWS:
             errors.append({"fila": line, "error": f"máximo {MAX_ROWS} filas por archivo"})
@@ -141,17 +158,31 @@ def import_csv(cur: Any, tenant_id: str, text: str) -> dict[str, Any]:
         row = {k: (raw.get(orig) or "").strip() for k, orig in headers.items()}
         if not any(row.values()):
             continue
+        seen.add(row.get("sku", "")[:64])
         try:
             with cur.connection.transaction():
-                was_new = _import_row(cur, tenant_id, row)
+                was_new, warning = _import_row(cur, tenant_id, row, from_sheet, changes)
             created += was_new
             updated += not was_new
-        except ValueError as exc:
-            errors.append({"fila": line, "sku": row.get("sku"), "error": str(exc)})
-    return {"created": created, "updated": updated, "errors": errors}
+            if warning:
+                warnings.append({"fila": line, "sku": row.get("sku"), "error": warning})
+        except (ValueError, psycopg.DataError) as exc:   # DataError: valor que la base no acepta
+            errors.append({"fila": line, "sku": row.get("sku"), "error": str(exc).splitlines()[0]})
+    result: dict[str, Any] = {"created": created, "updated": updated, "errors": errors + warnings}
+    if from_sheet:
+        result["changes"] = changes            # para auditar la sincronización (no cambia la importación manual)
+        cur.execute("select sku from catalog_items where tenant_id = %s and active and not (sku = any(%s)) "
+                    "order by sku", (tenant_id, list(seen)))
+        missing = [r["sku"] for r in cur.fetchall()]
+        result["missing"] = {"count": len(missing), "skus": missing[:20]}
+    return result
 
 
-def _import_row(cur: Any, tenant_id: str, row: dict[str, str]) -> bool:
+def _import_row(cur: Any, tenant_id: str, row: dict[str, str], from_sheet: bool = False,
+                changes: Optional[dict[str, int]] = None) -> tuple[bool, Optional[str]]:
+    """Aplica una fila. Devuelve (era nuevo, aviso). Aviso: el stock de la planilla no se pudo
+    aplicar (queda por debajo de lo apartado); el resto de la fila sí se aplicó."""
+    changes = changes if changes is not None else {"prices": 0, "stock": 0}
     sku, name = row.get("sku", ""), row.get("nombre", "")
     if not sku or not name:
         raise ValueError("sku y nombre son obligatorios")
@@ -185,9 +216,26 @@ def _import_row(cur: Any, tenant_id: str, row: dict[str, str]) -> bool:
         current = inventory._offer_by_id(cur, tenant_id, item_id)
         if current is None or current["price"] is None or abs(current["price"] - price) > 0.005:
             _set_price(cur, tenant_id, item_id, price)
+            changes["prices"] += 1
+    warning = None
     if stock is not None:
-        _set_stock(cur, tenant_id, item_id, int(stock))
-    return bool(r["inserted"])
+        if not from_sheet:
+            _set_stock(cur, tenant_id, item_id, int(stock))
+            changes["stock"] += 1
+        else:
+            # Planilla: el número manda sólo si el dueño lo cambió desde la última lectura.
+            cur.execute("select sheet_stock from catalog_items where tenant_id = %s and id = %s", (tenant_id, item_id))
+            if cur.fetchone()["sheet_stock"] != int(stock):
+                try:
+                    with cur.connection.transaction():
+                        _set_stock(cur, tenant_id, item_id, int(stock))
+                        cur.execute("update catalog_items set sheet_stock = %s where tenant_id = %s and id = %s",
+                                    (int(stock), tenant_id, item_id))
+                    changes["stock"] += 1
+                except ValueError as exc:
+                    # Precio y datos ya se aplicaron; el stock se reintenta en la próxima lectura.
+                    warning = f"stock no aplicado: {exc}"
+    return bool(r["inserted"]), warning
 
 
 # --- Pedidos -------------------------------------------------------------------

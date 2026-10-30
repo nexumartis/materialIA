@@ -616,3 +616,14 @@ tbody td.num { white-space:nowrap; }
   .kpi:nth-child(n+3) { border-top:1px solid var(--border); }
   .selection-bar { bottom:8px; }
 }
+
+/* Planilla de Google */
+.sheet-sync { margin-bottom:16px; }
+.sheet-sync-head { display:flex; gap:10px; align-items:flex-start; }
+.sheet-sync-head svg { color:var(--positive); margin-top:2px; flex:none; }
+.sheet-url { flex:1 1 360px; }
+.sheet-sync form .note { flex-basis:100%; margin:0; }
+.sheet-status { font-size:var(--fs-small); }
+.sheet-status .pill { margin-left:0; }
+.sheet-errors summary { cursor:pointer; font-size:var(--fs-small); color:var(--negative); }
+.sheet-errors ul { margin:6px 0 0; padding-left:18px; font-size:var(--fs-small); color:var(--negative); }

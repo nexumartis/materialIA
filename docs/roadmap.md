@@ -106,7 +106,7 @@ integración.
 Detalle y justificación en [research/2026-10-30-competencia](research/2026-10-30-competencia.md).
 
 **Ahora (sin WhatsApp):**
-1. Google Sheets como catálogo vivo.
+1. ~~Google Sheets como catálogo vivo~~ (rama `feat/catalogo-google-sheets`, 30/10/2026; [spec](superpowers/specs/2026-10-30-catalogo-google-sheets-design.md), migración 0011).
 2. Variantes y atributos de producto.
 3. Envío por zona o código postal.
 4. Sustitutos y búsqueda mejorada.

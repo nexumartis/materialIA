@@ -172,6 +172,16 @@ export const api = {
       body: JSON.stringify({ csv }),
     }),
   orders: () => authed<Order[]>("/app/orders"),
+  // Catálogo desde Google Sheets (planilla pública, sincronizada cada 15 minutos).
+  catalogSheet: () => authed<{ sheet: CatalogSheet | null }>("/app/catalog/sheet"),
+  connectCatalogSheet: (url: string) =>
+    authed<{ sheet: CatalogSheet }>("/app/catalog/sheet", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  syncCatalogSheet: () => authed<{ sheet: CatalogSheet }>("/app/catalog/sheet/sync", { method: "POST" }),
+  disconnectCatalogSheet: () => authed<{ disconnected: boolean }>("/app/catalog/sheet", { method: "DELETE" }),
   // Bandeja: el dueño toma conversaciones, responde como persona y las devuelve al agente.
   inbox: (filter: InboxFilter) => authed<InboxItem[]>(`/app/inbox?filter=${filter}`),
   inboxConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}`),
@@ -380,6 +390,15 @@ export interface CatalogItem {
   active: boolean;
   image_url: string | null;
   specs: Record<string, unknown>;
+}
+
+export interface CatalogSheet {
+  url: string;
+  enabled: boolean;
+  last_synced_at: string | null;
+  last_status: "ok" | "error" | null;
+  last_result: (ImportResult & { missing?: { count: number; skus: string[] } }) | null;
+  last_error: string | null;
 }
 
 export interface ImportResult {
