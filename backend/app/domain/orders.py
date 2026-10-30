@@ -342,6 +342,20 @@ def _cancel_pending(cur: Any, tenant_id: str, order: dict[str, Any], reason: str
     )
 
 
+def cancel_pending(cur: Any, tenant_id: str, order_id: str, reason: str,
+                   conversation_id: Optional[str] = None) -> dict[str, Any]:
+    """Cancela un pedido que espera el pago y libera su stock apartado (cliente o dueño).
+    LookupError si no existe (o no es de esa conversación); ValueError si ya no está pendiente.
+    Un pago que llegue después sigue el camino de pago tardío (reaparta o pide revisión)."""
+    row = _fetch(cur, tenant_id, order_id, lock=True)
+    if row is None or (conversation_id is not None and str(row["conversation_id"]) != conversation_id):
+        raise LookupError("pedido inexistente")
+    if row["status"] != "PENDING_PAYMENT":
+        raise ValueError("sólo se puede cancelar un pedido que espera el pago")
+    _cancel_pending(cur, tenant_id, row, reason)
+    return _view(cur, _fetch(cur, tenant_id, order_id))
+
+
 def expire_reservations(limit: int = 100) -> int:
     """Libera el stock de pedidos impagos vencidos (todas las empresas).
 

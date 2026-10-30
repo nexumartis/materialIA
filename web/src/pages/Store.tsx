@@ -36,6 +36,7 @@ export function Store({ slug }: { slug: string }) {
         storageKey: `pv.tienda.${slug}.conversacion`,
         uploadDocument: (c, orderId, file) => api.uploadDocument(slug, c, orderId, file),
         receipt: (c, receiptId) => api.storeReceipt(slug, c, receiptId),
+        cancelOrder: (c, orderId) => api.storeCancelOrder(slug, c, orderId),
       },
     [info, slug],
   );

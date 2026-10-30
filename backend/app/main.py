@@ -597,6 +597,19 @@ def app_payment_document_reject(document_id: UUID, uid: str = Depends(current_ui
     return {"rejected": True}
 
 
+@app.post("/app/orders/{order_id}/cancel")
+def app_cancel_order(order_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            order = orders.cancel_pending(cur, tenant, str(order_id), "cancelado por el negocio")
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        opportunities._audit(cur, tenant, "order_cancelled", str(order_id), {"actor": uid, "by": "negocio"})
+        return order
+
+
 @app.post("/app/orders/{order_id}/confirm-transfer")
 def app_confirm_transfer(order_id: UUID, req: TransferConfirm, uid: str = Depends(current_uid)) -> dict:
     with user_tx(uid) as (_, tenant):
@@ -739,6 +752,24 @@ async def public_upload_document(slug: str, conversation_id: UUID, order_id: UUI
     except LookupError:
         raise HTTPException(status_code=404, detail="Pedido no encontrado.")
     return {"document": doc, "note": "Recibimos tu comprobante. El negocio lo revisa antes de confirmar el pago."}
+
+
+@app.post("/public/{slug}/conversations/{conversation_id}/orders/{order_id}/cancel")
+def public_cancel_order(slug: str, conversation_id: UUID, order_id: UUID,
+                        token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
+    """El comprador cancela SU pedido pendiente: libera el stock apartado en el momento."""
+    store = _store(slug)
+    tenant, conv = store["tenant_id"], str(conversation_id)
+    _owned(tenant, conv, token)
+    with tenant_tx(tenant) as cur:
+        try:
+            order = orders.cancel_pending(cur, tenant, str(order_id), "cancelado por el cliente", conv)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        opportunities._audit(cur, tenant, "order_cancelled", str(order_id), {"by": "cliente"})
+        return order
 
 
 def _receipt_pdf(receipt: dict | None) -> Response:

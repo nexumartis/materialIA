@@ -206,6 +206,7 @@ export const api = {
     }),
   paymentRegister: (month: string) =>
     authed<Blob>(`/app/payments/register.csv?month=${encodeURIComponent(month)}`, {}, "blob"),
+  cancelOrder: (orderId: string) => authed<Order>(`/app/orders/${orderId}/cancel`, { method: "POST" }),
   orderReceipt: (orderId: string) => authed<Blob>(`/app/orders/${orderId}/receipt.pdf`, {}, "blob"),
   advanceOrder: (id: string, status: string) =>
     authed<Order>(`/app/orders/${id}/status?status=${status}`, { method: "POST" }),
@@ -271,6 +272,11 @@ export const api = {
     request<{ document: BuyerDocument; note: string }>(
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/orders/${orderId}/documents`,
       { method: "POST", headers: { "content-type": file.type || "application/octet-stream", ...buyerHeader(ref) }, body: file },
+    ),
+  storeCancelOrder: (slug: string, ref: ConversationRef, orderId: string) =>
+    request<Order>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/orders/${orderId}/cancel`,
+      { method: "POST", headers: buyerHeader(ref) },
     ),
   storeReceipt: (slug: string, ref: ConversationRef, receiptId: string) =>
     request<Blob>(
