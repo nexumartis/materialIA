@@ -19,6 +19,8 @@ export function downloadTemplate() {
 }
 
 /** Catálogo del negocio: importación CSV y edición de precio, stock y estado. */
+const LOW_STOCK = 3;
+
 export function Catalog() {
   const [items, setItems] = useState<CatalogItem[] | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -85,6 +87,8 @@ export function Catalog() {
   }
 
   const active = items?.filter((it) => it.active) ?? [];
+  // Por agotarse: activos con precio fijo y pocas unidades disponibles (sin contar lo apartado).
+  const low = (it: CatalogItem) => it.active && it.pricing_mode === "fixed" && it.available > 0 && it.available <= LOW_STOCK;
   return (
     <div className="sheet">
       <PageHeader
@@ -139,7 +143,7 @@ export function Catalog() {
             { label: "Productos activos", value: active.length, hint: `de ${items.length} cargados` },
             { label: "Sin stock", value: active.filter((it) => it.pricing_mode === "fixed" && it.available <= 0).length,
               hint: "activos que no se pueden vender" },
-            { label: "Apartados por pedidos", value: items.reduce((n, it) => n + it.reserved, 0), hint: "unidades" },
+            { label: "Por agotarse", value: items.filter(low).length, hint: `${LOW_STOCK} o menos disponibles` },
             { label: "A pedido", value: items.filter((it) => it.pricing_mode !== "fixed").length, hint: "los cotiza una persona" },
           ]} />
           <div className="tablewrap">
@@ -198,6 +202,7 @@ export function Catalog() {
                         {!it.active ? <Badge tone="neu">Pausado</Badge>
                           : custom ? <Badge tone="info">A pedido</Badge>
                           : it.available <= 0 ? <Badge tone="neg">Sin stock</Badge>
+                          : low(it) ? <Badge tone="warn">Quedan {it.available}</Badge>
                           : <Badge tone="pos">Activo</Badge>}
                         {it.reserved > 0 && <Badge tone="warn">{it.reserved} apartadas</Badge>}
                       </td>
