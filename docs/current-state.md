@@ -39,7 +39,7 @@ T1–T4 entraron a `main` **sin** la revisión cruzada de Mati, porque Tomi merg
 
 ## Datos y entornos
 
-- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): según `supabase migration list --linked` del 29/10, tiene 0001–0005 y le faltan **0006–0010**. 0006 (privacidad del chat) ya estaba pendiente antes de este corte. Si la app corre contra la nube con el código actual, los pagos y comprobantes fallan. Aplicar requiere instrucción expresa.
+- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): **0001–0010 aplicadas el 29/10/2026** por instrucción expresa de Tomi (`supabase db push` por el pooler de sesión). Antes se revisó que no hubiera operaciones destructivas: sólo se recrean políticas y el check de `payments.provider`. La prueba en seco listó exactamente 0006–0010 y no había pagos que chocaran con el check nuevo. Verificado después: tablas y columnas nuevas presentes; datos intactos (4 negocios, 24 conversaciones); `app_user` sin acceso a `access_token_hash`. No se cargó el seed.
 - **Demo local de esta PC:** Supabase 54321/54322 con 0001–0010 (0004–0007 se registraron porque las tablas ya existían; sin reset), API 8077 y web 5173. El worker no corre solo: `python -m app.worker`.
 - **Antes de un piloto real:**
   - almacenamiento privado para los originales (hoy `bytea`) y una política de retención;
@@ -77,6 +77,8 @@ La bandeja (etapa 2) entró a `main` con el PR #19, y la nube tiene 0001–0010 
 
 ## Próximo paso
 
-Revisión de Mati de lo integrado sin su revisión: comprobantes, bandeja y asistente. Según el [roadmap](roadmap.md), lo que sigue es la etapa 3 (WhatsApp/Instagram), que requiere cambiar el alcance en `CLAUDE.md` con ambos socios y tener una cuenta de Meta Business. Hasta entonces, mejoras dentro del alcance: sugerencias del agente al humano en la bandeja, eventos salientes (outbox, etapa 4) o almacenamiento privado de comprobantes.
+Revisión de Mati de los PRs de comprobantes y de la bandeja. Después, según el [roadmap](roadmap.md): etapa 6 (asistente paso a paso, front) en paralelo, o etapa 3 (WhatsApp, que requiere cambiar el alcance en CLAUDE.md con ambos socios).
+
+  
 
 Historial: [estado previo](state-history-2026-10-28-before-comprobantes.md). Los conteos antiguos no validan este diff.
