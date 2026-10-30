@@ -7,7 +7,7 @@ const TEMPLATE =
   "CAN-001,Canilla de cocina monocomando negra,griferia,Mi Marca,89900,6,Pico alto giratorio,https://...,negro,cocina,monocomando,,si\n" +
   "INO-001,Inodoro largo blanco,sanitarios,Mi Marca,,,Se encarga a fábrica,,blanco,baño,,si,si\n";
 
-function downloadTemplate() {
+export function downloadTemplate() {
   const url = URL.createObjectURL(new Blob([TEMPLATE], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;

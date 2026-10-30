@@ -36,6 +36,7 @@ from .schemas import (
     MeResponse,
     OpportunitySummary,
     OpportunityUpdate,
+    AgentPreview,
     HumanReply,
     ProductSummary,
     TransferConfirm,
@@ -67,6 +68,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Error-Code"],   # código estructurado de error (p. ej. evals_failed)
 )
 
 
@@ -340,6 +342,17 @@ def app_agent_templates(uid: str = Depends(current_uid)) -> list[dict]:
     return [{"key": k, "label": t["label"]} for k, t in agent_profile.TEMPLATES.items()]
 
 
+@app.get("/app/agent-templates/{key}")
+def app_agent_template(key: str, uid: str = Depends(current_uid)) -> dict:
+    """Contenido de la plantilla de un rubro SIN aplicarla (el asistente la vuelca en su borrador).
+    No incluye envíos, horarios ni medios de pago: eso es del negocio, no del rubro."""
+    if key not in agent_profile.TEMPLATES:
+        raise HTTPException(status_code=404, detail="Rubro inexistente.")
+    with user_tx(uid) as (cur, tenant):
+        t = agent_profile.template_profile(key, _business_name(cur, tenant))
+    return {k: t[k] for k in ("business_type", "seller_name", "tone", "greeting", "faq", "rules")}
+
+
 @app.get("/app/agent-profile")
 def app_get_profile(uid: str = Depends(current_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
@@ -367,7 +380,7 @@ def app_put_profile(body: dict = Body(...), uid: str = Depends(current_uid)) -> 
             if cases:
                 result = evals.run(tenant, cases, {**agent_profile._get(cur, tenant), **changes})
                 if result["passed"] < result["total"]:
-                    raise HTTPException(status_code=409, detail=(
+                    raise HTTPException(status_code=409, headers={"X-Error-Code": "evals_failed"}, detail=(
                         f"No se guardó: {result['total'] - result['passed']} de {result['total']} pruebas "
                         "fallaron. Revisalas con «Probar» o guardá igual."))
         # El link es único entre TODOS los negocios; bajo RLS no se ven los ajenos, así que lo
@@ -772,6 +785,31 @@ def _draft_profile(cur, tenant: str, draft: dict) -> dict:
         return {**current, **agent_profile.validate(draft or {})}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/agent-preview")
+def app_agent_preview(req: AgentPreview, uid: str = Depends(current_uid)) -> dict:
+    """Un mensaje de la vista previa del asistente: el agente responde con el perfil BORRADOR, sin
+    guardarlo, en una conversación de prueba (sin pedidos, stock ni cobros) que se borra al reiniciar
+    o la limpia el worker."""
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Escribí un mensaje.")
+    with user_tx(uid) as (cur, tenant):
+        profile = _draft_profile(cur, tenant, req.profile) if req.profile else None
+    try:
+        return evals.preview_turn(tenant, req.message, str(req.conversation_id) if req.conversation_id else None,
+                                  profile)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Vista previa no encontrada.")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.delete("/app/agent-preview/{conversation_id}")
+def app_agent_preview_end(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (_, tenant):
+        pass
+    return {"deleted": evals.end_preview(tenant, str(conversation_id))}
 
 
 @app.post("/app/agent-evals/run")

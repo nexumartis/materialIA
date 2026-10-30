@@ -27,7 +27,7 @@ export function Signup() {
             data: { business_name: business_name.trim() },
             // El link del correo de confirmación vuelve a este panel (debe estar en las
             // Redirect URLs permitidas del proyecto; si no, Supabase usa el Site URL).
-            emailRedirectTo: `${window.location.origin}/#/oportunidades`,
+            emailRedirectTo: `${window.location.origin}/#/asistente`,
           },
         });
         if (error) throw new Error(authErrorMessage(error.message));
@@ -35,7 +35,8 @@ export function Signup() {
           // Proyecto con confirmación de email: no hay sesión hasta confirmar.
           return "Te enviamos un correo para confirmar la cuenta. Después iniciá sesión.";
         }
-        window.location.hash = "#/oportunidades";
+        // Un negocio nuevo arranca por el asistente para crear su agente.
+        window.location.hash = "#/asistente";
       }}
       footer={
         <>

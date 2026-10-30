@@ -3,7 +3,7 @@ import type { Health } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "catalogo" | "agente" | "venta" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -17,6 +17,7 @@ const TITLES: Record<Section, string> = {
   pedidos: "Pedidos",
   catalogo: "Catálogo",
   agente: "Mi agente",
+  asistente: "Crear mi agente",
   venta: "Demo del agente",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
@@ -128,9 +129,9 @@ export function Shell({ health, active, children }: Props) {
               <IconDoc /> Catálogo
             </a>
             <a
-              className={active === "agente" ? "active" : ""}
+              className={active === "agente" || active === "asistente" ? "active" : ""}
               href="#/agente"
-              aria-current={active === "agente" ? "page" : undefined}
+              aria-current={active === "agente" || active === "asistente" ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               <IconChat /> Mi agente

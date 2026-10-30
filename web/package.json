@@ -9,7 +9,8 @@
     "preview": "vite preview --port 4173",
     "e2e": "node e2e/chat-publico.mjs",
     "e2e:comprobantes": "node e2e/comprobantes.mjs",
-    "e2e:bandeja": "node e2e/bandeja.mjs"
+    "e2e:bandeja": "node e2e/bandeja.mjs",
+    "e2e:asistente": "node e2e/asistente.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",

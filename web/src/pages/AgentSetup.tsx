@@ -40,7 +40,7 @@ export function AgentSetup() {
       setMsg({ ok: true, text: okText });
     } catch (e) {
       // 409 con pruebas: la versión no se activó; se puede revisar o guardar igual.
-      setBlocked(e instanceof ApiError && e.status === 409 && e.message.includes("pruebas"));
+      setBlocked(e instanceof ApiError && e.code === "evals_failed");
       setMsg({ ok: false, text: e instanceof ApiError ? e.message : "No pude guardar." });
     } finally {
       setSaving(false);
@@ -59,6 +59,7 @@ export function AgentSetup() {
           <h1>Mi agente</h1>
           <p className="finding">Cómo se presenta y qué responde tu vendedor virtual. Precios y stock salen del catálogo.</p>
         </div>
+        <div className="right"><a className="btn sm primary" href="#/asistente">Asistente paso a paso</a></div>
       </div>
 
       <form

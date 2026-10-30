@@ -98,6 +98,16 @@ class TransferConfirm(BaseModel):
     document_ids: list[UUID] = Field(default_factory=list, max_length=20)
 
 
+MAX_PREVIEW_MESSAGES = 12
+
+
+class AgentPreview(BaseModel):
+    """Un mensaje de la vista previa del asistente con el perfil borrador (sin guardarlo)."""
+    message: str = Field(min_length=1, max_length=1000)
+    conversation_id: Optional[UUID] = None
+    profile: Optional[dict[str, Any]] = None
+
+
 MAX_HUMAN_REPLY = 2000
 
 

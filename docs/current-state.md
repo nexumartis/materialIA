@@ -62,8 +62,23 @@ Rama `feat/bandeja-humana`; [spec](superpowers/specs/2026-10-29-bandeja-humana-d
 
 **Entorno:** las corridas completas de pytest tardan a veces más de 10 minutos de reloj, aunque pytest mide 22–42 s; un volcado de `faulthandler` no mostró ningún test colgado. Además, un `python -m app.worker` que queda corriendo contra la base de pytest compite con los tests: frenarlo al terminar un e2e (`pkill -f app.worker`).
 
+## Entrega en curso: asistente paso a paso (roadmap etapa 6)
+
+Rama `feat/asistente-agente`; [spec](superpowers/specs/2026-10-29-asistente-agente-design.md) y [revisión](reviews/2026-10-29-asistente.md).
+
+- **Asistente en `#/asistente`:** 8 pasos con progreso. Un registro nuevo entra directo, y «Mi agente» queda como ajustes, con un botón para abrir el asistente.
+- **Borrador:** el perfil se guarda una sola vez, al publicar.
+- **Vista previa:** con el borrador, sin pedidos ni stock, y avisa cuando responde sin IA.
+- **Sin migraciones.**
+- **Revisión** en contexto fresco: 10 hallazgos, todos corregidos.
+- **Evidencia (29/10):** backend **344 passed**; `e2e:asistente` **15/15**, `e2e:bandeja` **11/11**, `e2e:comprobantes` **17/17**, `e2e` **36/0**.
+
+La bandeja (etapa 2) entró a `main` con el PR #19, y la nube tiene 0001–0010 desde el 29/10.
+
 ## Próximo paso
 
 Revisión de Mati de los PRs de comprobantes y de la bandeja. Después, según el [roadmap](roadmap.md): etapa 6 (asistente paso a paso, front) en paralelo, o etapa 3 (WhatsApp, que requiere cambiar el alcance en CLAUDE.md con ambos socios).
+
+  
 
 Historial: [estado previo](state-history-2026-10-28-before-comprobantes.md). Los conteos antiguos no validan este diff.
