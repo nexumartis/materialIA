@@ -350,7 +350,10 @@ export interface AgentProfile {
 /** Reglas que hace cumplir el código (no el modelo). */
 export interface Policies {
   min_order_total?: number;
-  delivery_zones?: string[];
+  /** Lista guardada o, mientras se edita, el texto «CABA: 5000, Rosario» (lo interpreta el servidor). */
+  delivery_zones?: string[] | string;
+  /** Costo de envío por zona, cargado por el negocio. */
+  shipping_costs?: Record<string, number>;
   human_only_categories?: string[];
 }
 
