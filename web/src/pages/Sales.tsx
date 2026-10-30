@@ -188,6 +188,7 @@ export interface ChatSource {
   /** Tienda pública: el comprador adjunta su comprobante y baja su constancia. */
   uploadDocument?: (ref: ConversationRef, orderId: string, file: File) => Promise<unknown>;
   receipt?: (ref: ConversationRef, receiptId: string) => Promise<Blob>;
+  cancelOrder?: (ref: ConversationRef, orderId: string) => Promise<Order>;
 }
 
 const DOC_STATUS: Record<BuyerDocument["status"], string> = {
@@ -342,6 +343,18 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       setFileNote(e instanceof ApiError ? e.message : "No pude subir el comprobante.");
     } finally {
       setUploading(null);
+    }
+  }
+
+  async function cancel(o: Order) {
+    if (!conv || !source.cancelOrder) return;
+    if (!window.confirm(`¿Cancelar el pedido #${o.number}? Se libera lo que te habíamos apartado.`)) return;
+    try {
+      const updated = await source.cancelOrder(conv, o.id);
+      setOrders((list) => list.map((x) => (x.id === o.id ? updated : x)));
+      setFileNote(`Cancelaste el pedido #${o.number}.`);
+    } catch (e) {
+      setFileNote(e instanceof ApiError ? e.message : "No pude cancelar el pedido.");
     }
   }
 
@@ -555,6 +568,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                         <button className="btn sm" type="button" onClick={() => void downloadReceipt(o.receipt_id!, o.number)}>
                           Constancia (PDF)
                         </button>
+                      )}
+                      {source.cancelOrder && o.status === "PENDING_PAYMENT" && (
+                        <button className="btn sm ghost" type="button" onClick={() => void cancel(o)}>Cancelar pedido</button>
                       )}
                       {source.uploadDocument && (o.status === "PENDING_PAYMENT" || o.status === "CANCELLED") && (
                         <label className={`btn sm${uploading === o.id ? " disabled" : ""}`}>

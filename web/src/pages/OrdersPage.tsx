@@ -151,6 +151,18 @@ export function OrdersPage() {
                             <FileText size={14} strokeWidth={1.8} aria-hidden /> Constancia (PDF)
                           </button>
                         )}
+                        {o.status === "PENDING_PAYMENT" && (
+                          <button className="btn sm ghost" type="button"
+                            onClick={() => {
+                              if (!window.confirm(`¿Cancelar el pedido #${o.number}? Se libera el stock apartado.`)) return;
+                              void run(async () => {
+                                const updated = await api.cancelOrder(o.id);
+                                setList((l) => l?.map((x) => (x.id === o.id ? updated : x)) ?? null);
+                              }, "No pude cancelar el pedido.");
+                            }}>
+                            Cancelar
+                          </button>
+                        )}
                         {canConfirm(o) && confirming !== o.id && (
                           <button className="btn sm" type="button" onClick={() => setConfirming(o.id)}>
                             <Landmark size={14} strokeWidth={1.8} aria-hidden /> Confirmar transferencia
