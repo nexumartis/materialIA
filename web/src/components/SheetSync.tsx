@@ -86,6 +86,11 @@ export function SheetSync({ onSynced }: { onSynced?: () => void }) {
             )}
           </div>
           {sheet.last_status === "error" && sheet.last_error && <div className="state err">{sheet.last_error}</div>}
+          <p className="note">
+            Con la planilla conectada, <b>los precios se editan en la planilla</b>: un precio cambiado en la tabla de
+            abajo se reemplaza en la próxima sincronización. El stock que cambies acá se respeta hasta que cambies ese
+            número en la planilla.
+          </p>
           {sheet.last_status === "ok" && result && result.errors.length > 0 && (
             <details className="sheet-errors">
               <summary>{result.errors.length} {result.errors.length === 1 ? "fila con error" : "filas con error"}</summary>
