@@ -96,3 +96,11 @@ class TransferConfirm(BaseModel):
     amount: float = Field(gt=0)
     currency: str = Field(default="ARS", min_length=3, max_length=3)
     document_ids: list[UUID] = Field(default_factory=list, max_length=20)
+
+
+MAX_HUMAN_REPLY = 2000
+
+
+class HumanReply(BaseModel):
+    """Mensaje de una persona del negocio en una conversación de la bandeja."""
+    text: str = Field(min_length=1, max_length=MAX_HUMAN_REPLY)

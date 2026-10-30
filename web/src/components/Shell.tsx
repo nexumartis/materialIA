@@ -3,7 +3,7 @@ import type { Health } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "pedidos" | "catalogo" | "agente" | "venta" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "catalogo" | "agente" | "venta" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -13,6 +13,7 @@ interface Props {
 
 const TITLES: Record<Section, string> = {
   oportunidades: "Oportunidades",
+  conversaciones: "Conversaciones",
   pedidos: "Pedidos",
   catalogo: "Catálogo",
   agente: "Mi agente",
@@ -101,6 +102,14 @@ export function Shell({ health, active, children }: Props) {
               onClick={() => setOpen(false)}
             >
               <IconList /> Oportunidades
+            </a>
+            <a
+              className={active === "conversaciones" ? "active" : ""}
+              href="#/conversaciones"
+              aria-current={active === "conversaciones" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <IconChat /> Conversaciones
             </a>
             <a
               className={active === "pedidos" ? "active" : ""}

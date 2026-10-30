@@ -102,11 +102,15 @@ def _buyer_view(cur: Any, tenant_id: str, doc_id: str) -> dict[str, Any]:
 
 def for_conversation(tenant_id: str, conversation_id: str) -> list[dict[str, Any]]:
     with tenant_tx(tenant_id) as cur:
-        cur.execute(f"select {_BUYER_COLUMNS} from payment_documents d join orders o "
-                    "on o.tenant_id = d.tenant_id and o.id = d.order_id "
-                    "where d.tenant_id = %s and d.conversation_id = %s order by d.received_at",
-                    (tenant_id, conversation_id))
-        return [_buyer_row(r) for r in cur.fetchall()]
+        return _for_conversation(cur, tenant_id, conversation_id)
+
+
+def _for_conversation(cur: Any, tenant_id: str, conversation_id: str) -> list[dict[str, Any]]:
+    cur.execute(f"select {_BUYER_COLUMNS} from payment_documents d join orders o "
+                "on o.tenant_id = d.tenant_id and o.id = d.order_id "
+                "where d.tenant_id = %s and d.conversation_id = %s order by d.received_at",
+                (tenant_id, conversation_id))
+    return [_buyer_row(r) for r in cur.fetchall()]
 
 
 # --- Lectura en segundo plano (worker) ---------------------------------------------

@@ -31,7 +31,9 @@ integración.
    (no aplicadas en la nube). Decisiones en
    [decisions/2026-10-29](decisions/2026-10-29-comprobantes-implementacion.md). Antes de un piloto
    real: almacenamiento privado de originales y retención.
-2. **Bandeja y toma de control humana**: ver todas las conversaciones, filtros (derivadas, con
+2. **Bandeja y toma de control humana** (primer corte en la rama `feat/bandeja-humana`, 29/10/2026;
+   [spec](superpowers/specs/2026-10-29-bandeja-humana-design.md); las sugerencias del agente quedan
+   para un corte siguiente): ver todas las conversaciones, filtros (derivadas, con
    pedido, sin responder), **tomar el control** (el agente se pausa en esa conversación),
    responder, devolverla al agente. El agente sugiere respuestas al humano. Base para WhatsApp.
 3. **WhatsApp e Instagram** (requiere cambiar el alcance en CLAUDE.md con ambos socios y cuenta de

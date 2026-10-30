@@ -116,12 +116,16 @@ def get_cart(tenant_id: str, conversation_id: str) -> Optional[dict[str, Any]]:
 def conversation_orders(tenant_id: str, conversation_id: str, limit: int = 5) -> list[dict[str, Any]]:
     """Pedidos ya confirmados (no carritos) de la conversación, el más reciente primero."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute(
-            f"select {_ORDER_COLUMNS} from orders where tenant_id = %s and conversation_id = %s "
-            "and status <> 'CART_OPEN' order by created_at desc limit %s",
-            (tenant_id, conversation_id, limit),
-        )
-        return [_view(cur, r) for r in cur.fetchall()]
+        return _conversation_orders(cur, tenant_id, conversation_id, limit)
+
+
+def _conversation_orders(cur: Any, tenant_id: str, conversation_id: str, limit: int = 5) -> list[dict[str, Any]]:
+    cur.execute(
+        f"select {_ORDER_COLUMNS} from orders where tenant_id = %s and conversation_id = %s "
+        "and status <> 'CART_OPEN' order by created_at desc limit %s",
+        (tenant_id, conversation_id, limit),
+    )
+    return [_view(cur, r) for r in cur.fetchall()]
 
 
 # --- Carrito ------------------------------------------------------------------

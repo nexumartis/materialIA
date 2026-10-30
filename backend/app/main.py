@@ -25,8 +25,8 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, backoffice, catalog, customer_memory, evals, knowledge, opportunities, orders,
-                     receipts)
+from .domain import (agent_profile, backoffice, catalog, customer_memory, evals, inbox, knowledge, opportunities,
+                     orders, receipts)
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
 from .schemas import (
@@ -36,6 +36,7 @@ from .schemas import (
     MeResponse,
     OpportunitySummary,
     OpportunityUpdate,
+    HumanReply,
     ProductSummary,
     TransferConfirm,
 )
@@ -179,6 +180,7 @@ def sales_conversation(conversation_id: UUID, company: str = Query("C")) -> dict
         "messages": opportunities.conversation_messages(tenant, conv),
         "cart": orders.get_cart(tenant, conv),
         "orders": orders.conversation_orders(tenant, conv),
+        "attended_by_human": inbox.is_taken(tenant, conv),
     }
 
 
@@ -462,6 +464,58 @@ def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depend
         return order
 
 
+# --- Panel: bandeja de conversaciones y toma de control humana ----------------------
+@app.get("/app/inbox")
+def app_inbox(filter: str = Query("todas", description="todas | derivadas | con_pedido | sin_responder | mias"),
+              uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        try:
+            return inbox.list_conversations(cur, tenant, uid, filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/app/inbox/{conversation_id}")
+def app_inbox_detail(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        found = inbox.detail(cur, tenant, uid, str(conversation_id))
+    if found is None:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+    return found
+
+
+def _inbox_action(conversation_id: UUID, uid: str, action) -> dict:
+    conv = str(conversation_id)
+    try:
+        with user_tx(uid) as (cur, tenant):
+            if not action(cur, tenant, uid, conv):
+                raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+    except inbox.TakenByOther as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    # Tomar o devolver invalida lo que el agente dejó pendiente (oferta, compra por confirmar).
+    inbox.forget_pending_turn(tenant, conv)
+    with user_tx(uid) as (cur, tenant):
+        return inbox.detail(cur, tenant, uid, conv)
+
+
+@app.post("/app/inbox/{conversation_id}/take")
+def app_inbox_take(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    return _inbox_action(conversation_id, uid, inbox.take)
+
+
+@app.post("/app/inbox/{conversation_id}/release")
+def app_inbox_release(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    return _inbox_action(conversation_id, uid, inbox.release)
+
+
+@app.post("/app/inbox/{conversation_id}/reply")
+def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(current_uid)) -> dict:
+    try:
+        return _inbox_action(conversation_id, uid, lambda cur, t, u, c: inbox.reply(cur, t, u, c, req.text))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # --- Panel: comprobantes, transferencias y registro mensual --------------------------
 # El dueño revisa los archivos y acredita sólo lo que cotejó en su banco (confirm_transfer).
 @app.get("/app/payment-documents")
@@ -605,7 +659,8 @@ def public_conversation(slug: str, conversation_id: UUID,
     return {"messages": opportunities.conversation_messages(store["tenant_id"], conv),
             "cart": orders.get_cart(store["tenant_id"], conv),
             "orders": orders.conversation_orders(store["tenant_id"], conv),
-            "documents": documents.for_conversation(store["tenant_id"], conv)}
+            "documents": documents.for_conversation(store["tenant_id"], conv),
+            "attended_by_human": inbox.is_taken(store["tenant_id"], conv)}
 
 
 @app.post("/public/{slug}/conversations/{conversation_id}/orders/{order_id}/documents")

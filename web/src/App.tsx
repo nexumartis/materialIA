@@ -8,6 +8,7 @@ import { Store } from "./pages/Store";
 import { AgentSetup } from "./pages/AgentSetup";
 import { Catalog } from "./pages/Catalog";
 import { OrdersPage } from "./pages/OrdersPage";
+import { Inbox } from "./pages/Inbox";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -27,6 +28,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/agente") return "agente";
   if (hash === "#/catalogo") return "catalogo";
   if (hash === "#/pedidos") return "pedidos";
+  if (hash === "#/conversaciones") return "conversaciones";
   if (hash === "#/login") return "login";
   if (hash === "#/signup") return "signup";
   return "oportunidades";
@@ -118,6 +120,7 @@ function Panel({ active }: { active: Section }) {
   if (active === "agente") return <AgentSetup />;
   if (active === "catalogo") return <Catalog />;
   if (active === "pedidos") return <OrdersPage />;
+  if (active === "conversaciones") return <Inbox />;
   return <Opportunities />;
 }
 

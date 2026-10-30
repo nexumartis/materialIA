@@ -171,6 +171,17 @@ export const api = {
       body: JSON.stringify({ csv }),
     }),
   orders: () => authed<Order[]>("/app/orders"),
+  // Bandeja: el dueño toma conversaciones, responde como persona y las devuelve al agente.
+  inbox: (filter: InboxFilter) => authed<InboxItem[]>(`/app/inbox?filter=${filter}`),
+  inboxConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}`),
+  takeConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}/take`, { method: "POST" }),
+  releaseConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}/release`, { method: "POST" }),
+  replyConversation: (id: string, text: string) =>
+    authed<InboxConversation>(`/app/inbox/${id}/reply`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
   // Comprobantes: el dueño revisa los archivos y acredita sólo lo que cotejó en su banco.
   paymentDocuments: (month: string) =>
     authed<PaymentDocument[]>(`/app/payment-documents?month=${encodeURIComponent(month)}`),
@@ -431,6 +442,36 @@ export interface PaymentDocument {
   received_at: string;
 }
 
+export type InboxFilter = "todas" | "derivadas" | "sin_responder" | "con_pedido" | "mias";
+
+export interface InboxItem {
+  id: string;
+  channel: string;
+  needs_human: boolean;
+  /** "asked": el cliente pidió una persona; "quote": a medida, sin precio o precio vencido. */
+  needs_human_reason: "asked" | "quote" | null;
+  taken: boolean;
+  taken_by_me: boolean;
+  unanswered: boolean;
+  last_message: string;
+  last_at: string;
+  last_order: number | null;
+}
+
+export interface InboxConversation {
+  id: string;
+  channel: string;
+  created_at: string;
+  needs_human: boolean;
+  needs_human_reason: InboxItem["needs_human_reason"];
+  taken: boolean;
+  taken_by_me: boolean;
+  messages: { author: "cliente" | "agente" | "persona"; content: string; at: string }[];
+  cart: Order | null;
+  orders: Order[];
+  documents: BuyerDocument[];
+}
+
 export interface TransferConfirm {
   reference: string;
   amount: number;
@@ -486,6 +527,8 @@ export interface SalesConversation {
   orders: Order[];
   /** Sólo tienda pública. */
   documents?: BuyerDocument[];
+  /** Una persona del negocio tomó la conversación: el agente no responde. */
+  attended_by_human?: boolean;
 }
 
 export { ApiError };

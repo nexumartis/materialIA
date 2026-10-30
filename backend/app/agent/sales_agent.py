@@ -346,18 +346,35 @@ def _filters(text: str) -> dict[str, Any]:
 
 
 # --- Estado de la conversación ------------------------------------------------------
-def _load_state(tenant_id: str, conversation_id: str) -> dict[str, Any]:
+def _load_state(tenant_id: str, conversation_id: str) -> tuple[dict[str, Any], bool]:
+    """Estado del agente y si una persona del negocio tomó la conversación (bandeja)."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute("select agent_state from conversations where tenant_id = %s and id = %s",
+        cur.execute("select agent_state, taken_by from conversations where tenant_id = %s and id = %s",
                     (tenant_id, conversation_id))
         row = cur.fetchone()
-    return dict(row["agent_state"] or {}) if row else {}
+    return (dict(row["agent_state"] or {}) if row else {}), bool(row and row["taken_by"])
 
 
-def _save_state(tenant_id: str, conversation_id: str, state: dict[str, Any]) -> None:
+def _finish_turn(tenant_id: str, conversation_id: str, state: dict[str, Any], reply: str,
+                 ui: Optional[dict[str, Any]], profile_version: Optional[int], handoff: Optional[str]) -> bool:
+    """Cierra el turno en UNA transacción con la conversación bloqueada: estado, derivación y
+    respuesta. Si una persona tomó la conversación mientras el agente pensaba, no se guarda nada
+    (el agente no habla encima de una persona). `handoff`: 'asked' | 'quote' | None."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute("update conversations set agent_state = %s::jsonb where tenant_id = %s and id = %s",
-                    (json.dumps(state), tenant_id, conversation_id))
+        cur.execute("select taken_by from conversations where tenant_id = %s and id = %s for update",
+                    (tenant_id, conversation_id))
+        row = cur.fetchone()
+        if row and row["taken_by"]:
+            return False
+        cur.execute(
+            "update conversations set agent_state = %(state)s::jsonb, "
+            "needs_human_at = case when %(why)s::text is null then needs_human_at else coalesce(needs_human_at, now()) end, "
+            "needs_human_reason = case when %(why)s::text = 'asked' then 'asked' "
+            "else coalesce(needs_human_reason, %(why)s::text) end "
+            "where tenant_id = %(tenant)s and id = %(conv)s",
+            {"state": json.dumps(state), "why": handoff, "tenant": tenant_id, "conv": conversation_id})
+        opportunities._add_message(cur, tenant_id, conversation_id, "outbound", reply, ui or None, profile_version)
+    return True
 
 
 # --- Agente ----------------------------------------------------------------------
@@ -369,6 +386,7 @@ class _Turn:
         self.products: list[dict[str, Any]] = []
         self.payment: Optional[dict[str, Any]] = None
         self.requires_human = False
+        self.asked_for_person = False     # derivó porque el cliente pidió una persona (no por cotización)
         self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
         self.offer: Optional[dict[str, Any]] = None   # propuesta de agregar del turno anterior
@@ -1169,16 +1187,17 @@ class _Turn:
         return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
     def handoff(self, again: bool = False) -> str:
-        """Pide una persona: queda registrado en oportunidades (lo que ve el equipo en el panel).
-        No hay bandeja ni aviso automático todavía: no se promete canal ni plazo."""
+        """Pide una persona: queda en la bandeja del panel («derivadas») y en oportunidades. El equipo
+        puede responder en este mismo chat; no hay aviso por otro medio: no se promete canal ni plazo."""
         self.requires_human = True
+        self.asked_for_person = True
         self.state["handoff"] = True
         hours = (f" Horario de atención: {self.profile['hours'].rstrip('. ')}." if self.profile.get("hours")
                  else "")
         if again:
             self.tool("derivar_persona", "ya registrada")
-            return ("Tu pedido para hablar con una persona ya quedó registrado para el equipo del negocio. "
-                    "Desde este chat no tengo forma de avisarte por otro medio ni de darte un plazo."
+            return ("Tu pedido para hablar con una persona ya está en la bandeja del equipo del negocio: pueden "
+                    "responderte en este mismo chat. No tengo forma de avisarte por otro medio ni de darte un plazo."
                     + hours + " Si querés, seguí contándome qué necesitás y te ayudo con productos, precios y stock.")
         if not self.dry_run:
             req = dict(opportunities.get_conversation_requirements(self.tenant, self.conv))
@@ -1189,9 +1208,9 @@ class _Turn:
                 requires_human_quote=True, estimated_amount=cart["total"] if cart and cart["items"] else None))
             opportunities.log_activity(self.tenant, opp.id, "derivacion", "el cliente pidió hablar con una persona")
         self.tool("derivar_persona", "registrada en oportunidades")
-        return ("Listo, dejé registrado para el equipo del negocio que querés hablar con una persona." + hours
-                + " Desde este chat no puedo avisarte por otro medio ni darte un plazo. Mientras tanto, si "
-                  "querés, te sigo ayudando con productos, precios y stock.")
+        return ("Listo, le dejé al equipo del negocio tu pedido de hablar con una persona: lo ven en su bandeja y "
+                "pueden responderte en este mismo chat." + hours + " No puedo avisarte por otro medio ni darte un "
+                "plazo. Mientras tanto, si querés, te sigo ayudando con productos, precios y stock.")
 
     # -- CRM --
     def _lead_for_order(self, order: dict[str, Any]) -> None:
@@ -1283,6 +1302,13 @@ def _rules_reply(turn: _Turn, text: str) -> str:
     return reply
 
 
+def _human_hold(tenant_id: str, conversation_id: str) -> SalesReply:
+    """Una persona del negocio tiene la conversación: el agente no responde (bandeja)."""
+    return SalesReply(reply="", conversation_id=conversation_id, mode="human", requires_human=True,
+                      cart=orders.get_cart(tenant_id, conversation_id),
+                      orders=orders.conversation_orders(tenant_id, conversation_id), ui={"type": "human_hold"})
+
+
 def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional[str] = None,
                          planner: Optional[Any] = None, profile_override: Optional[dict[str, Any]] = None,
                          channel: str = "web_sandbox") -> SalesReply:
@@ -1292,7 +1318,9 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
 
     conv = opportunities.ensure_conversation(tenant_id, conversation_id, channel)
     opportunities.add_message(tenant_id, conv, "inbound", message)
-    state = _load_state(tenant_id, conv)
+    state, taken = _load_state(tenant_id, conv)
+    if taken and channel != "eval":
+        return _human_hold(tenant_id, conv)
     turn = _Turn(ToolContext(tenant_id=tenant_id, conversation_id=conv), state)
     if profile_override is not None:      # evaluaciones: borrador del perfil sin guardarlo
         turn._profile = profile_override
@@ -1317,10 +1345,11 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
 
     if turn.requires_human:
         state.pop("offer", None)          # "dale" después de derivar no es una compra
-    _save_state(tenant_id, conv, state)
     ui = _ui(turn)
-    opportunities.add_message(tenant_id, conv, "outbound", reply, ui or None,
-                              profile_version=turn.profile.get("version"))
+    # Aparece en «derivadas» de la bandeja: 'asked' si pidió una persona; si no, por cotización.
+    why = None if turn.dry_run or not turn.requires_human else ("asked" if turn.asked_for_person else "quote")
+    if not _finish_turn(tenant_id, conv, state, reply, ui, turn.profile.get("version"), why):
+        return _human_hold(tenant_id, conv)
     return SalesReply(
         reply=reply, conversation_id=conv, mode=mode, requires_human=turn.requires_human,
         cart=orders.get_cart(tenant_id, conv), orders=orders.conversation_orders(tenant_id, conv),
