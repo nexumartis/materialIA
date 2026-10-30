@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, customer_memory, inventory, knowledge, opportunities, orders
+from ..domain import agent_profile, ai_usage, customer_memory, inventory, knowledge, opportunities, orders
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -1338,7 +1338,8 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     if reply is None:
         planner = planner or llm_sales.default_planner()
         if planner is not None:
-            reply = llm_sales.run(turn, message, conv, planner)
+            with ai_usage.for_tenant(tenant_id, "venta"):
+                reply = llm_sales.run(turn, message, conv, planner)
             mode = "live" if reply is not None and turn.model_answered else "mock"
         if reply is None:
             reply = _rules_reply(turn, text)

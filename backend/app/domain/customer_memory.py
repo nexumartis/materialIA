@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 from ..config import settings
 from ..db import system_tx, tenant_tx
-from . import orders
+from . import ai_usage, orders
 
 MAX_FACTS = 8
 FACT_CHARS = 120
@@ -187,8 +187,9 @@ def _refresh_locked(cur: Any, tenant_id: str, customer_id: str, model: Any, llm_
     until = msgs[-1]["created_at"]
     transcript = "\n".join(("Cliente: " if m["direction"] == "inbound" else "Vendedor: ") + m["content"][:400]
                            for m in msgs)
-    data = llm_tasks.ask_json(_EXTRACT, f"Hechos previos: {json.dumps(previous, ensure_ascii=False)}\n\n"
-                                        f"Conversación nueva:\n{transcript}", model)
+    with ai_usage.for_tenant(tenant_id, "memoria"):
+        data = llm_tasks.ask_json(_EXTRACT, f"Hechos previos: {json.dumps(previous, ensure_ascii=False)}\n\n"
+                                            f"Conversación nueva:\n{transcript}", model)
     new_facts = sanitize(data.get("facts")) if data else _deterministic(previous, convs, history(tenant_id, customer_id))
     cur.execute(
         "insert into customer_memory (customer_id, tenant_id, facts, processed_until, updated_at) "
