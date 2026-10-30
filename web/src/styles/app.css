@@ -643,3 +643,10 @@ tbody td.num { white-space:nowrap; }
 /* Contador de derivaciones sin atender en el menú */
 .nav-count { margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:9px; display:inline-grid;
   place-items:center; font-size:var(--fs-label); font-weight:600; background:var(--accent-ink); color:#fff; }
+
+/* Login y registro sin el panel */
+.auth-page { min-height:100vh; display:grid; place-items:center; padding:24px 16px; background:var(--chrome); }
+.auth-card { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sheet); padding:24px 28px 8px; }
+.auth-brand { display:flex; align-items:center; gap:10px; font-size:14px; padding-bottom:4px; }
+.auth-card .auth { padding-top:12px; }

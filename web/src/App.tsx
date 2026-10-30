@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Health } from "./lib/api";
 import { useSession } from "./lib/session";
+import { Mark } from "./components/Mark";
 import { Shell, type Section } from "./components/Shell";
 import { Opportunities } from "./pages/Opportunities";
 import { Sales } from "./pages/Sales";
@@ -71,6 +72,18 @@ function Backoffice({ hash }: { hash: string }) {
       window.location.hash = "#/oportunidades";
     }
   }, [status, active]);
+
+  // Sin sesión, login y registro se muestran solos (sin el menú del panel, que no se puede usar).
+  if (status === "signed_out" && active !== "venta") {
+    return (
+      <main className="auth-page">
+        <div className="auth-card">
+          <div className="auth-brand"><Mark /> <b>Presupuesto Vivo</b></div>
+          {active === "signup" ? <Signup /> : <Login />}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <Shell health={health} active={active}>
