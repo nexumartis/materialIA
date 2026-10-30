@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bot } from "lucide-react";
 import { ApiError, api, type AgentProfile } from "../lib/api";
-import { EvalsSection, KnowledgeSection, PoliciesSection, ToolsSection, VersionsSection } from "./AgentAdvanced";
+import { AiUsageSection, EvalsSection, KnowledgeSection, PoliciesSection, ToolsSection, VersionsSection } from "./AgentAdvanced";
 
 const TONES: { key: AgentProfile["tone"]; label: string }[] = [
   { key: "cercano", label: "Cercano (vos, cálido)" },
@@ -178,6 +178,7 @@ export function AgentSetup() {
       <div className="setup" style={{ marginTop: 16 }}>
         <KnowledgeSection />
         <EvalsSection draft={formBody} />
+        <AiUsageSection />
         <VersionsSection current={p.version} onRestored={(np) => { setP(np); setMsg({ ok: true, text: `Restaurada como v${np.version}.` }); }} />
       </div>
     </div>
