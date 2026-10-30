@@ -36,7 +36,7 @@ def normalize(text: str) -> str:
 # Precio vigente hoy (mismo criterio que catalog.get_price) y disponible, en una sola consulta.
 _OFFER_SELECT = """
 select c.id, c.sku, c.name, c.brand, c.category, c.pricing_mode, c.specs_json, c.currency,
-       c.description, c.image_url, c.unit,
+       c.description, c.image_url, c.datasheet_url, c.unit,
        p.amount as price,
        coalesce(s.on_hand - s.reserved, 0) as available,
        (s.item_id is not null) as stock_tracked
@@ -69,7 +69,7 @@ def _offer(row: dict[str, Any]) -> dict[str, Any]:
         "id": str(row["id"]), "sku": row["sku"], "name": row["name"], "brand": row["brand"],
         "category": row["category"], "pricing_mode": row["pricing_mode"],
         "specs": row["specs_json"] or {}, "currency": row["currency"],
-        "description": row["description"], "image_url": _absolute(row["image_url"]), "unit": row["unit"],
+        "description": row["description"], "image_url": _absolute(row["image_url"]), "datasheet_url": row.get("datasheet_url"), "unit": row["unit"],
         "price": float(row["price"]) if row["price"] is not None else None,
         "available": int(row["available"]), "stock_tracked": bool(row["stock_tracked"]),
     }
