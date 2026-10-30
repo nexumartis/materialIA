@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, type InboxConversation, type InboxFilter, type InboxItem } from "../lib/api";
-import { MessageSquareText, MessagesSquare } from "lucide-react";
+import { Bell, MessageSquareText, MessagesSquare } from "lucide-react";
 import { EmptyState } from "../components/ui";
+import { notificationsOn, notificationsSupported } from "../lib/alerts";
 import { fmtAmount } from "../lib/format";
 
 const FILTERS: { key: InboxFilter; label: string }[] = [
@@ -110,6 +111,7 @@ export function Inbox() {
             asistente no contesta en esa conversación. Al terminar, devolvésela.
           </p>
         </div>
+        <NotifyButton />
       </div>
       {error && <div className="state err" role="alert">{error}</div>}
 
@@ -223,6 +225,24 @@ export function Inbox() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** Activa las notificaciones de este navegador (el permiso lo tiene que pedir un clic). */
+function NotifyButton() {
+  const [on, setOn] = useState(notificationsOn());
+  if (!notificationsSupported()) return null;
+  if (on) return <div className="right"><span className="pill pos">Avisos activados en este navegador</span></div>;
+  if (Notification.permission === "denied") {
+    return <div className="right"><span className="muted small">Avisos bloqueados en el navegador</span></div>;
+  }
+  return (
+    <div className="right">
+      <button className="btn" type="button"
+        onClick={() => void Notification.requestPermission().then((p) => setOn(p === "granted"))}>
+        <Bell size={15} strokeWidth={1.8} aria-hidden /> Avisarme de derivaciones
+      </button>
     </div>
   );
 }

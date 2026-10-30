@@ -4,6 +4,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
+import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
@@ -49,6 +50,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
 export function Shell({ health, active, children }: Props) {
   const [open, setOpen] = useState(false);
   const { status, me, signOut } = useSession();
+  const pending = usePendingHandoffs(status === "ready");
   const live = health?.llm.mode === "live";
   const apiBase = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8077";
 
@@ -102,6 +104,9 @@ export function Shell({ health, active, children }: Props) {
                     <a key={href} className={current ? "active" : ""} href={href}
                       aria-current={current ? "page" : undefined} onClick={() => setOpen(false)}>
                       <Icon size={16} strokeWidth={1.8} aria-hidden /> {label}
+                      {section === "conversaciones" && pending > 0 && (
+                        <span className="nav-count" aria-label={`${pending} sin atender`}>{pending}</span>
+                      )}
                     </a>
                   );
                 })}
