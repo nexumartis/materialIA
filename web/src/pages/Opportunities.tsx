@@ -9,6 +9,7 @@ export function Opportunities() {
   const [list, setList] = useState<Opportunity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlyOver, setOnlyOver] = useState(false);
+  const [board, setBoard] = useState(false);
   const [stamp, setStamp] = useState("");
 
   const load = useCallback(() => {
@@ -105,10 +106,17 @@ export function Opportunities() {
           <span className="count">{me?.business_name}</span>
           <span className="right count">
             {list === null ? "" : `${view.length} ${view.length === 1 ? "oportunidad" : "oportunidades"}`}
+            <span className="view-toggle" role="group" aria-label="Vista">
+              <button type="button" className="chip" aria-pressed={!board} onClick={() => setBoard(false)}>Tabla</button>
+              <button type="button" className="chip" aria-pressed={board} onClick={() => setBoard(true)}>Tablero</button>
+            </span>
           </span>
         </div>
       )}
 
+      {board && !error ? (
+        <Board list={view} onSaved={onSaved} onOpen={setSelected} />
+      ) : (
       <div className="tablewrap">
         <table>
           <caption className="sr">Oportunidades de tu negocio</caption>
@@ -167,6 +175,7 @@ export function Opportunities() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
     <ActivityDrawer opp={selected} onClose={() => setSelected(null)} />
     </>
@@ -276,5 +285,55 @@ function Row({
         )}
       </td>
     </tr>
+  );
+}
+
+/** Tablero (Kanban): una columna por etapa. Mover = elegir la etapa en la tarjeta (sin arrastrar,
+ *  accesible con teclado); guarda con la misma acción que la tabla. */
+function Board({ list, onSaved, onOpen }: {
+  list: Opportunity[];
+  onSaved: (o: Opportunity) => void;
+  onOpen: (o: Opportunity) => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  async function move(o: Opportunity, stage: Stage) {
+    setError(null);
+    try {
+      onSaved(await api.patchOpportunity(o.id, { stage }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No pude mover la oportunidad.");
+    }
+  }
+  return (
+    <>
+      {error && <div className="state err" role="alert">{error}</div>}
+      <div className="board">
+        {STAGES.map((s) => {
+          const cards = list.filter((o) => o.stage === s.key);
+          return (
+            <section className="board-col" key={s.key} aria-label={s.label}>
+              <h3 className="board-title">{s.label} <span className="muted">{cards.length}</span></h3>
+              {cards.map((o) => {
+                const t = pedidoText(o.requirements);
+                return (
+                  <article className="board-card" key={o.id}>
+                    <button type="button" className="linkish board-main" onClick={() => onOpen(o)}>{t.main}</button>
+                    {t.sub && <span className="muted small">{t.sub}</span>}
+                    <span className="board-meta">
+                      {o.estimated_amount != null && <b>${o.estimated_amount.toLocaleString("es-AR")}</b>}
+                      {o.next_action_at && <span className={isOverdue(o) ? "pill neg" : "muted small"}>{fmtDate(o.next_action_at)}</span>}
+                    </span>
+                    <select className="stage-select" aria-label={`Etapa de ${t.main}`} value={o.stage}
+                      onChange={(e) => void move(o, e.target.value as Stage)}>
+                      {STAGES.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                    </select>
+                  </article>
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
+    </>
   );
 }
