@@ -533,6 +533,8 @@ export interface ProductCard {
   pricing_mode: string;
   description: string;
   specs: Record<string, unknown>;
+  /** Ficha técnica del fabricante (PDF), si el negocio la cargó. */
+  datasheet_url?: string | null;
   action: QuickReply | null;
 }
 

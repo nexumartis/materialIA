@@ -278,3 +278,33 @@ def _item_id(raw_conn, tenant, sku):
         item = str(cur.fetchone()["id"])
     raw_conn.commit()
     return item
+
+
+def test_datasheet_link_is_imported_and_offered(client, accounts, google):
+    uid, tenant = accounts("Tienda Ficha")
+    google.csv = ("sku;nombre;categoria;precio;stock;ficha_url\n"
+                  "CAN-1;Canilla negra;griferia;89.900;5;https://fabricante.example/ficha.pdf\n"
+                  "MAL-1;Otra;griferia;1.000;1;http://inseguro.example/ficha.pdf\n")
+    sheet = client.put("/app/catalog/sheet", headers=bearer(uid), json={"url": URL}).json()["sheet"]
+    assert [e["sku"] for e in sheet["last_result"]["errors"]] == ["MAL-1"]          # sólo https
+    from app.domain import inventory
+    from app.db import tenant_tx
+    with tenant_tx(tenant) as cur:
+        cur.execute("select id from catalog_items where tenant_id = %s and sku = 'CAN-1'", (tenant,))
+        offer = inventory._offer_by_id(cur, tenant, str(cur.fetchone()["id"]))
+    assert offer["datasheet_url"] == "https://fabricante.example/ficha.pdf"
+
+
+def test_clearing_or_overlong_datasheet(client, accounts, google):
+    uid, tenant = accounts("Tienda Ficha 2")
+    google.csv = "sku;nombre;precio;stock;ficha_url\nCAN-1;Canilla;1.000;5;https://f.example/a.pdf\n"
+    client.put("/app/catalog/sheet", headers=bearer(uid), json={"url": URL})
+    google.csv = "sku;nombre;precio;stock;ficha_url\nCAN-1;Canilla;1.000;5;\n"                     # la borró
+    client.post("/app/catalog/sheet/sync", headers=bearer(uid))
+    from app.db import tenant_tx
+    with tenant_tx(tenant) as cur:
+        cur.execute("select datasheet_url from catalog_items where tenant_id = %s and sku = 'CAN-1'", (tenant,))
+        assert cur.fetchone()["datasheet_url"] is None
+    google.csv = "sku;nombre;precio;stock;ficha_url\nCAN-1;Canilla;1.000;5;https://f.example/" + "a" * 600 + "\n"
+    sheet = client.post("/app/catalog/sheet/sync", headers=bearer(uid)).json()["sheet"]
+    assert "demasiado largo" in sheet["last_result"]["errors"][0]["error"]

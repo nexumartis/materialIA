@@ -151,6 +151,11 @@ function ProductModal({
               ))}
             </div>
           )}
+          {card.datasheet_url && (
+            <a className="btn sm" href={card.datasheet_url} target="_blank" rel="noopener noreferrer">
+              Ver ficha técnica (PDF)
+            </a>
+          )}
           <div className="pcard-row">
             <span className="pcard-price">{card.price != null ? money(card.price) : "Consultar"}</span>
             <span className={`pill ${st.cls}`}>{st.text}</span>

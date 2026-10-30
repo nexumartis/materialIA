@@ -196,19 +196,26 @@ def _import_row(cur: Any, tenant_id: str, row: dict[str, str], from_sheet: bool 
     if photo and not photo.startswith(("https://", "http://", "/static/")):
         raise ValueError("foto_url debe ser un link https://")
     specs = {k: row[k] for k in _SPEC_COLUMNS if row.get(k)}
+    datasheet = row.get("ficha_url") or ""
+    if datasheet and not datasheet.startswith("https://"):
+        raise ValueError("ficha_url debe ser un link https://")
+    if len(datasheet) > 500:
+        raise ValueError("ficha_url es demasiado largo (máx. 500 caracteres)")
     cur.execute(
         "insert into catalog_items (tenant_id, sku, name, category, pricing_mode, specs_json, brand, "
-        "description, image_url, active) values (%(t)s, %(sku)s, %(name)s, %(cat)s, %(mode)s, %(specs)s::jsonb, "
-        "%(brand)s, %(desc)s, %(img)s, %(active)s) "
+        "description, image_url, datasheet_url, active) values (%(t)s, %(sku)s, %(name)s, %(cat)s, %(mode)s, %(specs)s::jsonb, "
+        "%(brand)s, %(desc)s, %(img)s, %(sheet)s, %(active)s) "
         "on conflict (tenant_id, sku) do update set name = excluded.name, category = excluded.category, "
         "pricing_mode = excluded.pricing_mode, specs_json = excluded.specs_json, brand = excluded.brand, "
         "description = excluded.description, image_url = coalesce(excluded.image_url, catalog_items.image_url), "
+        # Con la columna ficha_url presente, la celda manda (vacía = se quita); sin la columna, se conserva.
+        "datasheet_url = case when %(sheet_col)s then excluded.datasheet_url else catalog_items.datasheet_url end, "
         "active = excluded.active, updated_at = now() "
         "returning id, (xmax = 0) as inserted",
         {"t": tenant_id, "sku": sku[:64], "name": name[:200], "cat": (row.get("categoria") or "general")[:80],
          "mode": "custom_quote" if custom else "fixed", "specs": json.dumps(specs),
          "brand": row.get("marca") or None, "desc": row.get("descripcion", "")[:1000],
-         "img": photo or None, "active": active},
+         "img": photo or None, "sheet": datasheet or None, "sheet_col": "ficha_url" in row, "active": active},
     )
     r = cur.fetchone()
     item_id = str(r["id"])

@@ -71,7 +71,7 @@ def _card(n: int, o: dict[str, Any]) -> dict[str, Any]:
     return {"n": n, "name": o["name"], "brand": o.get("brand"), "image_url": o.get("image_url"),
             "price": o["price"] if sellable else None, "available": o["available"],
             "pricing_mode": o["pricing_mode"], "description": o.get("description") or "",
-            "specs": o.get("specs") or {}, "action": action}
+            "specs": o.get("specs") or {}, "datasheet_url": o.get("datasheet_url"), "action": action}
 
 
 def _ui(turn: "_Turn") -> dict[str, Any]:
