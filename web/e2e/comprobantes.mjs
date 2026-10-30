@@ -122,14 +122,15 @@ try {
   await O.page.press('input[name="password"]', "Enter");
   await O.page.waitForFunction(() => location.hash !== "#/login", null, { timeout: 15000 });
   await O.page.goto(`${WEB}/#/pedidos`);
-  const row = O.page.locator(".orders > div", { hasText: `#${order.number}` }).first();
+  const row = O.page.locator(`tr[data-order="${order.number}"]`);
   await row.waitFor();
-  const docRow = O.page.locator(".orow", { hasText: `Pedido #${order.number}` }).first();
+  const docRow = O.page.locator("table.docs tbody tr", { hasText: `Pedido #${order.number}` }).first();
   check("C2", "El dueño ve el comprobante leído", /Leído/.test(await docRow.innerText()));
   await row.getByRole("button", { name: "Confirmar transferencia" }).click();
-  await row.locator('input[placeholder="Nº de operación del banco"]').fill(REF);
-  check("C2", "El comprobante del pedido viene tildado para asociar", await row.locator("input[type=checkbox]").first().isChecked());
-  await row.locator("form button[type=submit]").dblclick();
+  const form = O.page.locator("tr.expand form");               // se abre debajo del pedido
+  await form.locator('input[placeholder="Nº de operación del banco"]').fill(REF);
+  check("C2", "El comprobante del pedido viene tildado para asociar", await form.locator("input[type=checkbox]").first().isChecked());
+  await form.locator("button[type=submit]").dblclick();
   await row.locator(".pill", { hasText: "pagado" }).waitFor({ timeout: 15000 });
   check("C2", "El pedido queda pagado", true);
   await O.page.waitForSelector(".pill:has-text('Asociado al pago')");

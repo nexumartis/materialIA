@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Download, Eye, FileText, Landmark, Receipt, RefreshCw, ShoppingBag } from "lucide-react";
+import { Badge, EmptyState, PageHeader, Stats, type Stat } from "../components/ui";
 import { ApiError, api, type DocField, type Order, type PaymentDocument } from "../lib/api";
 import { openBlob, saveBlob } from "../lib/download";
 import { fmtAmount, parseAmount } from "../lib/format";
@@ -79,74 +81,104 @@ export function OrdersPage() {
     }, "No pude descartar el comprobante.");
   }
 
+  const paidStates = ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"];
+  const stats: Stat[] = list ? [
+    { label: "Esperando el pago", value: list.filter((o) => o.status === "PENDING_PAYMENT").length },
+    { label: "Pagados sin despachar", value: list.filter((o) => o.status === "PAID").length },
+    { label: "Para revisar", value: list.filter((o) => o.attention_reason).length,
+      tone: list.some((o) => o.attention_reason) ? "neg" : undefined },
+    { label: "Vendido (ARS)", value: `$${fmtAmount(list.filter((o) => paidStates.includes(o.status) && o.currency === "ARS")
+        .reduce((n, o) => n + o.total, 0))}`, hint: "pedidos pagados del listado" },
+  ] : [];
+
   return (
     <div className="sheet">
-      <div className="titlebar">
-        <div>
-          <h1>Pedidos</h1>
-          <p className="finding">
-            Un pedido figura pagado sólo con el aviso verificado del medio de pago o con una transferencia que vos
-            confirmás después de verla en tu banco. Un comprobante del cliente no alcanza.
-          </p>
-        </div>
-        <div className="right">
-          <button className="btn sm" type="button" onClick={load}>Actualizar</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Pedidos"
+        description="Un pedido figura pagado sólo con el aviso verificado del medio de pago o con una transferencia que vos confirmás después de verla en tu banco. Un comprobante del cliente no alcanza."
+        actions={
+          <button className="btn" type="button" onClick={load}>
+            <RefreshCw size={15} strokeWidth={1.8} aria-hidden /> Actualizar
+          </button>
+        }
+      />
       {error && <div className="state err" role="alert">{error}</div>}
       {list === null ? (
-        <div className="state">Cargando…</div>
-      ) : list.length === 0 ? (
-        <div className="empty-box">Todavía no hay pedidos. Compartí el link de tu tienda desde “Mi agente”.</div>
-      ) : (
-        <div className="orders">
-          {list.map((o) => (
-            <div key={o.id}>
-              <div className="orow">
-                <div>
-                  <b>#{o.number}</b> <span className="muted">${fmtAmount(o.total)} {o.currency}</span>
-                  <div className="muted small">{o.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}</div>
-                </div>
-                <div className="ostate">
-                  <span className={`pill ${o.status === "PENDING_PAYMENT" ? "warn" : o.status === "CANCELLED" ? "neg" : "pos"}`}>
-                    {o.status_label}
-                  </span>
-                  {o.attention_reason && <span className="pill neg">{ATTENTION[o.attention_reason] ?? "Revisar"}</span>}
-                </div>
-                <div className="cactions">
-                  {(NEXT[o.status] ?? []).map((n) => (
-                    <button key={n.status} className="btn sm" type="button" onClick={() => void advance(o, n.status)}>
-                      {n.label}
-                    </button>
-                  ))}
-                  {o.receipt_id && (
-                    <button className="btn sm" type="button"
-                      onClick={() => void run(async () => saveBlob(await api.orderReceipt(o.id), `constancia-pedido-${o.number}.pdf`),
-                        "No pude descargar la constancia.")}>
-                      Constancia (PDF)
-                    </button>
-                  )}
-                  {canConfirm(o) && confirming !== o.id && (
-                    <button className="btn sm" type="button" onClick={() => setConfirming(o.id)}>
-                      Confirmar transferencia
-                    </button>
-                  )}
-                </div>
-              </div>
-              {confirming === o.id && (
-                <TransferForm
-                  order={o}
-                  docs={docs.filter((d) => d.order_id === o.id && d.decision === null)}
-                  onCancel={() => setConfirming(null)}
-                  onDone={() => {
-                    setConfirming(null);
-                    load();
-                  }}
-                />
-              )}
-            </div>
-          ))}
+        <div className="tablewrap" aria-busy="true" aria-label="Cargando pedidos">
+          {[0, 1, 2].map((k) => <div className="skel-row" key={k}><span className="skel" style={{ width: "35%" }} /></div>)}
         </div>
+      ) : list.length === 0 ? (
+        <EmptyState icon={ShoppingBag} title="Todavía no hay pedidos">
+          Compartí el link de tu tienda desde «Mi agente».
+        </EmptyState>
+      ) : (
+        <>
+          <Stats label="Resumen de pedidos" items={stats} />
+          <div className="tablewrap">
+            <table className="orders stack">
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th className="num">Total</th>
+                  <th>Estado</th>
+                  <th><span className="sr">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((o) => (
+                  <Fragment key={o.id}>
+                    <tr className={confirming === o.id ? "selected" : ""} data-order={o.number}>
+                      <td className="pedido">
+                        <b>#{o.number}</b>
+                        <small>{o.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}</small>
+                      </td>
+                      <td className="num" data-label="Total">${fmtAmount(o.total)} <span className="muted">{o.currency}</span></td>
+                      <td data-label="Estado">
+                        <Badge tone={o.status === "PENDING_PAYMENT" ? "warn" : o.status === "CANCELLED" || o.status === "REFUNDED" ? "neg"
+                          : o.status === "DELIVERED" ? "neu" : "pos"}>{o.status_label}</Badge>
+                        {o.attention_reason && <Badge tone="neg">{ATTENTION[o.attention_reason] ?? "Revisar"}</Badge>}
+                      </td>
+                      <td className="actions-cell"><div className="row-actions">
+                        {(NEXT[o.status] ?? []).map((n) => (
+                          <button key={n.status} className="btn sm" type="button" onClick={() => void advance(o, n.status)}>
+                            {n.label}
+                          </button>
+                        ))}
+                        {o.receipt_id && (
+                          <button className="btn sm" type="button"
+                            onClick={() => void run(async () => saveBlob(await api.orderReceipt(o.id), `constancia-pedido-${o.number}.pdf`),
+                              "No pude descargar la constancia.")}>
+                            <FileText size={14} strokeWidth={1.8} aria-hidden /> Constancia (PDF)
+                          </button>
+                        )}
+                        {canConfirm(o) && confirming !== o.id && (
+                          <button className="btn sm" type="button" onClick={() => setConfirming(o.id)}>
+                            <Landmark size={14} strokeWidth={1.8} aria-hidden /> Confirmar transferencia
+                          </button>
+                        )}
+                      </div></td>
+                    </tr>
+                    {confirming === o.id && (
+                      <tr className="expand">
+                        <td colSpan={4}>
+                          <TransferForm
+                            order={o}
+                            docs={docs.filter((d) => d.order_id === o.id && d.decision === null)}
+                            onCancel={() => setConfirming(null)}
+                            onDone={() => {
+                              setConfirming(null);
+                              load();
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div className="titlebar docs-head">
@@ -154,50 +186,62 @@ export function OrdersPage() {
           <h2 className="panel-title">Comprobantes recibidos</h2>
           <p className="panel-sub">Lo que mandaron los clientes. La lectura automática es una ayuda: verificá siempre en tu banco.</p>
         </div>
-        <div className="right inline">
-          <input className="field-select" type="month" aria-label="Mes" value={month}
+        <div className="right">
+          <input className="field-select month-input" type="month" aria-label="Mes" value={month}
             onChange={(e) => e.target.value && setMonth(e.target.value)} />
-          <button className="btn sm" type="button"
+          <button className="btn" type="button"
             onClick={() => void run(async () => saveBlob(await api.paymentRegister(month), `pagos-${month}.csv`),
               "No pude descargar el registro.")}>
-            Registro del mes (CSV)
+            <Download size={15} strokeWidth={1.8} aria-hidden /> Registro del mes (CSV)
           </button>
         </div>
       </div>
       {docs.length === 0 ? (
-        <div className="empty-box">Sin comprobantes en {month}.</div>
+        <EmptyState icon={Receipt} title={`Sin comprobantes en ${month}`} />
       ) : (
-        <div className="orders">
-          {docs.map((d) => (
-            <div className="orow" key={d.id}>
-              <div>
-                <b>Pedido #{d.order_number}</b>{" "}
-                <span className="muted">
-                  {new Date(d.received_at).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
-                </span>
-                <div className="muted small">
-                  {d.fields
-                    ? `Leído: importe ${fieldText(d.fields.amount)} ${fieldText(d.fields.currency)} · referencia ${fieldText(d.fields.reference)} · fecha ${fieldText(d.fields.date)}`
-                    : d.error ?? "Todavía sin leer."}
-                </div>
-              </div>
-              <div className="ostate">
-                <span className={`pill ${d.decision === "linked" ? "pos" : d.decision === "rejected" ? "neg" : "neu"}`}>
-                  {d.decision === "linked" ? "Asociado al pago" : d.decision === "rejected" ? "Descartado" : DOC_STATUS[d.status]}
-                </span>
-                {d.needs_review && d.decision === null && <span className="pill warn">Datos dudosos</span>}
-              </div>
-              <div className="cactions">
-                <button className="btn sm" type="button"
-                  onClick={() => void run(async () => openBlob(await api.documentOriginal(d.id)), "No pude abrir el comprobante.")}>
-                  Ver original
-                </button>
-                {d.decision === null && (
-                  <button className="btn sm" type="button" onClick={() => void reject(d)}>Descartar</button>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="tablewrap">
+          <table className="docs stack">
+            <thead>
+              <tr>
+                <th>Pedido</th>
+                <th>Recibido</th>
+                <th>Lo que leyó el sistema</th>
+                <th>Estado</th>
+                <th><span className="sr">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.id} data-document={d.id}>
+                  <td><b>Pedido #{d.order_number}</b></td>
+                  <td className="muted" data-label="Recibido">
+                    {new Date(d.received_at).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires",
+                      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td className="muted small-cell" data-label="Leído">
+                    {d.fields
+                      ? `Importe ${fieldText(d.fields.amount)} ${fieldText(d.fields.currency)} · ref. ${fieldText(d.fields.reference)} · ${fieldText(d.fields.date)}`
+                      : d.error ?? "Todavía sin leer."}
+                  </td>
+                  <td data-label="Estado">
+                    <Badge tone={d.decision === "linked" ? "pos" : d.decision === "rejected" ? "neg" : "neu"}>
+                      {d.decision === "linked" ? "Asociado al pago" : d.decision === "rejected" ? "Descartado" : DOC_STATUS[d.status]}
+                    </Badge>
+                    {d.needs_review && d.decision === null && <Badge tone="warn">Datos dudosos</Badge>}
+                  </td>
+                  <td className="actions-cell"><div className="row-actions">
+                    <button className="btn sm" type="button"
+                      onClick={() => void run(async () => openBlob(await api.documentOriginal(d.id)), "No pude abrir el comprobante.")}>
+                      <Eye size={14} strokeWidth={1.8} aria-hidden /> Ver original
+                    </button>
+                    {d.decision === null && (
+                      <button className="btn sm ghost" type="button" onClick={() => void reject(d)}>Descartar</button>
+                    )}
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

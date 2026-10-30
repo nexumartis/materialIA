@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { ApiError, api, type AgentProfile, type Health, type ImportResult, type Me } from "../lib/api";
 import { downloadTemplate } from "./Catalog";
 import { EvalsSection, PoliciesSection } from "./AgentAdvanced";
@@ -118,10 +119,12 @@ export function AgentWizard({ health }: { health: Health | null }) {
     <div className="sheet">
       <div className="titlebar">
         <div>
-          <h1>Crear mi agente</h1>
+          <h1>Mi agente</h1>
           <p className="finding">Ocho pasos para dejar tu vendedor virtual listo. Podés salir y volver: se guarda tu avance en este navegador.</p>
         </div>
-        <div className="right"><a className="btn sm ghost" href="#/agente">Ajustes avanzados</a></div>
+        <div className="right">
+          <a className="btn" href="#/agente"><SlidersHorizontal size={15} strokeWidth={1.8} aria-hidden /> Ajustes avanzados</a>
+        </div>
       </div>
 
       <ol className="wizard-steps" aria-label="Pasos">

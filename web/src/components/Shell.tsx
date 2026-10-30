@@ -1,4 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
+import {
+  Bot, Code2, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target,
+  type LucideIcon,
+} from "lucide-react";
 import type { Health } from "../lib/api";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
@@ -16,35 +20,31 @@ const TITLES: Record<Section, string> = {
   conversaciones: "Conversaciones",
   pedidos: "Pedidos",
   catalogo: "Catálogo",
-  agente: "Mi agente",
-  asistente: "Crear mi agente",
+  agente: "Ajustes del agente",
+  asistente: "Mi agente",
   venta: "Demo del agente",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
 
-function IconList() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-function IconChat() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M4 5h16v10H9l-5 4V5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function IconDoc() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M6 3h8l4 4v14H6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
-}
+/** Navegación agrupada como en un SaaS: Ventas, Tu agente y Herramientas. */
+interface NavItem { section: Section | null; href: string; label: string; icon: LucideIcon; also?: Section[]; external?: boolean }
+const NAV: { title: string; items: NavItem[] }[] = [
+  { title: "Ventas", items: [
+    { section: "conversaciones", href: "#/conversaciones", label: "Conversaciones", icon: MessagesSquare },
+    { section: "oportunidades", href: "#/oportunidades", label: "Oportunidades", icon: Target },
+    { section: "pedidos", href: "#/pedidos", label: "Pedidos", icon: ShoppingBag },
+  ] },
+  { title: "Tu agente", items: [
+    // «Mi agente» abre el asistente paso a paso; el formulario completo queda como ajustes.
+    { section: "asistente", href: "#/asistente", label: "Mi agente", icon: Bot },
+    { section: "agente", href: "#/agente", label: "Ajustes del agente", icon: SlidersHorizontal },
+    { section: "catalogo", href: "#/catalogo", label: "Catálogo", icon: Package },
+  ] },
+  { title: "Herramientas", items: [
+    { section: "venta", href: "#/venta", label: "Demo del agente", icon: MessageCircle },
+  ] },
+];
 
 export function Shell({ health, active, children }: Props) {
   const [open, setOpen] = useState(false);
@@ -75,9 +75,7 @@ export function Shell({ health, active, children }: Props) {
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
+          <Menu size={20} strokeWidth={1.8} aria-hidden />
         </button>
         <b>{TITLES[active]}</b>
       </div>
@@ -89,88 +87,51 @@ export function Shell({ health, active, children }: Props) {
           <div className="brand">
             <Mark />
             <div>
-              <b>Presupuesto Vivo</b>
-              <span>Agente de ventas</span>
+              <b title={me?.business_name}>{status === "ready" && me ? me.business_name : "Presupuesto Vivo"}</b>
+              <span>{status === "ready" && me ? "Presupuesto Vivo" : "Agente de ventas"}</span>
             </div>
           </div>
 
-
           <nav className="nav" aria-label="Secciones">
-            <a
-              className={active === "oportunidades" ? "active" : ""}
-              href="#/oportunidades"
-              aria-current={active === "oportunidades" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconList /> Oportunidades
-            </a>
-            <a
-              className={active === "conversaciones" ? "active" : ""}
-              href="#/conversaciones"
-              aria-current={active === "conversaciones" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconChat /> Conversaciones
-            </a>
-            <a
-              className={active === "pedidos" ? "active" : ""}
-              href="#/pedidos"
-              aria-current={active === "pedidos" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconList /> Pedidos
-            </a>
-            <a
-              className={active === "catalogo" ? "active" : ""}
-              href="#/catalogo"
-              aria-current={active === "catalogo" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconDoc /> Catálogo
-            </a>
-            <a
-              className={active === "agente" || active === "asistente" ? "active" : ""}
-              href="#/agente"
-              aria-current={active === "agente" || active === "asistente" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconChat /> Mi agente
-            </a>
-            <a
-              className={active === "venta" ? "active" : ""}
-              href="#/venta"
-              aria-current={active === "venta" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <IconChat /> Demo del agente
-            </a>
-            <a href={`${apiBase}/docs`} target="_blank" rel="noopener noreferrer">
-              <IconDoc /> API · Swagger
-            </a>
+            {NAV.map((group) => (
+              <div className="nav-group" key={group.title}>
+                <span className="nav-title" aria-hidden>{group.title}</span>
+                {group.items.map(({ section, href, label, icon: Icon }) => {
+                  const current = section === active;
+                  return (
+                    <a key={href} className={current ? "active" : ""} href={href}
+                      aria-current={current ? "page" : undefined} onClick={() => setOpen(false)}>
+                      <Icon size={16} strokeWidth={1.8} aria-hidden /> {label}
+                    </a>
+                  );
+                })}
+                {group.title === "Herramientas" && (
+                  <a href={`${apiBase}/docs`} target="_blank" rel="noopener noreferrer">
+                    <Code2 size={16} strokeWidth={1.8} aria-hidden /> API · Swagger
+                  </a>
+                )}
+              </div>
+            ))}
           </nav>
 
           <div className="sidebar-foot">
-            <div className="account">
-              {status === "ready" && me ? (
-                <>
-                  <span className="who">Tu negocio</span>
-                  <b title={me.business_name}>{me.business_name}</b>
-                  <button className="btn ghost sm" type="button" onClick={() => void signOut()}>
-                    Cerrar sesión
-                  </button>
-                </>
-              ) : status !== "unconfigured" ? (
-                <a className="btn sm" href="#/login" onClick={() => setOpen(false)}>
-                  Iniciar sesión
-                </a>
-              ) : null}
+            <div className="foot-status">
+              <span className={`modepill ${live ? "live" : "demo"}`}>
+                <span className="dot" aria-hidden />
+                {live ? "IA activa" : "Modo demo (sin IA)"}
+              </span>
+              {health?.llm.model && <span className="foot-note" title={health.llm.model}>{health.llm.model}</span>}
+              {active === "venta" && <span className="foot-note">Datos sintéticos de demostración.</span>}
             </div>
-            <span className={`modepill ${live ? "live" : "demo"}`}>
-              <span className="dot" />
-              {live ? "Modo live" : "Modo demo"}
-            </span>
-            {health?.llm.model && <span className="foot-note">{health.llm.model}</span>}
-            {active === "venta" && <span className="foot-note">Datos sintéticos de demostración.</span>}
+            {status === "ready" && me ? (
+              <button className="nav-action" type="button" onClick={() => void signOut()}>
+                <LogOut size={16} strokeWidth={1.8} aria-hidden /> Cerrar sesión
+              </button>
+            ) : status !== "unconfigured" ? (
+              <a className="nav-action" href="#/login" onClick={() => setOpen(false)}>
+                <LogIn size={16} strokeWidth={1.8} aria-hidden /> Iniciar sesión
+              </a>
+            ) : null}
           </div>
         </aside>
 

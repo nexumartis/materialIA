@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, type InboxConversation, type InboxFilter, type InboxItem } from "../lib/api";
+import { MessageSquareText, MessagesSquare } from "lucide-react";
+import { EmptyState } from "../components/ui";
 import { fmtAmount } from "../lib/format";
 
 const FILTERS: { key: InboxFilter; label: string }[] = [
@@ -113,10 +115,10 @@ export function Inbox() {
 
       <div className={`inbox${selected ? " has-selection" : ""}`}>
         <section className="inbox-list" aria-label="Lista de conversaciones">
-          <div className="quick" role="tablist" aria-label="Filtros">
+          <div className="quick" role="group" aria-label="Filtros">
             {FILTERS.map((f) => (
-              <button key={f.key} type="button" role="tab" aria-selected={filter === f.key}
-                className={`chip${filter === f.key ? " on" : ""}`} onClick={() => setFilter(f.key)}>
+              <button key={f.key} type="button" aria-pressed={filter === f.key}
+                className="chip" onClick={() => setFilter(f.key)}>
                 {f.label}
               </button>
             ))}
@@ -124,7 +126,7 @@ export function Inbox() {
           {list === null ? (
             <div className="state">Cargando…</div>
           ) : list.length === 0 ? (
-            <div className="empty-box">No hay conversaciones en este filtro.</div>
+            <EmptyState icon={MessagesSquare} title="No hay conversaciones en este filtro" />
           ) : (
             <ul className="inbox-items">
               {list.map((c) => (
@@ -150,7 +152,9 @@ export function Inbox() {
 
         <section className="inbox-detail" aria-label="Conversación">
           {!selected ? (
-            <div className="empty-box">Elegí una conversación.</div>
+            <EmptyState icon={MessageSquareText} title="Elegí una conversación">
+              Vas a ver los mensajes, el carrito y los pedidos del cliente.
+            </EmptyState>
           ) : !conv || conv.id !== selected ? (
             <div className="state">Cargando…</div>
           ) : (

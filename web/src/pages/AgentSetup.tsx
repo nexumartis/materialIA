@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Bot } from "lucide-react";
 import { ApiError, api, type AgentProfile } from "../lib/api";
 import { EvalsSection, KnowledgeSection, PoliciesSection, ToolsSection, VersionsSection } from "./AgentAdvanced";
 
@@ -56,10 +57,12 @@ export function AgentSetup() {
     <div className="sheet">
       <div className="titlebar">
         <div>
-          <h1>Mi agente</h1>
+          <h1>Ajustes del agente</h1>
           <p className="finding">Cómo se presenta y qué responde tu vendedor virtual. Precios y stock salen del catálogo.</p>
         </div>
-        <div className="right"><a className="btn sm primary" href="#/asistente">Asistente paso a paso</a></div>
+        <div className="right">
+          <a className="btn" href="#/asistente"><Bot size={15} strokeWidth={1.8} aria-hidden /> Volver a Mi agente</a>
+        </div>
       </div>
 
       <form
@@ -141,8 +144,8 @@ export function AgentSetup() {
           <h3 className="sub">Preguntas frecuentes</h3>
           {p.faq.map((f, i) => (
             <div className="faq-row" key={i}>
-              <input placeholder="Pregunta" value={f.q} onChange={(e) => set("faq", p.faq.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)))} />
-              <textarea rows={2} placeholder="Respuesta" value={f.a} onChange={(e) => set("faq", p.faq.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)))} />
+              <input placeholder="Pregunta" aria-label={`Pregunta ${i + 1}`} value={f.q} onChange={(e) => set("faq", p.faq.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)))} />
+              <textarea rows={2} placeholder="Respuesta" aria-label={`Respuesta ${i + 1}`} value={f.a} onChange={(e) => set("faq", p.faq.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)))} />
               <button className="btn sm ghost" type="button" onClick={() => set("faq", p.faq.filter((_, j) => j !== i))} aria-label="Quitar pregunta">✕</button>
             </div>
           ))}
@@ -151,7 +154,7 @@ export function AgentSetup() {
           <h3 className="sub">Reglas del negocio</h3>
           {p.rules.map((r, i) => (
             <div className="faq-row" key={i}>
-              <input value={r} onChange={(e) => set("rules", p.rules.map((x, j) => (j === i ? e.target.value : x)))} />
+              <input aria-label={`Regla ${i + 1}`} value={r} onChange={(e) => set("rules", p.rules.map((x, j) => (j === i ? e.target.value : x)))} />
               <button className="btn sm ghost" type="button" onClick={() => set("rules", p.rules.filter((_, j) => j !== i))} aria-label="Quitar regla">✕</button>
             </div>
           ))}
