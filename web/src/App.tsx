@@ -6,6 +6,7 @@ import { Opportunities } from "./pages/Opportunities";
 import { Sales } from "./pages/Sales";
 import { Store } from "./pages/Store";
 import { AgentSetup } from "./pages/AgentSetup";
+import { AgentWizard } from "./pages/AgentWizard";
 import { Catalog } from "./pages/Catalog";
 import { OrdersPage } from "./pages/OrdersPage";
 import { Inbox } from "./pages/Inbox";
@@ -26,6 +27,7 @@ function sectionFor(hash: string): Section {
   // "#/chat" era el chat del producto anterior (cotización de cerramientos): va al agente de ventas.
   if (hash === "#/venta" || hash === "#/chat") return "venta";
   if (hash === "#/agente") return "agente";
+  if (hash === "#/asistente") return "asistente";
   if (hash === "#/catalogo") return "catalogo";
   if (hash === "#/pedidos") return "pedidos";
   if (hash === "#/conversaciones") return "conversaciones";
@@ -75,14 +77,14 @@ function Backoffice({ hash }: { hash: string }) {
       {active === "venta" ? (
         <Sales health={health} />
       ) : (
-        <Panel active={active} />
+        <Panel active={active} health={health} />
       )}
     </Shell>
   );
 }
 
 /** Secciones que dependen de la cuenta: login, registro y el panel del negocio. */
-function Panel({ active }: { active: Section }) {
+function Panel({ active, health }: { active: Section; health: Health | null }) {
   const { status, retry, signOut } = useSession();
 
   if (status === "unconfigured") {
@@ -118,6 +120,7 @@ function Panel({ active }: { active: Section }) {
     );
   }
   if (active === "agente") return <AgentSetup />;
+  if (active === "asistente") return <AgentWizard health={health} />;
   if (active === "catalogo") return <Catalog />;
   if (active === "pedidos") return <OrdersPage />;
   if (active === "conversaciones") return <Inbox />;

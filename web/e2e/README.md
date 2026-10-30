@@ -78,3 +78,15 @@ E2E_OWNER_EMAIL=… E2E_OWNER_PASSWORD=… npm run e2e:comprobantes
 Mismas salvaguardas y variables (`E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD`) que `comprobantes.mjs`. No necesita el worker.
 
 **Al terminar, frená el worker y la API de prueba** (`pkill -f app.worker`). Un worker que queda corriendo contra la base de pytest compite con los tests.
+
+# Aceptación en navegador — asistente paso a paso
+
+`asistente.mjs` (`npm run e2e:asistente`) recorre el flujo:
+
+1. El asistente muestra los 8 pasos y marca el catálogo como listo.
+2. El dueño cambia el saludo; el borrador sobrevive a una recarga.
+3. La vista previa responde con el borrador mientras la tienda sigue sin cambios.
+4. Al publicar (o «Publicar igual» si fallan pruebas del negocio), la tienda pública saluda con lo nuevo.
+5. Sin desborde horizontal a 390 px.
+
+Mismas salvaguardas y variables que `bandeja.mjs`. **Publica el perfil de la tienda C en la base de prueba.** El registro no se recorre: en el entorno aislado, el Auth local y la base de la API son distintos.

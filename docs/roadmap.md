@@ -52,7 +52,9 @@ integración.
    compras (p. ej. "compró grifería hace 6 meses", "consultó y no compró"), plantillas aprobadas,
    programación por el worker, **consentimiento y bajas** obligatorios, límite de frecuencia y
    atribución de ventas a la campaña.
-6. **Crear el agente paso a paso** (mejor UX): asistente guiado con progreso:
+6. **Crear el agente paso a paso** (primer corte en la rama `feat/asistente-agente`, 29/10/2026;
+   [spec](superpowers/specs/2026-10-29-asistente-agente-design.md); sin WhatsApp ni conectores de
+   catálogo): asistente guiado con progreso:
    1. negocio · 2. rubro (plantilla) · 3. catálogo (CSV o conectar) · 4. cómo habla ·
    5. políticas · 6. cobro · 7. **probar** (chat de vista previa + pruebas) · 8. publicar (link,
    WhatsApp). "Mi agente" queda como pantalla de ajustes para después.

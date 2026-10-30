@@ -67,7 +67,8 @@ export interface Me {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `code`: código estructurado del servidor (header X-Error-Code), p. ej. "evals_failed". */
+  constructor(public status: number, message: string, public code: string | null = null) {
     super(message);
     this.name = "ApiError";
   }
@@ -98,7 +99,7 @@ async function request<T>(path: string, init?: RequestInit, as: "json" | "blob" 
     } catch {
       /* sin cuerpo JSON */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, res.headers.get("x-error-code"));
   }
   return (as === "blob" ? await res.blob() : await res.json()) as T;
 }
@@ -235,6 +236,19 @@ export const api = {
       body: JSON.stringify(c),
     }),
   deleteEvalCase: (id: string) => authed<{ deleted: boolean }>(`/app/agent-evals/${id}`, { method: "DELETE" }),
+  /** Un mensaje de la vista previa con el perfil BORRADOR (sin guardarlo). `conversation_id` null = empezar. */
+  agentPreview: (message: string, conversationId: string | null, profile: Partial<AgentProfile>) =>
+    authed<{ conversation_id: string; reply: string; mode: string; ui: MessageUI }>("/app/agent-preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message, conversation_id: conversationId, profile }),
+    }),
+  endPreview: (conversationId: string) =>
+    authed<{ deleted: boolean }>(`/app/agent-preview/${conversationId}`, { method: "DELETE" }),
+  /** Contenido de la plantilla de un rubro, SIN aplicarla. */
+  agentTemplate: (key: string) =>
+    authed<Pick<AgentProfile, "business_type" | "seller_name" | "tone" | "greeting" | "faq" | "rules">>(
+      `/app/agent-templates/${encodeURIComponent(key)}`),
   runEvals: (profile?: Partial<AgentProfile>) =>
     authed<EvalRun>("/app/agent-evals/run", {
       method: "POST",
