@@ -13,6 +13,10 @@ import {
 const errText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 const list = (v?: string[]) => (v ?? []).join(", ");
 const parse = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
+/** «CABA: 5000, Rosario»: zonas con su costo de envío, si lo tienen. */
+const zonesText = (p: Policies) =>
+  typeof p.delivery_zones === "string" ? p.delivery_zones
+    : (p.delivery_zones ?? []).map((z) => (p.shipping_costs?.[z] != null ? `${z}: ${p.shipping_costs[z]}` : z)).join(", ");
 
 /** Reglas que el CÓDIGO hace cumplir (no dependen de que el modelo las respete). */
 export function PoliciesSection({ policies, onChange }: { policies: Policies; onChange: (p: Policies) => void }) {
@@ -31,12 +35,13 @@ export function PoliciesSection({ policies, onChange }: { policies: Policies; on
           />
         </label>
         <label className="field">
-          <span>Zonas de envío (separadas por coma)</span>
+          <span>Zonas de envío y su costo (separadas por coma)</span>
           <input
-            value={list(policies.delivery_zones)}
-            placeholder="Ej.: CABA, GBA, Rosario"
-            onChange={(e) => onChange({ ...policies, delivery_zones: parse(e.target.value) })}
+            value={zonesText(policies)}
+            placeholder="Ej.: CABA: 5000, GBA: 8000, Rosario"
+            onChange={(e) => onChange({ ...policies, delivery_zones: e.target.value, shipping_costs: undefined })}
           />
+          <small>Con «zona: costo» el agente informa ese costo; sin costo, sólo dice si envía.</small>
         </label>
       </div>
       <label className="field">
