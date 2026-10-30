@@ -5,7 +5,8 @@ Cada vuelta (todas idempotentes; el estado vive en la base):
 - destila la memoria de clientes cuya conversación quedó inactiva (fuera de la respuesta);
 - resume la parte vieja de las conversaciones largas;
 - lee con OCR local los comprobantes de pago recibidos (nunca acreditan el pago);
-- borra conversaciones de prueba abandonadas (vistas previas del asistente).
+- borra conversaciones de prueba abandonadas (vistas previas del asistente);
+- sincroniza el catálogo de los negocios con Google Sheets conectada (cada 15 minutos).
 
     python -m app.worker            # bucle cada WORKER_INTERVAL_S segundos (default 60)
     python -m app.worker --once     # una sola vuelta (cron, tests)
@@ -19,7 +20,7 @@ import time
 
 from .agent import compaction
 from .documents import store as documents
-from .domain import customer_memory, evals, orders
+from .domain import catalog_sheet, customer_memory, evals, orders
 
 log = logging.getLogger("app.worker")
 
@@ -29,7 +30,8 @@ def run_once() -> dict[str, int]:
             "customer_memories": customer_memory.refresh_due(),
             "compacted_conversations": compaction.compact_due(),
             "payment_documents_read": documents.process_pending(),
-            "stale_previews": evals.cleanup_stale()}
+            "stale_previews": evals.cleanup_stale(),
+            "catalog_sheets": catalog_sheet.sync_due()}
 
 
 def main(argv: list[str]) -> None:

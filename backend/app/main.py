@@ -25,8 +25,8 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, backoffice, catalog, customer_memory, evals, inbox, knowledge, opportunities,
-                     orders, receipts)
+from .domain import (agent_profile, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+                     opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
 from .schemas import (
@@ -439,6 +439,40 @@ def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends
         opportunities._audit(cur, tenant, "catalog_item_updated", str(item_id),
                              {"fields": sorted(k for k in ("price", "stock", "active") if body.get(k) is not None)})
         return item
+
+
+# --- Panel: catálogo desde Google Sheets -------------------------------------------
+@app.get("/app/catalog/sheet")
+def app_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        return {"sheet": catalog_sheet.get(cur, tenant)}
+
+
+@app.put("/app/catalog/sheet")
+def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    """Conecta (o reemplaza) la planilla y la sincroniza en el momento."""
+    with user_tx(uid) as (cur, tenant):
+        try:
+            catalog_sheet.connect(cur, tenant, uid, str(body.get("url") or ""))
+        except catalog_sheet.SheetError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return {"sheet": catalog_sheet.sync(tenant)}
+
+
+@app.post("/app/catalog/sheet/sync")
+def app_sync_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (_, tenant):
+        pass   # el negocio sale de la membresía; la lectura la hace el backend (red fuera de la transacción)
+    sheet = catalog_sheet.sync(tenant)
+    if sheet is None:
+        raise HTTPException(status_code=404, detail="No hay una planilla conectada.")
+    return {"sheet": sheet}
+
+
+@app.delete("/app/catalog/sheet")
+def app_disconnect_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+    with user_tx(uid) as (cur, tenant):
+        return {"disconnected": catalog_sheet.disconnect(cur, tenant, uid)}
 
 
 @app.post("/app/catalog/import")

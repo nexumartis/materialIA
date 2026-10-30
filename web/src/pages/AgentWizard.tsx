@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { ApiError, api, type AgentProfile, type Health, type ImportResult, type Me } from "../lib/api";
+import { SheetSync } from "../components/SheetSync";
 import { downloadTemplate } from "./Catalog";
 import { EvalsSection, PoliciesSection } from "./AgentAdvanced";
 
@@ -332,6 +333,7 @@ function CatalogStep({ products, onImported, onError }: {
           )}
         </div>
       )}
+      <SheetSync onSynced={() => void api.catalog().then((c) => onImported(c.length)).catch(() => {})} />
       <p className="note">Conectar Tiendanube o Mercado Libre todavía no está disponible.</p>
     </>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, type CatalogItem, type ImportResult } from "../lib/api";
 import { Download, Package, Pause, Play, Upload } from "lucide-react";
+import { SheetSync } from "../components/SheetSync";
 import { Badge, EmptyState, PageHeader, SelectionBar, Stats } from "../components/ui";
 
 const TEMPLATE =
@@ -108,6 +109,7 @@ export function Catalog() {
       />
 
       {error && <div className="state err" role="alert">{error}</div>}
+      <SheetSync onSynced={load} />
       {result && (
         <div className="import-result" role="status">
           <Badge tone="pos">{result.created} nuevos</Badge>

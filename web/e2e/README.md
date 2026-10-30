@@ -90,3 +90,14 @@ Mismas salvaguardas y variables (`E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD`) que `c
 5. Sin desborde horizontal a 390 px.
 
 Mismas salvaguardas y variables que `bandeja.mjs`. **Publica el perfil de la tienda C en la base de prueba.** El registro no se recorre: en el entorno aislado, el Auth local y la base de la API son distintos.
+
+# Aceptación en navegador — planilla de Google
+
+`catalogo-planilla.mjs` (`npm run e2e:planilla`) comprueba en Catálogo que:
+
+- se explica cómo compartir la planilla;
+- se rechaza un link que no es de Google Sheets y no queda nada conectado;
+- una planilla que no se puede leer se informa con un mensaje claro;
+- se puede desconectar.
+
+**Hace una consulta real a Google** con un ID inexistente, para ver el mensaje que recibe el dueño. La lectura exitosa la cubren los tests del backend con un transporte falso. Mismas variables que `bandeja.mjs`.
