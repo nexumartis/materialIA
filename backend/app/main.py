@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, limits, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -345,6 +345,13 @@ def app_opp_activity(opportunity_id: UUID, uid: str = Depends(current_uid)) -> l
 def _business_name(cur, tenant: str) -> str:
     cur.execute("select name from tenants where id = %s", (tenant,))
     return cur.fetchone()["name"]
+
+
+@app.get("/app/insights")
+def app_insights(days: int = Query(30, ge=1, le=365), uid: str = Depends(owner_uid)) -> dict:
+    """Resultados del agente: embudo, ventas cobradas, cuánto resolvió solo, fuera de horario."""
+    with user_tx(uid) as (cur, tenant):
+        return insights.summary(cur, tenant, days)
 
 
 @app.get("/app/ai-usage")
