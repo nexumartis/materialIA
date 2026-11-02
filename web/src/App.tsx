@@ -35,7 +35,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/conversaciones") return "conversaciones";
   if (hash === "#/equipo") return "equipo";
   if (hash === "#/login") return "login";
-  if (hash === "#/signup") return "signup";
+  if (hash === "#/signup" || hash === "#/signup/equipo") return "signup";
   return "oportunidades";
 }
 

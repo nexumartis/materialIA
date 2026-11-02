@@ -11,6 +11,7 @@ export function TeamPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(() => {
     api.team().then(setTeam, (e) => setError(e instanceof Error ? e.message : "No pude cargar el equipo."));
@@ -51,7 +52,11 @@ export function TeamPage() {
           </button>
         </div>
         <p className="muted small">
-          No mandamos emails: avisale que se registre en Presupuesto Vivo con ese email y, al confirmarlo, entra a tu negocio.
+          No mandamos emails: pasale el link{" "}
+          <a href="#/signup/equipo" onClick={(e) => { e.preventDefault(); void navigator.clipboard?.writeText(`${window.location.origin}/#/signup/equipo`); setCopied(true); }}>
+            {copied ? "¡copiado!" : "para sumarse al equipo"}
+          </a>{" "}
+          y que se registre con ese email.
         </p>
       </form>
       {error && <p className="state err" role="alert">{error}</p>}
