@@ -791,9 +791,14 @@ class _Turn:
     def out_of_stock(self, items: list[dict[str, Any]]) -> str:
         """Escenario D: no promete disponibilidad; ofrece sustitutos REALES con stock."""
         o = items[0]
-        alts = inventory.offers(self.tenant, category=o["category"],
-                                ambiente=o["specs"].get("ambiente"), in_stock_only=True,
-                                exclude=[i["id"] for i in items], limit=4)
+        skip = [i["id"] for i in items]
+        # Primero, las otras variantes del mismo modelo con stock («no hay en negro, sí en cromo»);
+        # después, alternativas reales de la misma categoría.
+        siblings = (inventory.offers(self.tenant, variant_group=o["variant_group"], in_stock_only=True,
+                                     exclude=skip, limit=4) if o.get("variant_group") else [])
+        alts = siblings + inventory.offers(self.tenant, category=o["category"],
+                                           ambiente=o["specs"].get("ambiente"), in_stock_only=True,
+                                           exclude=skip + [s["id"] for s in siblings], limit=4 - len(siblings))
         self.tool("consultar_stock", f"{o['sku']}: 0 disponibles; {len(alts)} alternativa(s)")
         head = (f"La {o['name']} está sin stock y no tengo fecha de reposición confirmada, "
                 "así que no te la puedo prometer.")
