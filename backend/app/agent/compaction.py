@@ -7,6 +7,8 @@ siempre se consultan con herramientas.
 """
 from __future__ import annotations
 
+from ..domain import ai_usage
+
 import re
 from typing import Any
 
@@ -60,8 +62,9 @@ def _compact_locked(cur: Any, tenant_id: str, conversation_id: str, conv: dict[s
         return conv["summary"] if conv else None
     transcript = "\n".join(("Cliente: " if m["direction"] == "inbound" else "Vendedor: ") + m["content"][:300]
                            for m in new)
-    data = llm_tasks.ask_json(_PROMPT, f"Resumen previo: {conv['summary'] or '(ninguno)'}\n\n"
-                                       f"Mensajes a resumir:\n{transcript}", model)
+    with ai_usage.for_tenant(tenant_id, "resumen"):
+        data = llm_tasks.ask_json(_PROMPT, f"Resumen previo: {conv['summary'] or '(ninguno)'}\n\n"
+                                           f"Mensajes a resumir:\n{transcript}", model)
     if data and data.get("summary"):
         summary = _clean(str(data["summary"]))
     else:   # sin modelo: lo que pidió el cliente, en orden

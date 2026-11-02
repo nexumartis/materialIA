@@ -227,6 +227,7 @@ export const api = {
     }),
 
   // Arquitectura del agente: versiones, herramientas, conocimiento y pruebas.
+  aiUsage: (days = 30) => authed<AiUsage>(`/app/ai-usage?days=${days}`),
   agentTools: () => authed<{ key: string; label: string }[]>("/app/agent-tools"),
   profileVersions: () => authed<ProfileVersion[]>("/app/agent-profile/versions"),
   restoreVersion: (version: number) =>
@@ -352,6 +353,17 @@ export interface Policies {
   min_order_total?: number;
   delivery_zones?: string[];
   human_only_categories?: string[];
+}
+
+export interface AiUsage {
+  days: number;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  /** Sólo si el servidor tiene precio configurado por millón de tokens. */
+  cost: number | null;
+  currency: string;
+  by_kind: { kind: string; calls: number; prompt_tokens: number; completion_tokens: number }[];
 }
 
 export interface ProfileVersion {

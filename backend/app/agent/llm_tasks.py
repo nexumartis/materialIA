@@ -5,6 +5,8 @@ configurado o falla, devuelven None y quien llama usa su versión determinista.
 """
 from __future__ import annotations
 
+from ..domain import ai_usage
+
 import json
 import logging
 from typing import Any, Callable, Optional
@@ -31,7 +33,9 @@ def _ollama(system: str, user: str) -> str:
         headers=headers, timeout=settings.llm_timeout_s,
     )
     resp.raise_for_status()
-    return resp.json().get("message", {}).get("content") or ""
+    data = resp.json()
+    ai_usage.record(settings.ollama_model, data)
+    return data.get("message", {}).get("content") or ""
 
 
 def default_model() -> Optional[JsonModel]:

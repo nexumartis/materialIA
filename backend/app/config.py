@@ -6,6 +6,8 @@ un proyecto de desarrollo remoto, setear DATABASE_URL en un `.env` NO versionado
 """
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +38,11 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_base_url: str = "https://api.openai.com/v1"
     llm_timeout_s: float = 60.0
+    # Precio del modelo por millón de tokens (entrada / salida). Sin precio, el panel muestra uso
+    # pero no un costo: no se inventa.
+    llm_price_in_per_mtok: Optional[float] = None
+    llm_price_out_per_mtok: Optional[float] = None
+    llm_price_currency: str = "USD"
     llm_max_output_tokens: int = 500
     # Ollama (local sin key, o Ollama Cloud con key en OLLAMA_API_KEY/LLM_API_KEY)
     ollama_base_url: str = "http://localhost:11434"

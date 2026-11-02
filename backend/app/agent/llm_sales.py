@@ -16,6 +16,8 @@ Garantías (las mismas que con reglas):
 """
 from __future__ import annotations
 
+from ..domain import ai_usage
+
 import json
 import logging
 import re
@@ -194,7 +196,9 @@ def _ollama_planner(messages: list[dict[str, Any]], tools: list[dict[str, Any]])
         headers=headers, timeout=settings.llm_timeout_s,
     )
     resp.raise_for_status()
-    msg = resp.json().get("message", {})
+    data = resp.json()
+    ai_usage.record(settings.ollama_model, data)
+    msg = data.get("message", {})
     calls = []
     for c in msg.get("tool_calls") or []:
         fn = c.get("function", {})

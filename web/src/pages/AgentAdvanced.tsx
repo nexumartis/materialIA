@@ -3,6 +3,7 @@ import {
   ApiError,
   api,
   type AgentProfile,
+  type AiUsage,
   type EvalCase,
   type EvalRun,
   type KnowledgeDoc,
@@ -259,6 +260,45 @@ export function VersionsSection({ current, onRestored }: { current: number; onRe
           )}
         </div>
       ))}
+    </section>
+  );
+}
+
+const KIND_LABEL: Record<string, string> = { venta: "Atención a clientes", resumen: "Resúmenes", memoria: "Memoria de clientes", otro: "Otros" };
+
+/** Llamadas y tokens de IA del negocio en los últimos 30 días (costo sólo si está configurado). */
+export function AiUsageSection() {
+  const [u, setU] = useState<AiUsage | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api.aiUsage().then(setU).catch(() => setFailed(true));
+  }, []);
+  const n = (x: number) => x.toLocaleString("es-AR");
+  return (
+    <section className="setup-card">
+      <h2 className="panel-title">Uso de IA (últimos 30 días)</h2>
+      {failed ? <p className="muted">No pude cargar el uso.</p> : !u ? <p className="muted">Cargando…</p> : u.calls === 0 ? (
+        <p className="muted">Todavía no hubo llamadas al modelo (o el agente responde por reglas, sin IA).</p>
+      ) : (
+        <>
+          <div className="kv">
+            {u.by_kind.map((k) => (
+              <div className="row" key={k.kind}>
+                <span className="k">{KIND_LABEL[k.kind] ?? k.kind}</span>
+                <span className="v">{n(k.calls)} llamadas · {n(k.prompt_tokens + k.completion_tokens)} tokens</span>
+              </div>
+            ))}
+            <div className="row">
+              <span className="k"><b>Total</b></span>
+              <span className="v">{n(u.calls)} llamadas · {n(u.prompt_tokens + u.completion_tokens)} tokens</span>
+            </div>
+          </div>
+          <p className="note">
+            {u.cost != null ? `Costo estimado: ${u.currency} ${u.cost.toLocaleString("es-AR")}.`
+              : "Sin precio por token configurado en el servidor: se muestra el uso, no un costo."}
+          </p>
+        </>
+      )}
     </section>
   );
 }
