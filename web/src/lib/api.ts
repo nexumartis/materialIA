@@ -194,6 +194,10 @@ export const api = {
     authed<InternalNote>(`/app/inbox/${id}/notes`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ body }),
     }),
+  createQuote: (conversationId: string, lines: QuoteLine[], deposit: number | null) =>
+    authed<Order>(`/app/inbox/${conversationId}/quote`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines, deposit }),
+    }),
   team: () => authed<Team>("/app/team"),
   invite: (email: string) =>
     authed<Team>("/app/team/invites", {
@@ -492,7 +496,14 @@ export interface Order {
   payment: { provider: string; checkout_url: string | null; status: string } | null;
   /** Constancia de compra emitida (sólo pedidos pagados). */
   receipt_id: string | null;
+  /** Pedido a medida (productos a pedido) con seña opcional. */
+  quote?: boolean;
+  deposit?: number | null;
+  /** Lo que falta cobrar ahora: la seña, el saldo o el total (0 si no espera pago). */
+  amount_due?: number;
 }
+
+export interface QuoteLine { item_id: string; qty: number; unit_price: number }
 
 /** Campo leído de un comprobante: sugerido o, si es dudoso, sólo candidatos. */
 export interface DocField {

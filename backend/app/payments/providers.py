@@ -109,13 +109,16 @@ class SimulatedProvider:
         if outcome not in ("approved", "rejected", "pending"):
             raise ValueError("resultado simulado inválido")
         with system_tx() as cur:
-            # La preferencia cobra el total del pedido (como el ítem de una preferencia real).
-            cur.execute("select p.order_id, o.total as amount, o.currency from payments p "
+            # La preferencia cobra un monto fijo, como en Mercado Pago: el total, la seña o el saldo.
+            cur.execute("select p.order_id, p.charge, o.total, o.deposit, o.currency from payments p "
                         "join orders o on o.tenant_id = p.tenant_id and o.id = p.order_id "
                         "where p.provider = 'simulated' and p.preference_id = %s", (preference_id,))
             p = cur.fetchone()
             if p is None:
                 raise LookupError("preferencia inexistente")
+            total, deposit = float(p["total"]), float(p["deposit"] or 0)
+            p = {**p, "amount": deposit if p["charge"] == "deposit"
+                 else round(total - deposit, 2) if p["charge"] == "balance" else total}
             cur.execute(
                 "insert into sim_provider_payments (preference_id, external_ref, status, amount, currency) "
                 "values (%s, %s, %s, %s, %s) returning id",
@@ -149,7 +152,8 @@ class MercadoPagoProvider:
         }
         try:
             resp = self._client.post("/checkout/preferences", json=body, headers={
-                **self._auth, "X-Idempotency-Key": f"order-{order['id']}"})
+                **self._auth, "X-Idempotency-Key": f"order-{order['id']}" + (
+                    f"-{order['charge']}" if order.get("charge") else "")})
             resp.raise_for_status()
             data = resp.json()
         except (httpx.HTTPError, ValueError) as exc:

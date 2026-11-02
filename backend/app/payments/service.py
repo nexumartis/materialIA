@@ -27,8 +27,21 @@ _REVERSALS = {"refunded", "charged_back"}
 _PAID_STATES = ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED")
 
 
+def _charge_view(view: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    """Lo que se le pide al proveedor: el pedido entero o, con seña, la seña o el saldo como un
+    único ítem (con su propia clave de idempotencia)."""
+    amount, kind = orders.amount_due(row)
+    if kind == "total":
+        return view
+    label = "Seña" if kind == "deposit" else "Saldo"
+    return {**view, "total": amount, "charge": kind,
+            "items": [{"sku": f"{kind.upper()}-{view['number']}", "name": f"{label} del pedido #{view['number']}",
+                       "qty": 1, "unit_price": amount}]}
+
+
 def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
-    """Devuelve el link de pago del pedido PENDING_PAYMENT; lo crea una sola vez.
+    """Devuelve el link de pago de lo que el pedido debe ahora (pedido, seña o saldo); lo crea una
+    sola vez por cobro.
 
     El pedido queda bloqueado mientras se crea la preferencia: dos confirmaciones simultáneas
     no generan dos links. Si el proveedor falla, no queda nada a medias (se puede reintentar).
@@ -36,25 +49,27 @@ def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
     provider = get_provider()
     with tenant_tx(tenant_id) as cur:
         row = orders._fetch(cur, tenant_id, order_id, lock=True)
-        if row is None or row["status"] != "PENDING_PAYMENT":
+        if row is None or row["status"] not in orders.AWAITING_PAYMENT:
             raise ValueError("el pedido no está esperando pago")
+        due, kind = orders.amount_due(row)
         # Un solo link por pedido: tras un pago rechazado el cliente reintenta en la misma
         # preferencia (Mercado Pago lo permite), sin chocar con su idempotency key.
         cur.execute(
             "select provider, checkout_url from payments where tenant_id = %s and order_id = %s "
-            "and provider = %s and checkout_url is not null order by created_at limit 1",
-            (tenant_id, order_id, provider.name),
+            "and provider = %s and checkout_url is not null and coalesce(charge, 'total') = %s "
+            "order by created_at limit 1",
+            (tenant_id, order_id, provider.name, kind),
         )
         existing = cur.fetchone()
         if existing:
             return {"provider": existing["provider"], "checkout_url": existing["checkout_url"]}
-        view = orders._view(cur, row)
+        view = _charge_view(orders._view(cur, row), row)
         checkout = provider.create_checkout(view)   # PaymentProviderError => rollback
         cur.execute(
-            "insert into payments (tenant_id, order_id, provider, preference_id, checkout_url, amount, currency) "
-            "values (%s, %s, %s, %s, %s, %s, %s)",
+            "insert into payments (tenant_id, order_id, provider, preference_id, checkout_url, amount, currency, "
+            "charge) values (%s, %s, %s, %s, %s, %s, %s, %s)",
             (tenant_id, order_id, provider.name, checkout.preference_id, checkout.url,
-             view["total"], view["currency"]),
+             due, view["currency"], None if kind == "total" else kind),
         )
     return {"provider": provider.name, "checkout_url": checkout.url}
 
@@ -130,6 +145,8 @@ def apply_payment(provider_name: str, payment: ProviderPayment) -> str:
         outcome, became_paid = _apply(cur, tenant_id, order, provider_name, payment)
     if became_paid:
         _after_paid(tenant_id, became_paid)
+    if outcome == DEPOSIT_OK:
+        _offer_balance(tenant_id, payment.external_reference)
     return outcome
 
 
@@ -167,9 +184,10 @@ def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
             if same is None:   # transferencia nueva: tiene que cubrir exactamente un pedido impago
                 if order["status"] in _PAID_STATES:
                     raise ValueError("el pedido ya figura pagado")
-                if abs(payment.amount - float(order["total"])) > 0.005 or payment.currency != order["currency"]:
-                    raise ValueError(f"el importe o la moneda no coinciden con el pedido "
-                                     f"({float(order['total']):.2f} {order['currency']})")
+                if not _amount_ok(order, payment) or payment.currency != order["currency"]:
+                    due = " o ".join(f"{a:.2f}" for a in _accepted(order))
+                    raise ValueError(f"el importe o la moneda no coinciden con lo que debe el pedido "
+                                     f"({due} {order['currency']})")
             outcome, became_paid = _apply(cur, tenant_id, order, "transfer", payment, verified_by=uid)
             if became_paid or outcome == "ya estaba pagado":
                 cur.execute("select id from payments where tenant_id = %s and provider = 'transfer' "
@@ -184,7 +202,50 @@ def confirm_transfer(tenant_id: str, uid: str, order_id: str, reference: str,
         raise ReferenceInUse("esa referencia ya acreditó otro pedido") from None
     if became_paid:
         _after_paid(tenant_id, became_paid)
+    if outcome == DEPOSIT_OK:
+        _offer_balance(tenant_id, order_id)
     return outcome
+
+
+DEPOSIT_OK = "seña acreditada"
+
+
+def _accepted(order: dict[str, Any]) -> list[float]:
+    """Montos que un pago puede cubrir según el estado: con seña pendiente, la seña o todo junto;
+    señado, el saldo; si no, el total."""
+    total = float(order["total"])
+    if order.get("deposit") is not None and order["status"] in ("PENDING_PAYMENT", "CANCELLED"):
+        return [float(order["deposit"]), total]      # cancelado: seña tardía de una cotización vencida
+    if order["status"] == "DEPOSIT_PAID":
+        return [orders.amount_due(order)[0]]
+    return [total]
+
+
+def _amount_ok(order: dict[str, Any], payment: ProviderPayment) -> bool:
+    return any(abs(payment.amount - a) <= 0.005 for a in _accepted(order))
+
+
+def _offer_balance(tenant_id: str, order_id: str) -> None:
+    """Después de la seña, deja en la conversación el link del saldo. Si el proveedor falla, el
+    cliente lo pide después («link de pago») y el agente lo reintenta."""
+    try:
+        pay = start_payment(tenant_id, order_id)
+    except (PaymentProviderError, ValueError):
+        log.warning("no se pudo generar el link del saldo del pedido %s", order_id)
+        return
+    with tenant_tx(tenant_id) as cur:
+        order = orders._fetch(cur, tenant_id, order_id)
+        if order is None or order["status"] != "DEPOSIT_PAID" or not order["conversation_id"]:
+            return
+        due = orders.amount_due(order)[0]
+        _message(cur, tenant_id, order["conversation_id"],
+                 f"Cuando quieras pagar el saldo de {_ars(due)} del pedido #{order['number']}: "
+                 f"{pay['checkout_url']}",
+                 {"type": "balance_link", "order_id": order_id})
+
+
+def _ars(amount: float) -> str:
+    return "$" + f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
@@ -192,6 +253,9 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
     """Efecto de un pago verificado sobre su pedido (bloqueado por el llamador).
     Devuelve (resultado, pedido recién pagado o None)."""
     order_id = str(order["id"])
+    cur.execute("select status from payments where tenant_id = %s and order_id = %s and provider = %s "
+                "and provider_payment_id = %s", (tenant_id, order_id, provider_name, payment.id))
+    before = cur.fetchone()
     payment_id = _record_payment(cur, tenant_id, order_id, provider_name, payment, verified_by)
 
     if payment.status in _REVERSALS:
@@ -203,11 +267,20 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
                                 "where tenant_id = %s and id = %s", (tenant_id, order_id))
                     opportunities._audit(cur, tenant_id, "order_attention_resolved", order_id,
                                          {"reason": "duplicate_payment"})
+            elif _others_total(cur, tenant_id, order, payment.id) > 0.005:
+                # Devolución parcial (p. ej. sólo la seña): sigue habiendo plata cobrada; lo resuelve
+                # una persona sin anular el pedido ni la constancia.
+                _attention(cur, tenant_id, order, f"payment_{payment.status}", notify=False)
             else:
                 cur.execute(
                     "update orders set status = 'REFUNDED', updated_at = now() "
                     "where tenant_id = %s and id = %s", (tenant_id, order_id))
                 _attention(cur, tenant_id, order, f"payment_{payment.status}", notify=False)
+        elif order["status"] == "DEPOSIT_PAID":
+            # Se devolvió la seña: el pedido ya no está señado; lo resuelve una persona.
+            cur.execute("update orders set status = 'REFUNDED', updated_at = now() "
+                        "where tenant_id = %s and id = %s", (tenant_id, order_id))
+            _attention(cur, tenant_id, order, f"payment_{payment.status}", notify=False)
         return f"pago {payment.status}", None
     if payment.status != "approved":
         # pending / in_process / rejected / cancelled: el pedido sigue esperando pago hasta
@@ -221,11 +294,28 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
         return "pago duplicado: requiere devolución", None
     if order["status"] in _PAID_STATES:
         return "ya estaba pagado", None
-    if (abs(payment.amount - float(order["total"])) > 0.005
-            or payment.currency != order["currency"]):
+    if order["status"] == "DEPOSIT_PAID" and before and before["status"] == "approved":
+        return "seña ya acreditada", None     # el mismo pago de la seña, reenviado: no es el saldo
+    if not _amount_ok(order, payment) or payment.currency != order["currency"]:
         _attention(cur, tenant_id, order, "amount_mismatch")
         return "monto o moneda no coinciden: requiere revisión", None
-    lines = [(it["item_id"], it["qty"]) for it in orders._items(cur, tenant_id, order_id)]
+    if (order["status"] in ("PENDING_PAYMENT", "CANCELLED") and order.get("deposit") is not None
+            and abs(payment.amount - float(order["deposit"])) <= 0.005):
+        cur.execute("update orders set status = 'DEPOSIT_PAID', deposit_paid_at = now(), reserved_until = null, "
+                    "cancel_reason = null, attention_reason = null, updated_at = now() "
+                    "where tenant_id = %s and id = %s",
+                    (tenant_id, order_id))
+        cur.execute("update payments set charge = 'deposit' where tenant_id = %s and id = %s", (tenant_id, payment_id))
+        opportunities._audit(cur, tenant_id, "order_deposit_paid", order_id,
+                             {"amount": payment.amount, "provider": provider_name})
+        if order["conversation_id"]:
+            _message(cur, tenant_id, order["conversation_id"],
+                     f"¡Recibimos la seña del pedido #{order['number']}! Ya quedó señado; "
+                     "falta pagar el saldo.", {"type": "deposit_paid", "order_id": order_id})
+        return DEPOSIT_OK, None
+    # Un pedido a medida no aparta ni descuenta stock: se fabrica o se encarga.
+    lines = ([] if order.get("quote")
+             else [(it["item_id"], it["qty"]) for it in orders._items(cur, tenant_id, order_id)])
     if order["status"] == "CANCELLED":
         # Pago tardío: la reserva venció. Se intenta apartar de nuevo, sin vender de más.
         try:
@@ -234,10 +324,12 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
         except OutOfStock:
             _attention(cur, tenant_id, order, "paid_without_stock")
             return "pagado sin stock: requiere devolución", None
-    elif order["status"] != "PENDING_PAYMENT":
+    elif order["status"] not in orders.AWAITING_PAYMENT:
         _attention(cur, tenant_id, order, f"paid_in_status_{order['status'].lower()}")
         return "pago en un estado inesperado: requiere revisión", None
     inventory._sell(cur, tenant_id, order_id, lines)
+    if order["status"] == "DEPOSIT_PAID":
+        cur.execute("update payments set charge = 'balance' where tenant_id = %s and id = %s", (tenant_id, payment_id))
     if order["attention_reason"]:
         # Se resolvió (p. ej. pago tardío reintentado con stock repuesto): queda auditado.
         opportunities._audit(cur, tenant_id, "order_attention_resolved", order_id,
@@ -260,15 +352,19 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
     return "pedido pagado", became_paid
 
 
-def _other_valid_payment(cur: Any, tenant_id: str, order: dict[str, Any], payment_id: str) -> bool:
-    """¿Otro pago aprobado (no éste) cubre el pedido? Uno con monto o moneda distintos no lo cubre."""
+def _others_total(cur: Any, tenant_id: str, order: dict[str, Any], payment_id: str) -> float:
+    """Suma de los OTROS pagos aprobados del pedido en su moneda (con seña son dos: seña y saldo)."""
     cur.execute(
-        "select 1 from payments where tenant_id = %s and order_id = %s and status = 'approved' "
-        "and provider_payment_id is distinct from %s and abs(amount - %s) <= 0.005 "
-        "and currency = %s limit 1",
-        (tenant_id, str(order["id"]), payment_id, order["total"], order["currency"]),
+        "select coalesce(sum(amount), 0) as s from payments where tenant_id = %s and order_id = %s "
+        "and status = 'approved' and provider_payment_id is distinct from %s and currency = %s",
+        (tenant_id, str(order["id"]), payment_id, order["currency"]),
     )
-    return cur.fetchone() is not None
+    return float(cur.fetchone()["s"])
+
+
+def _other_valid_payment(cur: Any, tenant_id: str, order: dict[str, Any], payment_id: str) -> bool:
+    """¿Los otros pagos aprobados (no éste) ya cubren el pedido entero? Entonces éste sobra."""
+    return _others_total(cur, tenant_id, order, payment_id) >= float(order["total"]) - 0.005
 
 
 def _record_payment(cur: Any, tenant_id: str, order_id: str, provider_name: str,

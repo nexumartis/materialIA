@@ -28,7 +28,7 @@ from .documents import ocr, store as documents
 from .domain import (agent_profile, agent_suggest, ai_usage, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
-from .payments.providers import SimulatedProvider
+from .payments.providers import PaymentProviderError, SimulatedProvider
 from .schemas import (
     CatalogImportRequest,
     CatalogImportResult,
@@ -640,6 +640,41 @@ def app_inbox_note(conversation_id: UUID, body: dict = Body(...), uid: str = Dep
     if note is None:
         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
     return note
+
+
+@app.post("/app/inbox/{conversation_id}/quote")
+def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    """El dueño cotiza productos «a pedido» con seña opcional; el link de pago (de la seña o del
+    total) queda en la conversación. El pago se acredita sólo verificado, como cualquier pedido."""
+    conv = str(conversation_id)
+    deposit = body.get("deposit")
+    try:
+        with user_tx(uid) as (_cur, tenant):
+            pass
+        with tenant_tx(tenant) as cur:
+            order = orders.create_quote(cur, tenant, conv, body.get("lines") or [],
+                                        float(deposit) if deposit not in (None, "") else None)
+            opportunities._audit(cur, tenant, "quote_created", order["id"],
+                                 {"actor": uid, "total": order["total"], "deposit": order["deposit"]})
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Datos inválidos.")
+    try:
+        pay = payments.start_payment(tenant, order["id"])
+    except PaymentProviderError:
+        pay = None
+    what = (f"una seña de {payments._ars(order['deposit'])} (el saldo, cuando esté listo)"
+            if order["deposit"] else "el total")
+    lines = ", ".join(f"{i['qty']} × {i['name']}" for i in order["items"])
+    text = (f"Te armamos el pedido #{order['number']}: {lines}. Total {payments._ars(order['total'])}. "
+            f"Para confirmarlo se paga {what}. ")
+    text += (f"Pagá acá: {pay['checkout_url']}" if pay
+             else "El link de pago no se pudo generar ahora: escribime «link de pago» en un rato.")
+    with tenant_tx(tenant) as cur:
+        opportunities._add_message(cur, tenant, conv, "outbound", text,
+                                   {"type": "quote", "order_id": order["id"], "author_id": uid})
+        return orders._view(cur, orders._fetch(cur, tenant, order["id"]))
 
 
 # --- Panel: equipo (sólo el dueño) ----------------------------------------------------

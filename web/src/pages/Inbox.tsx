@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, type InboxConversation, type InboxFilter, type InboxItem, type InternalNote } from "../lib/api";
-import { Bell, MessageSquareText, MessagesSquare, StickyNote } from "lucide-react";
+import { ApiError, api, type CatalogItem, type InboxConversation, type InboxFilter, type InboxItem, type InternalNote } from "../lib/api";
+import { Bell, FileSignature, MessageSquareText, MessagesSquare, StickyNote } from "lucide-react";
+import { useSession } from "../lib/session";
 import { EmptyState } from "../components/ui";
 import { notificationsOn, notificationsSupported } from "../lib/alerts";
-import { fmtAmount } from "../lib/format";
+import { fmtAmount, parseAmount } from "../lib/format";
 
 const FILTERS: { key: InboxFilter; label: string }[] = [
   { key: "derivadas", label: "Derivadas" },
@@ -29,6 +30,7 @@ function when(iso: string): string {
 
 /** Bandeja: el dueño ve las conversaciones, toma el control (el agente se pausa), responde y la devuelve. */
 export function Inbox() {
+  const { me } = useSession();
   const [filter, setFilter] = useState<InboxFilter>("derivadas");
   const [list, setList] = useState<InboxItem[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -222,6 +224,10 @@ export function Inbox() {
                 )}
               </div>
               <InternalNotes key={conv.id} conversationId={conv.id} initial={conv.notes} />
+              {me?.role !== "staff" && (
+                <QuoteForm key={`q-${conv.id}`} conversationId={conv.id}
+                  onDone={() => void act(conv.id, () => api.inboxConversation(conv.id), "No pude actualizar la conversación.")} />
+              )}
             </>
           )}
         </section>
@@ -291,5 +297,101 @@ function InternalNotes({ conversationId, initial }: { conversationId: string; in
       </form>
       {error && <p className="state err" role="alert">{error}</p>}
     </section>
+  );
+}
+
+interface QuoteRow { item_id: string; qty: string; price: string }
+
+/** Pedido a medida para productos «a pedido»: el dueño pone precio y, si quiere, una seña. El link
+ *  de pago queda en la conversación; el pago se acredita sólo verificado. */
+function QuoteForm({ conversationId, onDone }: { conversationId: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<CatalogItem[] | null>(null);
+  const [rows, setRows] = useState<QuoteRow[]>([{ item_id: "", qty: "1", price: "" }]);
+  const [deposit, setDeposit] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || items) return;
+    api.catalog().then((all) => setItems(all.filter((i) => i.pricing_mode === "custom_quote" && i.active)),
+      () => setError("No pude cargar el catálogo."));
+  }, [open, items]);
+
+  const total = rows.reduce((n, r) => n + (Number(r.qty) || 0) * (parseAmount(r.price) || 0), 0);
+  const set = (k: number, patch: Partial<QuoteRow>) => setRows((rs) => rs.map((r, i) => (i === k ? { ...r, ...patch } : r)));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const lines = rows.map((r) => ({ item_id: r.item_id, qty: Number(r.qty), unit_price: parseAmount(r.price) }));
+      await api.createQuote(conversationId, lines, deposit.trim() ? parseAmount(deposit) : null);
+      setOpen(false);
+      setRows([{ item_id: "", qty: "1", price: "" }]);
+      setDeposit("");
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No pude armar el pedido.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn sm quote-open" type="button" onClick={() => setOpen(true)}>
+        <FileSignature size={14} strokeWidth={1.8} aria-hidden /> Cotizar productos a pedido
+      </button>
+    );
+  }
+  return (
+    <form className="quote-form" onSubmit={(e) => void submit(e)} aria-label="Cotizar productos a pedido">
+      <h3><FileSignature size={14} strokeWidth={1.8} aria-hidden /> Pedido a medida</h3>
+      {items && items.length === 0 ? (
+        <p className="muted small">No tenés productos «a pedido» en el catálogo (columna <code>a_pedido = si</code>).</p>
+      ) : (
+        <>
+          {rows.map((r, k) => (
+            <div className="quote-row" key={k}>
+              <select aria-label="Producto" required value={r.item_id} onChange={(e) => set(k, { item_id: e.target.value })}>
+                <option value="">{items ? "Elegí un producto…" : "Cargando…"}</option>
+                {items?.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+              <input aria-label="Cantidad" type="number" min={1} required value={r.qty} onChange={(e) => set(k, { qty: e.target.value })} />
+              <input aria-label="Precio unitario" inputMode="decimal" required placeholder="Precio $" value={r.price}
+                onChange={(e) => set(k, { price: e.target.value })} />
+              {rows.length > 1 && (
+                <button className="btn sm ghost" type="button" aria-label="Quitar producto"
+                  onClick={() => setRows((rs) => rs.filter((_, i) => i !== k))}>×</button>
+              )}
+            </div>
+          ))}
+          <button className="btn sm ghost" type="button" onClick={() => setRows((rs) => [...rs, { item_id: "", qty: "1", price: "" }])}>
+            + Otro producto
+          </button>
+          <label className="quote-deposit">
+            Seña (opcional)
+            <input inputMode="decimal" placeholder="Monto $ (vacío = sin seña)" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
+            {total > 0 && (
+              <span className="muted small">
+                Total ${fmtAmount(total)} · 30% = ${fmtAmount(Math.round(total * 0.3))}{" "}
+                <button type="button" className="linkish" onClick={() => setDeposit(String(Math.round(total * 0.3)))}>usar 30%</button>
+              </span>
+            )}
+          </label>
+          <p className="muted small">
+            Se le manda al cliente el resumen con el link de pago {deposit.trim() ? "de la seña; después de acreditarla, el del saldo" : "del total"}.
+            Sólo se acredita con el pago verificado o una transferencia que cotejes en tu banco.
+          </p>
+          <div className="quote-actions">
+            <button className="btn sm" type="button" onClick={() => setOpen(false)}>Cancelar</button>
+            <button className="btn primary sm" type="submit" disabled={saving || !items}>Enviar al cliente</button>
+          </div>
+        </>
+      )}
+      {error && <p className="state err" role="alert">{error}</p>}
+    </form>
   );
 }

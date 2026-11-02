@@ -113,7 +113,7 @@ Detalle y justificación en [research/2026-10-30-competencia](research/2026-10-3
 5. Avisos al dueño (derivaciones y clientes sin atender).
 6. ~~Roles de empleados, asignación y notas internas~~ (rama `feat/empleados-roles`, 02/11/2026; [spec](superpowers/specs/2026-11-02-equipo-roles-design.md), migración 0016).
 7. Alertas de stock bajo y movimientos de inventario.
-8. Seña para productos a pedido.
+8. ~~Seña para productos a pedido~~ (rama `feat/sena`, 02/11/2026; [spec](superpowers/specs/2026-11-02-sena-design.md), migración 0017).
 9. Cancelar un pedido pendiente desde el chat.
 10. Configuración desde la web o los PDFs del negocio, siempre como propuesta a revisar.
 11. Fichas técnicas en PDF.
