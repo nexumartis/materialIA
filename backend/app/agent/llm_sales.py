@@ -16,7 +16,7 @@ Garantías (las mismas que con reglas):
 """
 from __future__ import annotations
 
-from ..domain import ai_usage
+from ..domain import ai_usage, limits
 
 import json
 import logging
@@ -189,9 +189,12 @@ def _ollama_planner(messages: list[dict[str, Any]], tools: list[dict[str, Any]])
     key = settings.ollama_api_key or settings.llm_api_key
     if key:
         headers["Authorization"] = f"Bearer {key}"
+    if not limits.ai_allowed(ai_usage.current_tenant()):
+        raise limits.AIBudgetExceeded()       # el que llama sigue con su respaldo sin IA
     resp = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/chat",
         json={"model": settings.ollama_model, "messages": messages, "stream": False,
+              "options": {"num_predict": settings.llm_max_output_tokens},
               "tools": [{"type": "function", "function": t} for t in tools]},
         headers=headers, timeout=settings.llm_timeout_s,
     )
@@ -596,6 +599,8 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             refused = refused + 1 if blocked == len(calls) else 0
             if refused >= 2:
                 break
+    except limits.AIBudgetExceeded:
+        log.warning("tope de IA alcanzado a mitad del turno: sigue con reglas")
     except Exception:  # noqa: BLE001 - modelo caído o respuesta inválida
         log.exception("planner LLM de ventas falló")
         if not outputs:

@@ -32,6 +32,10 @@ def _force_mock_llm():
     from app.config import settings
     settings.llm_provider = "mock"
     settings.georef_url = ""          # sin red en los tests: test_georef simula la API
+    # Todos los tests salen de la misma IP: los límites de pedidos se prueban en test_limits.
+    for name in ("rate_ip_per_minute", "rate_ip_per_day", "rate_conversation_per_hour",
+                 "rate_store_per_hour", "rate_user_ai_per_minute"):
+        setattr(settings, name, 0)
 
 
 @pytest.fixture(scope="session", autouse=True)

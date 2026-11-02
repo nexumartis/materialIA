@@ -20,7 +20,7 @@ import time
 
 from .agent import compaction
 from .documents import store as documents
-from .domain import catalog_sheet, customer_memory, evals, orders
+from .domain import catalog_sheet, customer_memory, evals, limits, orders
 
 log = logging.getLogger("app.worker")
 
@@ -31,7 +31,8 @@ def run_once() -> dict[str, int]:
             "compacted_conversations": compaction.compact_due(),
             "payment_documents_read": documents.process_pending(),
             "stale_previews": evals.cleanup_stale(),
-            "catalog_sheets": catalog_sheet.sync_due()}
+            "catalog_sheets": catalog_sheet.sync_due(),
+            "rate_limit_windows_cleaned": limits.cleanup()}
 
 
 def main(argv: list[str]) -> None:

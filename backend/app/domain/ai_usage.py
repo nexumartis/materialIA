@@ -25,6 +25,11 @@ def for_tenant(tenant_id: str, kind: str) -> Iterator[None]:
         _current.reset(token)
 
 
+def current_tenant() -> Optional[str]:
+    ctx = _current.get()
+    return ctx[0] if ctx else None
+
+
 def record(model: str, response: dict[str, Any]) -> None:
     ctx = _current.get()
     if ctx is None:

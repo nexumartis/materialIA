@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, limits, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -160,8 +160,9 @@ def _not_public(tenant: str, conversation_id: str | None) -> None:
 
 
 @app.post("/sandbox/sales/chat")
-def sales_chat(req: ChatRequest, company: str = Query("C")) -> dict:
+def sales_chat(req: ChatRequest, request: Request, company: str = Query("C")) -> dict:
     tenant = _resolve_tenant(company)
+    limits.guard_public_chat(request, tenant, req.conversation_id)
     _not_public(tenant, req.conversation_id)
     res = sales_agent.handle_sales_message(tenant, req.message, req.conversation_id)
     return {
@@ -368,12 +369,14 @@ def _suggest(uid: str, read) -> dict:
 @app.post("/app/agent-suggest/url")
 def app_agent_suggest_url(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """Propuesta de tono, saludo y preguntas frecuentes a partir de la web del negocio."""
+    limits.guard_user(uid)
     return _suggest(uid, lambda: agent_suggest.fetch_site_text(str(body.get("url") or "")))
 
 
 @app.post("/app/agent-suggest/pdf")
 async def app_agent_suggest_pdf(request: Request, uid: str = Depends(owner_uid)) -> dict:
     """Igual, desde un PDF del negocio (catálogo, lista, folleto), como cuerpo crudo."""
+    await run_in_threadpool(limits.guard_user, uid)
     too_big = HTTPException(status_code=413, detail="El PDF supera 10 MiB.")
     try:
         if int(request.headers.get("content-length") or 0) > 10 * 1024 * 1024:
@@ -836,11 +839,12 @@ BUYER_KEY = "X-Buyer-Key"
 
 
 @app.post("/public/{slug}/chat")
-def public_chat(slug: str, req: ChatRequest,
+def public_chat(slug: str, req: ChatRequest, request: Request,
                 token: str | None = Header(None, alias=buyer_session.HEADER),
                 buyer_key: str | None = Header(None, alias=BUYER_KEY)) -> dict:
     store = _store(slug)
     tenant = store["tenant_id"]
+    limits.guard_public_chat(request, tenant, req.conversation_id)
     new_token = None
     if req.conversation_id:
         _owned(tenant, req.conversation_id, token)
@@ -888,6 +892,7 @@ async def public_upload_document(slug: str, conversation_id: UUID, order_id: UUI
     recibirlo o leerlo NO acredita el pago."""
     store = await run_in_threadpool(_store, slug)
     tenant, conv = store["tenant_id"], str(conversation_id)
+    await run_in_threadpool(limits.guard_public_chat, request, tenant, conv)
     await run_in_threadpool(_owned, tenant, conv, token)   # antes de leer el archivo
     try:
         declared = int(request.headers.get("content-length") or 0)
@@ -1015,6 +1020,7 @@ def app_agent_preview(req: AgentPreview, uid: str = Depends(current_uid)) -> dic
     """Un mensaje de la vista previa del asistente: el agente responde con el perfil BORRADOR, sin
     guardarlo, en una conversación de prueba (sin pedidos, stock ni cobros) que se borra al reiniciar
     o la limpia el worker."""
+    limits.guard_user(uid)
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Escribí un mensaje.")
     with user_tx(uid) as (cur, tenant):
@@ -1041,5 +1047,6 @@ def app_run_evals(body: dict = Body(default={}), uid: str = Depends(owner_uid)) 
     with user_tx(uid) as (cur, tenant):
         cases = evals.list_cases(cur, tenant)
         profile = _draft_profile(cur, tenant, body.get("profile")) if body.get("profile") else None
+    limits.guard_user(uid, weight=max(1, len(cases)))     # cada caso es una corrida del agente
     # Fuera de la transacción del panel: el agente abre las suyas (rol del backend, tenant fijo).
     return evals.run(tenant, cases, profile)
