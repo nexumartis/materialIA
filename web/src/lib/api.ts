@@ -410,6 +410,8 @@ export interface CatalogItem {
   reserved: number;
   active: boolean;
   image_url: string | null;
+  variant_group?: string | null;
+  variant_label?: string | null;
   specs: Record<string, unknown>;
 }
 
@@ -550,6 +552,9 @@ export interface ProductCard {
   specs: Record<string, unknown>;
   /** Ficha técnica del fabricante (PDF), si el negocio la cargó. */
   datasheet_url?: string | null;
+  /** Variante de este producto (p. ej. «Negro mate») y las otras del mismo modelo. */
+  variant_label?: string | null;
+  variants?: { label: string; available: number | null; message: string }[];
   action: QuickReply | null;
 }
 
