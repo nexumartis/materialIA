@@ -82,7 +82,7 @@ TOGGLEABLE_TOOLS = {
 #   min_order_total        compra mínima para cerrar un pedido (pesos)
 #   delivery_zones         zonas a las que se envía (vacío = no se informa por zona)
 #   human_only_categories  categorías que sólo vende una persona (no entran al carrito)
-POLICY_KEYS = ("min_order_total", "delivery_zones", "human_only_categories")
+POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories")
 
 
 def slugify(text: str) -> str:
@@ -194,9 +194,37 @@ def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("La compra mínima no puede ser negativa.")
         if minimum:
             out["min_order_total"] = minimum
-    zones = _words(raw.get("delivery_zones"))
+    # «CABA: 5000» o «GBA = $8.000»: zona con costo de envío cargado por el negocio (el agente lo
+    # informa tal cual; sin costo, sólo dice si se envía).
+    zones, costs = [], {}
+    raw_zones = raw.get("delivery_zones")
+    if isinstance(raw_zones, str):   # «Quilmes: 4.500,50»: la coma de los centavos no separa zonas
+        raw_zones = re.split(r",(?!(?<=\d,)\d{1,2}\s*(?:,|$))", raw_zones)
+    for entry in _words(raw_zones):
+        name, _, cost = entry.replace("=", ":").partition(":")
+        name = name.strip()
+        if not name:
+            continue
+        zones.append(name)
+        if cost.strip():
+            if not re.fullmatch(r"\$?\s*[\d.,]+", cost.strip()):
+                raise ValueError(f"El costo de envío de «{name}» debe ser un número.")
+            amount = re.sub(r"[^\d,.]", "", cost)
+            amount = amount.replace(".", "").replace(",", ".") if "," in amount or re.fullmatch(r"\d{1,3}(\.\d{3})+", amount) else amount
+            try:
+                value = float(amount)
+            except ValueError:
+                raise ValueError(f"El costo de envío de «{name}» debe ser un número.")
+            if value < 0 or value > 10_000_000:
+                raise ValueError(f"El costo de envío de «{name}» no es válido.")
+            costs[name] = value
+    for name, value in (raw.get("shipping_costs") or {}).items() if isinstance(raw.get("shipping_costs"), dict) else []:
+        if name in zones and name not in costs and isinstance(value, (int, float)) and 0 <= value <= 10_000_000:
+            costs[name] = float(value)
     if zones:
         out["delivery_zones"] = zones
+    if costs:
+        out["shipping_costs"] = costs
     cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
     if cats:
         out["human_only_categories"] = cats

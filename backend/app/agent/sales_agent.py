@@ -1023,7 +1023,10 @@ class _Turn:
         z = normalize(zone)
         hit = next((x for x in zones if z and (normalize(x) in z or z in normalize(x))), None)
         if hit:
-            return f"Sí, enviamos a {hit}." + (f" {info}" if info else "")
+            cost = ((self.profile.get("policies") or {}).get("shipping_costs") or {}).get(hit)
+            # El costo es el que cargó el negocio; sin costo cargado no se inventa.
+            price = f" El envío a {hit} cuesta {_money(cost)}." if cost is not None else ""
+            return f"Sí, enviamos a {hit}.{price}" + (f" {info}" if info else "")
         return (f"A {zone or 'esa zona'} no figura que enviemos. Las zonas de envío son: "
                 f"{', '.join(zones)}. Si querés, una persona del equipo lo revisa.")
 
