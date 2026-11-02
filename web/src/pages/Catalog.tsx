@@ -73,6 +73,7 @@ export function Catalog() {
   }
 
   const [selected, setSelected] = useState<string[]>([]);
+  const [history, setHistory] = useState<CatalogItem | null>(null);
   const allIds = items?.map((it) => it.id) ?? [];
   const toggleSel = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -212,6 +213,7 @@ export function Catalog() {
                       </td>
                       <td className="actions-cell">
                         {e && <button className="btn sm primary" type="button" onClick={() => void saveRow(it)}>Guardar</button>}
+                        <button className="btn sm ghost" type="button" onClick={() => setHistory(it)}>Historial</button>
                         <button className="btn sm ghost" type="button" onClick={() => void toggle(it)}>
                           {it.active ? "Pausar" : "Activar"}
                         </button>
@@ -222,6 +224,7 @@ export function Catalog() {
               </tbody>
             </table>
           </div>
+          {history && <MovementsModal item={history} onClose={() => setHistory(null)} />}
           <SelectionBar count={selected.length} onClear={() => setSelected([])}>
             <button className="btn sm" type="button" onClick={() => void setActive(true)}>
               <Play size={14} strokeWidth={1.8} aria-hidden /> Activar
@@ -232,6 +235,50 @@ export function Catalog() {
           </SelectionBar>
         </>
       )}
+    </div>
+  );
+}
+
+/** Historial de stock de un producto: ventas, apartados, liberaciones y ajustes. */
+function MovementsModal({ item, onClose }: { item: CatalogItem; onClose: () => void }) {
+  type Move = Awaited<ReturnType<typeof api.stockMovements>>[number];
+  const [moves, setMoves] = useState<Move[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api.stockMovements(item.id).then(setMoves).catch(() => setFailed(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [item.id, onClose]);
+  const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  return (
+    <div className="pmodal-scrim" onClick={onClose}>
+      <div className="pmodal history-modal" role="dialog" aria-modal="true" aria-label={`Historial de ${item.name}`}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="pmodal-body">
+          <h2>Historial de stock</h2>
+          <p>{item.name} · stock {item.on_hand}, apartadas {item.reserved}</p>
+          {failed ? <div className="state err">No pude cargar el historial.</div> : !moves ? <p>Cargando…</p>
+            : moves.length === 0 ? <p>Todavía no hay movimientos.</p> : (
+              <div className="kv">
+                {moves.map((m, i) => (
+                  <div className="row" key={i}>
+                    <span className="k">
+                      {new Date(m.at).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires",
+                        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · {m.label}
+                      {m.order_number ? ` · pedido #${m.order_number}` : ""}
+                    </span>
+                    <span className="v">
+                      {m.on_hand !== 0 && `stock ${sign(m.on_hand)}`}{m.on_hand !== 0 && m.reserved !== 0 ? " · " : ""}
+                      {m.reserved !== 0 && `apartadas ${sign(m.reserved)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          <button className="btn" type="button" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
     </div>
   );
 }

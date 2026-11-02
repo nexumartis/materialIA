@@ -206,6 +206,9 @@ export const api = {
     }),
   paymentRegister: (month: string) =>
     authed<Blob>(`/app/payments/register.csv?month=${encodeURIComponent(month)}`, {}, "blob"),
+  stockMovements: (itemId: string) =>
+    authed<{ kind: string; label: string; on_hand: number; reserved: number; at: string; order_number: number | null }[]>(
+      `/app/catalog/${itemId}/movements`),
   cancelOrder: (orderId: string) => authed<Order>(`/app/orders/${orderId}/cancel`, { method: "POST" }),
   orderReceipt: (orderId: string) => authed<Blob>(`/app/orders/${orderId}/receipt.pdf`, {}, "blob"),
   advanceOrder: (id: string, status: string) =>

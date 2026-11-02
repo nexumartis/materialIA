@@ -80,6 +80,24 @@ def _set_stock(cur: Any, tenant_id: str, item_id: str, on_hand: int) -> None:
         inventory._movement(cur, tenant_id, item_id, None, "adjust", delta, 0)
 
 
+_MOVEMENT_LABEL = {"sale": "Venta", "reserve": "Apartado por pedido", "release": "Liberado",
+                   "adjust": "Ajuste de stock"}
+
+
+def movements(cur: Any, tenant_id: str, item_id: str, limit: int = 50) -> Optional[list[dict[str, Any]]]:
+    """Últimos movimientos de stock del producto (None si no es del negocio)."""
+    cur.execute("select 1 from catalog_items where tenant_id = %s and id = %s", (tenant_id, item_id))
+    if cur.fetchone() is None:
+        return None
+    cur.execute("select m.kind, m.delta_on_hand, m.delta_reserved, m.created_at, o.number "
+                "from stock_movements m left join orders o on o.tenant_id = m.tenant_id and o.id = m.order_id "
+                "where m.tenant_id = %s and m.item_id = %s order by m.created_at desc limit %s",
+                (tenant_id, item_id, limit))
+    return [{"kind": r["kind"], "label": _MOVEMENT_LABEL.get(r["kind"], r["kind"]),
+             "on_hand": r["delta_on_hand"], "reserved": r["delta_reserved"],
+             "at": r["created_at"].isoformat(), "order_number": r["number"]} for r in cur.fetchall()]
+
+
 def update_product(cur: Any, tenant_id: str, item_id: str, price: Optional[float] = None,
                    stock: Optional[int] = None, active: Optional[bool] = None) -> Optional[dict[str, Any]]:
     cur.execute("select pricing_mode from catalog_items where tenant_id = %s and id = %s",
