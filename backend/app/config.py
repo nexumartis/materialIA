@@ -45,7 +45,23 @@ class Settings(BaseSettings):
     llm_price_in_per_mtok: Optional[float] = None
     llm_price_out_per_mtok: Optional[float] = None
     llm_price_currency: str = "USD"
-    llm_max_output_tokens: int = 500
+    # Tope de tokens que puede generar cada respuesta (incluye el razonamiento de los modelos que
+    # «piensan»): corta respuestas desbocadas.
+    llm_max_output_tokens: int = 4000
+
+    # --- Frenos de abuso y gasto (0 = sin límite en ese eje). Ver app/domain/limits.py. ---
+    rate_ip_per_minute: int = 12            # chat público, por IP
+    rate_ip_per_day: int = 400
+    rate_conversation_per_hour: int = 90
+    rate_store_per_hour: int = 1500         # una tienda entera: pasado, atiende SIN IA (no bloquea)
+    rate_user_ai_per_minute: int = 20       # panel: vista previa, evaluaciones, propuestas
+    ai_daily_calls_per_tenant: int = 1500   # pasado el tope: sin IA hasta mañana (sigue con reglas)
+    ai_daily_tokens_per_tenant: int = 3_000_000
+    ai_daily_calls_global: int = 20_000
+    ai_daily_tokens_global: int = 40_000_000
+    # Proxies de confianza que agregan X-Forwarded-For (Cloud Run directo: 1; con balanceador de
+    # Google: 2). 0 = IP del socket. Mal contado, todos los clientes comparten el límite.
+    trusted_proxy_hops: int = 0
     # Ollama (local sin key, o Ollama Cloud con key en OLLAMA_API_KEY/LLM_API_KEY)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"

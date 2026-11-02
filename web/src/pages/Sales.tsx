@@ -517,6 +517,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
               type="text"
               autoComplete="off"
               placeholder="Escribí como cliente…"
+              maxLength={2000}
               aria-label="Mensaje"
               value={input}
               onChange={(e) => setInput(e.target.value)}

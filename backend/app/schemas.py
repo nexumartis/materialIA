@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Catálogo -------------------------------------------------------------
@@ -84,7 +84,14 @@ class MeResponse(BaseModel):
 
 # --- API chat -------------------------------------------------------------
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=2000)   # un mensaje gigante es tokens pagos
+
+    @field_validator("message")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("el mensaje está vacío")
+        return v
     conversation_id: Optional[str] = None
 
 

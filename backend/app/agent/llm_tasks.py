@@ -5,7 +5,7 @@ configurado o falla, devuelven None y quien llama usa su versión determinista.
 """
 from __future__ import annotations
 
-from ..domain import ai_usage
+from ..domain import ai_usage, limits
 
 import json
 import logging
@@ -26,9 +26,12 @@ def _ollama(system: str, user: str) -> str:
     key = settings.ollama_api_key or settings.llm_api_key
     if key:
         headers["Authorization"] = f"Bearer {key}"
+    if not limits.ai_allowed(ai_usage.current_tenant()):
+        raise limits.AIBudgetExceeded()       # el que llama sigue con su respaldo sin IA
     resp = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/chat",
         json={"model": settings.ollama_model, "stream": False, "format": "json",
+              "options": {"num_predict": settings.llm_max_output_tokens},
               "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
         headers=headers, timeout=settings.llm_timeout_s,
     )
