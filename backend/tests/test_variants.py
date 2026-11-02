@@ -42,3 +42,30 @@ def test_cards_offer_the_other_variants_of_the_model(accounts):
     client.post("/app/catalog/import", headers=owner, json={"csv": "sku;nombre;precio\nAQ-CRO;Canilla Aquaflux cromo;68.000\n"})
     items = {i["sku"]: i for i in client.get("/app/catalog", headers=owner).json()}
     assert items["AQ-NEG"]["variant_group"] is None and items["AQ-CRO"]["variant_group"] == "Canilla Aquaflux"
+
+
+def test_search_by_model_and_color_and_variant_substitutes(accounts):
+    client = TestClient(app)
+    uid, _ = accounts("Tienda Búsqueda")
+    owner = bearer(uid)
+    client.post("/app/catalog/import", headers=owner, json={"csv": CSV + "OTRA-1;Canilla genérica cromo;griferia;50.000;8;;\n"})
+    slug = client.get("/app/agent-profile", headers=owner).json()["public_slug"]
+    r = client.post(f"/public/{slug}/chat", json={"message": "canilla aquaflux negra"}).json()
+    names = [c["name"] for c in r["ui"].get("products", [])]
+    assert names == ["Canilla Aquaflux negra mate"], r["reply"]                    # color sin ficha: por nombre
+    r = client.post(f"/public/{slug}/chat", json={"message": "canilla aquaflux blanca"}).json()
+    alts = [c["name"] for c in r["ui"].get("products", [])]
+    assert "sin stock" in r["reply"] and alts and alts[0].startswith("Canilla Aquaflux"), r["reply"]   # variante primero
+
+
+def test_color_fallback_matches_whole_words_only(accounts, raw_conn):
+    from app.domain import inventory
+    client = TestClient(app)
+    uid, tenant = accounts("Tienda Colores")
+    client.post("/app/catalog/import", headers=bearer(uid),
+                json={"csv": "sku;nombre;categoria;precio;stock\nINO-1;Inodoro largo;sanitarios;1.000;5\n"
+                              "GRI-1;Grifería dorada;griferia;2.000;5\n"})
+    names = lambda color: [o["name"] for o in inventory.offers(tenant, color=color)]
+    assert names("oro") == []                       # «oro» no es parte de «inodoro»
+    assert names("dorado") == ["Grifería dorada"]
+    assert names("%") == [] and names("_") == []

@@ -54,6 +54,7 @@ where c.tenant_id = %(tenant)s and c.active = true
 
 # Texto donde se busca: nombre, marca, categoría y ficha, normalizado como `normalize`.
 _HAYSTACK = ("translate(lower(c.name || ' ' || coalesce(c.brand, '') || ' ' || c.category"
+             " || ' ' || coalesce(c.variant_group, '') || ' ' || coalesce(c.variant_label, '')"
              " || ' ' || c.specs_json::text), 'áéíóúüñ', 'aeiouun')")
 
 
@@ -80,7 +81,8 @@ def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
             keywords: Iterable[str] = (), color: Optional[str] = None,
             max_price: Optional[float] = None, category: Optional[str] = None,
             ambiente: Optional[str] = None, in_stock_only: bool = False,
-            exclude: Iterable[str] = (), limit: int = 10) -> list[dict[str, Any]]:
+            exclude: Iterable[str] = (), variant_group: Optional[str] = None,
+            limit: int = 10) -> list[dict[str, Any]]:
     """Ofertas activas de la empresa. Con `keywords`, devuelve sólo las que coinciden con MÁS
     palabras (todas, si alguna oferta las tiene todas); ordena por precio."""
     sql = [_OFFER_SELECT]
@@ -89,8 +91,21 @@ def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
         sql.append("and c.id = any(%(ids)s::uuid[])")
         params["ids"] = list(ids)
     if color:
-        sql.append("and c.specs_json->>'color' = %(color)s")
+        # Sin color cargado en la ficha, vale el que dice el nombre, el modelo o la variante
+        # («negra mate»): raíz sin la vocal final (negro/negra -> negr).
+        # Palabra completa que empieza con la raíz (negr -> negra/negro; «oro» no matchea «inodoro»).
+        stem = re.sub(r"[^a-z]", "", normalize(color))
+        stem = stem[:-1] if len(stem) > 4 else stem
+        if stem:
+            sql.append(f"and (c.specs_json->>'color' = %(color)s or (c.specs_json->>'color' is null "
+                       f"and {_HAYSTACK} ~ %(color_re)s))")
+            params["color_re"] = rf"\m{stem}[a-z]*\M"
+        else:
+            sql.append("and c.specs_json->>'color' = %(color)s")
         params["color"] = color
+    if variant_group:
+        sql.append("and c.variant_group = %(variant_group)s")
+        params["variant_group"] = variant_group
     if category:
         sql.append("and c.category = %(category)s")
         params["category"] = category
