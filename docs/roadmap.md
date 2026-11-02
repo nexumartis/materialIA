@@ -111,7 +111,7 @@ Detalle y justificación en [research/2026-10-30-competencia](research/2026-10-3
 3. Envío por zona o código postal.
 4. Sustitutos y búsqueda mejorada.
 5. Avisos al dueño (derivaciones y clientes sin atender).
-6. Roles de empleados, asignación y notas internas.
+6. ~~Roles de empleados, asignación y notas internas~~ (rama `feat/empleados-roles`, 02/11/2026; [spec](superpowers/specs/2026-11-02-equipo-roles-design.md), migración 0016).
 7. Alertas de stock bajo y movimientos de inventario.
 8. Seña para productos a pedido.
 9. Cancelar un pedido pendiente desde el chat.

@@ -23,9 +23,9 @@ from . import buyer_session
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
-from .db import NoMembership, db_healthcheck, tenant_tx, user_tx
+from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
@@ -291,12 +291,21 @@ def _no_membership(_: Request, __: NoMembership) -> JSONResponse:
     return JSONResponse(status_code=403, content={"detail": "Tu cuenta no tiene un negocio asociado."})
 
 
+def owner_uid(uid: str = Depends(current_uid)) -> str:
+    """Como `current_uid`, pero sólo para el dueño: plata, catálogo, configuración y equipo."""
+    with user_tx(uid) as (cur, _tenant):
+        if team.role(cur) != "owner":
+            raise HTTPException(status_code=403, detail="Esto lo puede hacer sólo el dueño del negocio.")
+    return uid
+
+
 @app.get("/app/me", response_model=MeResponse)
 def me(uid: str = Depends(current_uid)) -> MeResponse:
     with user_tx(uid) as (cur, tenant):
         cur.execute("select name from tenants where id = %s", (tenant,))
         row = cur.fetchone()
-    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"])
+        role = team.role(cur)
+    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"], role=role)
 
 
 @app.get("/app/opportunities", response_model=list[OpportunitySummary])
@@ -338,7 +347,7 @@ def _business_name(cur, tenant: str) -> str:
 
 
 @app.get("/app/ai-usage")
-def app_ai_usage(days: int = Query(30, ge=1, le=365), uid: str = Depends(current_uid)) -> dict:
+def app_ai_usage(days: int = Query(30, ge=1, le=365), uid: str = Depends(owner_uid)) -> dict:
     """Llamadas y tokens de IA del negocio; costo sólo con precio configurado."""
     with user_tx(uid) as (cur, tenant):
         return ai_usage.summary(cur, tenant, days)
@@ -357,13 +366,13 @@ def _suggest(uid: str, read) -> dict:
 
 
 @app.post("/app/agent-suggest/url")
-def app_agent_suggest_url(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_agent_suggest_url(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """Propuesta de tono, saludo y preguntas frecuentes a partir de la web del negocio."""
     return _suggest(uid, lambda: agent_suggest.fetch_site_text(str(body.get("url") or "")))
 
 
 @app.post("/app/agent-suggest/pdf")
-async def app_agent_suggest_pdf(request: Request, uid: str = Depends(current_uid)) -> dict:
+async def app_agent_suggest_pdf(request: Request, uid: str = Depends(owner_uid)) -> dict:
     """Igual, desde un PDF del negocio (catálogo, lista, folleto), como cuerpo crudo."""
     too_big = HTTPException(status_code=413, detail="El PDF supera 10 MiB.")
     try:
@@ -405,7 +414,7 @@ def app_get_profile(uid: str = Depends(current_uid)) -> dict:
 
 
 @app.put("/app/agent-profile")
-def app_put_profile(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_put_profile(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """Guarda el formulario. Con `apply_template`, precarga la plantilla del rubro elegido."""
     with user_tx(uid) as (cur, tenant):
         agent_profile._ensure(cur, tenant, _business_name(cur, tenant))
@@ -452,7 +461,7 @@ def app_profile_versions(uid: str = Depends(current_uid)) -> list[dict]:
 
 
 @app.post("/app/agent-profile/versions/{version}/restore")
-def app_profile_restore(version: int, uid: str = Depends(current_uid)) -> dict:
+def app_profile_restore(version: int, uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         profile = agent_profile.restore(cur, tenant, version, uid)
         if profile is None:
@@ -469,7 +478,7 @@ def app_catalog(uid: str = Depends(current_uid)) -> list[dict]:
 
 
 @app.patch("/app/catalog/{item_id}")
-def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         try:
             item = backoffice.update_product(
@@ -503,7 +512,7 @@ def app_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
 
 
 @app.put("/app/catalog/sheet")
-def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """Conecta (o reemplaza) la planilla y la sincroniza en el momento."""
     with user_tx(uid) as (cur, tenant):
         try:
@@ -514,7 +523,7 @@ def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(current
 
 
 @app.post("/app/catalog/sheet/sync")
-def app_sync_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+def app_sync_catalog_sheet(uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (_, tenant):
         pass   # el negocio sale de la membresía; la lectura la hace el backend (red fuera de la transacción)
     sheet = catalog_sheet.sync(tenant)
@@ -524,13 +533,13 @@ def app_sync_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
 
 
 @app.delete("/app/catalog/sheet")
-def app_disconnect_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+def app_disconnect_catalog_sheet(uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         return {"disconnected": catalog_sheet.disconnect(cur, tenant, uid)}
 
 
 @app.post("/app/catalog/import")
-def app_import_catalog(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_import_catalog(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """CSV como texto (el front lo lee del archivo). Devuelve creados, actualizados y errores por fila."""
     text = str(body.get("csv") or "")
     if len(text) > 2_000_000:
@@ -617,6 +626,66 @@ def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(c
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.post("/app/inbox/{conversation_id}/notes")
+def app_inbox_note(conversation_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    with system_tx() as cur:
+        cur.execute("select email from auth.users where id = %s", (uid,))
+        row = cur.fetchone()
+    try:
+        with user_tx(uid) as (cur, tenant):
+            note = team.add_note(cur, tenant, uid, row["email"] if row else None, str(conversation_id),
+                                 str(body.get("body") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if note is None:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+    return note
+
+
+# --- Panel: equipo (sólo el dueño) ----------------------------------------------------
+def _team_tx(uid: str) -> str:
+    """Negocio del dueño ya verificado por `owner_uid` (el equipo se lee como backend: emails)."""
+    with user_tx(uid) as (_cur, tenant):
+        pass
+    return tenant
+
+
+@app.get("/app/team")
+def app_team(uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return team.members(cur, tenant)
+
+
+@app.post("/app/team/invites")
+def app_team_invite(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            team.invite(cur, tenant, uid, str(body.get("email") or ""))
+            return team.members(cur, tenant)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/app/team/invites/{email}")
+def app_team_cancel_invite(email: str, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        if not team.cancel_invite(cur, tenant, email):
+            raise HTTPException(status_code=404, detail="Invitación no encontrada.")
+        return team.members(cur, tenant)
+
+
+@app.delete("/app/team/members/{member_id}")
+def app_team_remove(member_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        if not team.remove(cur, tenant, uid, str(member_id)):
+            raise HTTPException(status_code=404, detail="Integrante no encontrado (al dueño no se lo puede quitar).")
+        return team.members(cur, tenant)
+
+
 # --- Panel: comprobantes, transferencias y registro mensual --------------------------
 # El dueño revisa los archivos y acredita sólo lo que cotejó en su banco (confirm_transfer).
 @app.get("/app/payment-documents")
@@ -652,7 +721,7 @@ def app_payment_document_reject(document_id: UUID, uid: str = Depends(current_ui
 
 
 @app.post("/app/orders/{order_id}/cancel")
-def app_cancel_order(order_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_cancel_order(order_id: UUID, uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         try:
             order = orders.cancel_pending(cur, tenant, str(order_id), "cancelado por el negocio")
@@ -665,7 +734,7 @@ def app_cancel_order(order_id: UUID, uid: str = Depends(current_uid)) -> dict:
 
 
 @app.post("/app/orders/{order_id}/confirm-transfer")
-def app_confirm_transfer(order_id: UUID, req: TransferConfirm, uid: str = Depends(current_uid)) -> dict:
+def app_confirm_transfer(order_id: UUID, req: TransferConfirm, uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (_, tenant):
         pass   # el negocio sale de la membresía; confirm_transfer la revalida al bloquear el pedido
     try:
@@ -684,7 +753,7 @@ def app_confirm_transfer(order_id: UUID, req: TransferConfirm, uid: str = Depend
 
 @app.get("/app/payments/register.csv")
 def app_payment_register(month: str = Query(..., description="AAAA-MM, hora Argentina"),
-                         uid: str = Depends(current_uid)) -> Response:
+                         uid: str = Depends(owner_uid)) -> Response:
     with user_tx(uid) as (cur, tenant):
         try:
             body = documents.month_csv(cur, tenant, month)
@@ -853,7 +922,7 @@ def app_knowledge(uid: str = Depends(current_uid)) -> list[dict]:
 
 
 @app.post("/app/knowledge")
-def app_add_knowledge(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_add_knowledge(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     text = str(body.get("text") or "")
     vectors = knowledge.embed(knowledge.chunk(text)) if text.strip() else None   # fuera de la transacción
     with user_tx(uid) as (cur, tenant):
@@ -866,7 +935,7 @@ def app_add_knowledge(body: dict = Body(...), uid: str = Depends(current_uid)) -
 
 
 @app.delete("/app/knowledge/{document_id}")
-def app_delete_knowledge(document_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_delete_knowledge(document_id: UUID, uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         if not knowledge.delete_document(cur, tenant, str(document_id)):
             raise HTTPException(status_code=404, detail="Documento no encontrado.")
@@ -881,7 +950,7 @@ def app_eval_cases(uid: str = Depends(current_uid)) -> list[dict]:
 
 
 @app.post("/app/agent-evals")
-def app_add_eval_case(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_add_eval_case(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         try:
             return evals.add_case(cur, tenant, body)
@@ -890,7 +959,7 @@ def app_add_eval_case(body: dict = Body(...), uid: str = Depends(current_uid)) -
 
 
 @app.delete("/app/agent-evals/{case_id}")
-def app_delete_eval_case(case_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_delete_eval_case(case_id: UUID, uid: str = Depends(owner_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         if not evals.delete_case(cur, tenant, str(case_id)):
             raise HTTPException(status_code=404, detail="Caso no encontrado.")
@@ -932,7 +1001,7 @@ def app_agent_preview_end(conversation_id: UUID, uid: str = Depends(current_uid)
 
 
 @app.post("/app/agent-evals/run")
-def app_run_evals(body: dict = Body(default={}), uid: str = Depends(current_uid)) -> dict:
+def app_run_evals(body: dict = Body(default={}), uid: str = Depends(owner_uid)) -> dict:
     """Corre los casos contra el perfil vigente o contra `profile` (borrador, sin guardar)."""
     with user_tx(uid) as (cur, tenant):
         cases = evals.list_cases(cur, tenant)

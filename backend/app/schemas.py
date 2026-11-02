@@ -79,6 +79,7 @@ class MeResponse(BaseModel):
     user_id: str
     tenant_id: str
     business_name: str
+    role: str = "owner"
 
 
 # --- API chat -------------------------------------------------------------
