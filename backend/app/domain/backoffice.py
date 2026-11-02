@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import math
+import re
 from typing import Any, Optional
 
 import psycopg
@@ -216,6 +217,10 @@ def _import_row(cur: Any, tenant_id: str, row: dict[str, str], from_sheet: bool 
         raise ValueError("foto_url debe ser un link https://")
     specs = {k: row[k] for k in _SPEC_COLUMNS if row.get(k)}
     group, label = (row.get("modelo") or "")[:120], (row.get("variante") or "")[:60]
+    # Venta cruzada: SKUs separados por coma, barra o espacio (hasta 5; el propio SKU no cuenta).
+    complements = [c for c in dict.fromkeys(re.split(r"[,|;\s]+", row.get("complementos") or "")) if c and c != sku][:5]
+    if any(len(c) > 64 for c in complements):
+        raise ValueError("complementos: cada SKU tiene como máximo 64 caracteres")
     datasheet = row.get("ficha_url") or ""
     if datasheet and not datasheet.startswith("https://"):
         raise ValueError("ficha_url debe ser un link https://")
@@ -223,8 +228,8 @@ def _import_row(cur: Any, tenant_id: str, row: dict[str, str], from_sheet: bool 
         raise ValueError("ficha_url es demasiado largo (máx. 500 caracteres)")
     cur.execute(
         "insert into catalog_items (tenant_id, sku, name, category, pricing_mode, specs_json, brand, "
-        "description, image_url, datasheet_url, variant_group, variant_label, active) values (%(t)s, %(sku)s, %(name)s, %(cat)s, %(mode)s, %(specs)s::jsonb, "
-        "%(brand)s, %(desc)s, %(img)s, %(sheet)s, %(vg)s, %(vl)s, %(active)s) "
+        "description, image_url, datasheet_url, variant_group, variant_label, complements, active) values (%(t)s, %(sku)s, %(name)s, %(cat)s, %(mode)s, %(specs)s::jsonb, "
+        "%(brand)s, %(desc)s, %(img)s, %(sheet)s, %(vg)s, %(vl)s, %(comp)s, %(active)s) "
         "on conflict (tenant_id, sku) do update set name = excluded.name, category = excluded.category, "
         "pricing_mode = excluded.pricing_mode, specs_json = excluded.specs_json, brand = excluded.brand, "
         "description = excluded.description, image_url = coalesce(excluded.image_url, catalog_items.image_url), "
@@ -232,13 +237,14 @@ def _import_row(cur: Any, tenant_id: str, row: dict[str, str], from_sheet: bool 
         "datasheet_url = case when %(sheet_col)s then excluded.datasheet_url else catalog_items.datasheet_url end, "
         "variant_group = case when %(vg_col)s then excluded.variant_group else catalog_items.variant_group end, "
         "variant_label = case when %(vl_col)s then excluded.variant_label else catalog_items.variant_label end, "
+        "complements = case when %(comp_col)s then excluded.complements else catalog_items.complements end, "
         "active = excluded.active, updated_at = now() "
         "returning id, (xmax = 0) as inserted",
         {"t": tenant_id, "sku": sku[:64], "name": name[:200], "cat": (row.get("categoria") or "general")[:80],
          "mode": "custom_quote" if custom else "fixed", "specs": json.dumps(specs),
          "brand": row.get("marca") or None, "desc": row.get("descripcion", "")[:1000],
          "img": photo or None, "sheet": datasheet or None, "sheet_col": "ficha_url" in row,
-         "vg": group or None, "vl": label or None, "vg_col": "modelo" in row, "vl_col": "variante" in row, "active": active},
+         "vg": group or None, "vl": label or None, "vg_col": "modelo" in row, "vl_col": "variante" in row, "comp": complements, "comp_col": "complementos" in row, "active": active},
     )
     r = cur.fetchone()
     item_id = str(r["id"])

@@ -978,10 +978,38 @@ class _Turn:
                     + f". ¿Querés que te agregue {more}?")
         if res.status == "not_found":
             return "Ese producto ya no está disponible en el catálogo."
+        extra = self.complement(o, res.cart) if tail else None
         return (f"Listo, agregué {qty} × {o['name']} ({_money(res.offer['price'])} c/u).\n"
                 + self.cart_text(res.cart)
                 + ("\nEntrega: por ahora coordinamos retiro o envío con el equipo después del pago. "
-                   "¿Querés sumar algo más o lo comprás?" if tail else ""))
+                   + (extra or "¿Querés sumar algo más o lo comprás?") if tail else ""))
+
+    def complement(self, o: dict[str, Any], cart: Optional[dict[str, Any]]) -> Optional[str]:
+        """Venta cruzada: UN complemento que el negocio cargó para este producto (columna
+        `complementos`), con stock y precio vigente y que no esté ya en el carrito. Queda como
+        propuesta: «sí» lo agrega. Nunca sugiere algo que el negocio no cargó, y como mucho dos
+        veces por conversación (sugerir de más espanta)."""
+        if self.state.get("cross_sold", 0) >= 2:
+            return None
+        with tenant_tx(self.tenant) as cur:
+            cur.execute("select c.id from catalog_items p cross join lateral unnest(p.complements) "
+                        "with ordinality as s(sku, n) join catalog_items c on c.tenant_id = p.tenant_id "
+                        "and c.sku = s.sku and c.active where p.tenant_id = %s and p.id = %s order by s.n",
+                        (self.tenant, o["id"]))
+            ids = [str(r["id"]) for r in cur.fetchall()]
+        in_cart = {it["item_id"] for it in (cart or {}).get("items", [])}
+        ids = [i for i in ids if i not in in_cart]
+        if not ids:
+            return None
+        found = {x["id"]: x for x in inventory.offers(self.tenant, ids=ids, limit=len(ids))}
+        pick = next((found[i] for i in ids if i in found and found[i].get("price") is not None
+                     and found[i].get("available", 0) > 0 and found[i].get("pricing_mode") != "custom_quote"), None)
+        if pick is None:
+            return None
+        self.tool("venta_cruzada", f"{o['sku']} → {pick['sku']}")
+        self.state["offer"] = {"ids": [pick["id"]], "qty": 1}
+        self.state["cross_sold"] = self.state.get("cross_sold", 0) + 1
+        return f"Suele llevarse con eso: {pick['name']} a {_money(pick['price'])}. ¿Te lo agrego?"
 
     def edit(self, op: tuple[str, int]) -> Optional[str]:
         """"Dejame dos", "sacá una", "sacá todas": un único cambio de la línea, sin vaciar y volver
