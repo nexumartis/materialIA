@@ -108,7 +108,7 @@ Detalle y justificación en [research/2026-10-30-competencia](research/2026-10-3
 **Ahora (sin WhatsApp):**
 1. ~~Google Sheets como catálogo vivo~~ (rama `feat/catalogo-google-sheets`, 30/10/2026; [spec](superpowers/specs/2026-10-30-catalogo-google-sheets-design.md), migración 0011).
 2. Variantes y atributos de producto.
-3. Envío por zona o código postal.
+3. Envío por zona o código postal (+ Georef: localidad → partido o zona del GBA, 02/11/2026, rama `feat/georef`).
 4. Sustitutos y búsqueda mejorada.
 5. Avisos al dueño (derivaciones y clientes sin atender).
 6. ~~Roles de empleados, asignación y notas internas~~ (rama `feat/empleados-roles`, 02/11/2026; [spec](superpowers/specs/2026-11-02-equipo-roles-design.md), migración 0016).

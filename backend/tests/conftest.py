@@ -31,6 +31,7 @@ def _force_mock_llm():
     """Los tests corren en modo mock (deterministas y rápidos), sin importar el .env."""
     from app.config import settings
     settings.llm_provider = "mock"
+    settings.georef_url = ""          # sin red en los tests: test_georef simula la API
 
 
 @pytest.fixture(scope="session", autouse=True)

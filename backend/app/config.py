@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     # Opt-in de las mutaciones administrativas del sandbox sin cuenta (SANDBOX_ADMIN=1). Apagado por
     # defecto y sin efecto fuera de APP_ENV=local.
     sandbox_admin: bool = False
+    # API Georef (datos.gob.ar): ubica localidades para las zonas de envío. Vacío = apagada.
+    georef_url: str = "https://apis.datos.gob.ar/georef/api"
 
     # --- Supabase Auth (panel autenticado) ---
     # URL del proyecto (no es secreto). Local: `supabase start`. Los JWT se verifican con
