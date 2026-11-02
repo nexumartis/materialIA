@@ -107,10 +107,42 @@ def _ui(turn: "_Turn") -> dict[str, Any]:
 
 
 # --- Lenguaje --------------------------------------------------------------------
-_COLORS = {"negro": "negro", "negra": "negro", "negros": "negro", "negras": "negro",
-           "cromo": "cromo", "cromada": "cromo", "cromado": "cromo", "cromadas": "cromo",
-           "cromados": "cromo", "plateada": "cromo", "plateado": "cromo",
-           "blanco": "blanco", "blanca": "blanco", "blancos": "blanco", "blancas": "blanco"}
+def _color_forms() -> dict[str, str]:
+    """Colores de cualquier rubro (ropa, muebles, griferías…) con sus formas: «roja», «rojos» -> rojo."""
+    base = {"negro": [], "blanco": [], "rojo": [], "azul": ["azules"], "verde": ["verdes"],
+            "amarillo": [], "gris": ["grises"], "marron": ["marrones"], "beige": [],
+            "rosa": ["rosado", "rosada", "rosados", "rosadas"], "violeta": ["violetas", "lila", "lilas"],
+            "naranja": ["naranjas"], "celeste": ["celestes"], "dorado": [], "plateado": [],
+            "bordo": ["bordeaux"], "crema": ["cremas"], "turquesa": ["turquesas"], "nude": [],
+            "fucsia": ["fucsias"], "camel": [], "natural": ["naturales"], "transparente": ["transparentes"],
+            "cromo": ["cromada", "cromado", "cromadas", "cromados"], "multicolor": []}
+    out: dict[str, str] = {}
+    for color, extra in base.items():
+        forms = {color, *extra}
+        if color.endswith("o"):
+            stem = color[:-1]
+            forms |= {stem + "a", stem + "os", stem + "as"}
+        elif not color.endswith(("s", "z")):
+            forms.add(color + "s")
+        out.update({f: color for f in forms})
+    out["plateada"] = out["plateado"] = "plateado"
+    return out
+
+
+_COLORS = _color_forms()
+
+
+def _detail(o: dict[str, Any]) -> str:
+    """Lo que distingue a variantes con el mismo nombre (color, talle, sabor), si el nombre no lo dice:
+    «Remera básica (Roja, talle M)»."""
+    specs, name = o.get("specs") or {}, normalize(o["name"])
+    parts = [o.get("variant_label")] if o.get("variant_label") else [specs.get("color"), specs.get("sabor")]
+    parts = [p for p in parts if p and normalize(str(p)) not in name]
+    if specs.get("talle") and f"talle {normalize(str(specs['talle']))}" not in name:
+        parts.append(f"talle {specs['talle']}")
+    return f" ({', '.join(str(p) for p in parts)})" if parts else ""
+# Talle de ropa o calzado: «talle M», «talle 42» (la letra sola es ambigua: sólo después de «talle»).
+_RE_TALLE = re.compile(r"\btalles?\s+(xxxl|xxl|xl|xxs|xs|s|m|l|u|unico|\d{1,2})\b")
 _AMBIENTES = {"cocina": "cocina", "bano": "baño", "banio": "baño", "lavatorio": "baño"}
 _SYNONYMS = {"grifo": "canilla", "grifos": "canilla", "griferia": "canilla", "griferias": "canilla",
              "monocomandos": "monocomando", "duchador": "ducha", "flexibles": "flexible",
@@ -342,6 +374,10 @@ def _filters(text: str) -> dict[str, Any]:
     tokens = re.findall(r"[a-z0-9]+", text)
     color = next((_COLORS[t] for t in tokens if t in _COLORS), None)
     ambiente = next((_AMBIENTES[t] for t in tokens if t in _AMBIENTES), None)
+    talle_m = _RE_TALLE.search(text)
+    talle = talle_m.group(1).upper() if talle_m else None
+    if talle_m:
+        tokens = re.findall(r"[a-z0-9]+", text[:talle_m.start()] + " " + text[talle_m.end():])
     # Una medida ("40 cm", "500 g") describe el producto: es un filtro, no una cantidad.
     keywords = [f"{n} {u}" for n, u in re.findall(r"\b(\d+(?:,\d+)?)\s?(cm|mm|m|g|kg|w)\b", text)]
     for t in tokens:
@@ -355,7 +391,7 @@ def _filters(text: str) -> dict[str, Any]:
             t = t[:-1]
         if t not in keywords and t not in _STOP:
             keywords.append(t)
-    return {"keywords": keywords, "color": color, "ambiente": ambiente}
+    return {"keywords": keywords, "color": color, "ambiente": ambiente, "talle": talle}
 
 
 # --- Estado de la conversación ------------------------------------------------------
@@ -544,7 +580,7 @@ class _Turn:
                              for k in f["keywords"] if k not in ("canilla",))]
         if not found and f["keywords"]:
             found = inventory.offers(self.tenant, keywords=f["keywords"], color=f["color"],
-                                     ambiente=f["ambiente"], limit=5)
+                                     ambiente=f["ambiente"], talle=f["talle"], limit=5)
         # Entre varias, las que no se pueden llevar (sin stock) no compiten, y "un flexible" es el
         # producto que ES un flexible, no la ducha "con flexible".
         sellable = [o for o in found if o["pricing_mode"] != "fixed" or o["available"] > 0]
@@ -692,7 +728,7 @@ class _Turn:
                      else "última unidad" if o["available"] == 1 else "SIN STOCK")
             tail = f"{_money(o['price'])} · {stock}"
         brand = f" — {o['brand']}" if o.get("brand") else ""
-        return f"{i}. {o['name']}{brand} · {tail}"
+        return f"{i}. {o['name']}{_detail(o)}{brand} · {tail}"
 
     def show(self, items: list[dict[str, Any]], intro: str) -> str:
         # Repetir una búsqueda conserva las posiciones y actualiza cada producto una sola vez.
@@ -743,16 +779,16 @@ class _Turn:
     def search(self, text: str, budget: Optional[float]) -> str:
         drop_budget = bool(_RE_NO_BUDGET.search(text))
         f = self.filters(_RE_NO_BUDGET.sub(" ", text))
-        query = {"keywords": f["keywords"], "color": f["color"], "ambiente": f["ambiente"]}
+        query = {"keywords": f["keywords"], "color": f["color"], "ambiente": f["ambiente"], "talle": f["talle"]}
         last = self.state.get("last_query")
-        if last and not f["keywords"] and (budget is not None or f["color"] or f["ambiente"] or drop_budget):
+        if last and not f["keywords"] and (budget is not None or f["color"] or f["ambiente"] or f["talle"] or drop_budget):
             # Corrección parcial ("¿y en cromo?", "hasta 150 mil", "sin límite de precio") => sobre la
             # última búsqueda, con su tope salvo que lo cambie o lo quite. Otro tipo de producto
             # arranca de cero (sin tope).
             query = {k: query[k] or last.get(k) for k in query}
             if budget is None and not drop_budget:
                 budget = last.get("budget")
-        if not (query["keywords"] or query["color"] or query["ambiente"]):
+        if not (query["keywords"] or query["color"] or query["ambiente"] or query["talle"]):
             if _RE_CATALOG.search(text) or not text.strip():
                 return self.overview()
             if self.state.get("last_results"):
@@ -774,7 +810,7 @@ class _Turn:
             hint = (" Si querés alguna de las opciones de antes, decime el número (por ejemplo "
                     "\"la 2\")." if self.state.get("last_results") else "")
             return ("No encontré eso en el catálogo. ¿Me lo describís de otra forma (tipo, color, "
-                    "ambiente o medida)?" + hint)
+                    "talle, medida o modelo)?" + hint)
         if all(o["pricing_mode"] == "fixed" and o["available"] == 0 for o in found):
             return self.out_of_stock(found)
         if budget is not None:
@@ -793,6 +829,9 @@ class _Turn:
         if not query["ambiente"] and len(places) > 1:
             # Falta el dato que cambia la elección: una pregunta concreta, sin descartar opciones.
             return listed + f"\n¿Es para {' o para '.join(places)}? Si alguna ya te sirve, decime el número."
+        sizes = sorted({str(o["specs"].get("talle")) for o in found if o["specs"].get("talle")})
+        if not query.get("talle") and len(sizes) > 1:
+            return listed + f"\n¿Qué talle buscás? Hay {', '.join(sizes)}."
         return listed + "\n¿Querés que te agregue alguna?"
 
     def out_of_stock(self, items: list[dict[str, Any]]) -> str:
