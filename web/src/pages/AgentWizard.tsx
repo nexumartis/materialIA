@@ -158,6 +158,7 @@ export function AgentWizard({ health }: { health: Health | null }) {
               <small>Es lo que vas a compartir con tus clientes. De 3 a 48 minúsculas, números y guiones.</small>
               {!SLUG.test(draft.public_slug) && <small className="neg-text">Revisá el link: así no se puede publicar.</small>}
             </label>
+            <SuggestCard onApply={(p) => setDraft({ ...draft, ...p })} />
           </>
         )}
 
@@ -472,5 +473,76 @@ function PublishStep({ draft, profile, done, onPublished, onGo }: {
       </div>
       <p className="note">WhatsApp todavía no está disponible para conectar.</p>
     </>
+  );
+}
+
+const SUGGEST_LABEL: Record<string, string> = {
+  tone: "Tono", greeting: "Saludo", faq: "Preguntas frecuentes", shipping: "Envíos", hours: "Horarios",
+  payment_methods: "Medios de pago",
+};
+
+/** Lee la web o un PDF del negocio y PROPONE cómo configurar el agente; el dueño elige qué usar. */
+function SuggestCard({ onApply }: { onApply: (p: Partial<Draft>) => void }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<Partial<AgentProfile> | null>(null);
+  const [use, setUse] = useState<Record<string, boolean>>({});
+  const [applied, setApplied] = useState(false);
+
+  async function run(load: () => Promise<{ proposal: Partial<AgentProfile> }>) {
+    setBusy(true);
+    setError(null);
+    setApplied(false);
+    try {
+      const r = await load();
+      setProposal(r.proposal);
+      setUse(Object.fromEntries(Object.keys(r.proposal).map((k) => [k, true])));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No pude armar la propuesta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const show = (k: string, v: unknown) =>
+    k === "faq" ? (v as { q: string; a: string }[]).map((f) => `${f.q} → ${f.a}`).join("\n") : String(v);
+  return (
+    <div className="suggest-card">
+      <h3 className="sub">¿Tenés página web o un PDF del negocio? Te armo una propuesta</h3>
+      <p className="muted small">La leemos y te proponemos tono, saludo, preguntas frecuentes, envíos, horarios y pagos.
+        Vos elegís qué usar; no se publica nada hasta el último paso. No carga productos ni precios.</p>
+      <form className="inline" onSubmit={(e) => { e.preventDefault(); if (url.trim()) void run(() => api.suggestFromUrl(url.trim())); }}>
+        <input className="field-select sheet-url" aria-label="Página web del negocio" placeholder="https://minegocio.com.ar"
+          value={url} onChange={(e) => setUrl(e.target.value)} />
+        <button className="btn" type="submit" disabled={busy || !url.trim()}>{busy ? "Leyendo…" : "Leer web"}</button>
+        <label className={`btn${busy ? " disabled" : ""}`}>
+          Subir PDF
+          <input type="file" accept="application/pdf" hidden disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void run(() => api.suggestFromPdf(f)); }} />
+        </label>
+      </form>
+      {error && <div className="state err" role="alert">{error}</div>}
+      {proposal && (
+        <div className="suggest-result">
+          {Object.entries(proposal).map(([k, v]) => (
+            <label className="check suggest-item" key={k}>
+              <input type="checkbox" checked={!!use[k]} onChange={(e) => setUse({ ...use, [k]: e.target.checked })} />
+              <span><b>{SUGGEST_LABEL[k] ?? k}:</b> <span className="muted">{show(k, v)}</span></span>
+            </label>
+          ))}
+          <div className="inline">
+            <button className="btn primary sm" type="button"
+              onClick={() => {
+                onApply(Object.fromEntries(Object.entries(proposal).filter(([k]) => use[k])) as Partial<Draft>);
+                setApplied(true);
+              }}>
+              Usar lo marcado
+            </button>
+            {applied && <span className="pill pos" role="status">Aplicado a tu borrador: revisalo en los pasos siguientes.</span>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

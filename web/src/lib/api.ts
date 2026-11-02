@@ -260,6 +260,19 @@ export const api = {
     }),
   endPreview: (conversationId: string) =>
     authed<{ deleted: boolean }>(`/app/agent-preview/${conversationId}`, { method: "DELETE" }),
+  /** Propuesta de perfil a partir de la web o un PDF del negocio (no guarda nada). */
+  suggestFromUrl: (url: string) =>
+    authed<{ proposal: Partial<AgentProfile> }>("/app/agent-suggest/url", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  suggestFromPdf: (file: File) =>
+    authed<{ proposal: Partial<AgentProfile> }>("/app/agent-suggest/pdf", {
+      method: "POST",
+      headers: { "content-type": "application/pdf" },
+      body: file,
+    }),
   /** Contenido de la plantilla de un rubro, SIN aplicarla. */
   agentTemplate: (key: string) =>
     authed<Pick<AgentProfile, "business_type" | "seller_name" | "tone" | "greeting" | "faq" | "rules">>(

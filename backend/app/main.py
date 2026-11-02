@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, ai_usage, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import SimulatedProvider
@@ -342,6 +342,44 @@ def app_ai_usage(days: int = Query(30, ge=1, le=365), uid: str = Depends(current
     """Llamadas y tokens de IA del negocio; costo sólo con precio configurado."""
     with user_tx(uid) as (cur, tenant):
         return ai_usage.summary(cur, tenant, days)
+
+
+# --- Panel: armar el agente desde la web o un PDF del negocio (sólo propuesta) ---------
+def _suggest(uid: str, read) -> dict:
+    with user_tx(uid) as (_, tenant):
+        pass   # el negocio sale de la membresía; la lectura y la IA van fuera de la transacción
+    try:
+        text = read()
+        with ai_usage.for_tenant(tenant, "otro"):
+            return agent_suggest.suggest(text)
+    except agent_suggest.SuggestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/agent-suggest/url")
+def app_agent_suggest_url(body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    """Propuesta de tono, saludo y preguntas frecuentes a partir de la web del negocio."""
+    return _suggest(uid, lambda: agent_suggest.fetch_site_text(str(body.get("url") or "")))
+
+
+@app.post("/app/agent-suggest/pdf")
+async def app_agent_suggest_pdf(request: Request, uid: str = Depends(current_uid)) -> dict:
+    """Igual, desde un PDF del negocio (catálogo, lista, folleto), como cuerpo crudo."""
+    too_big = HTTPException(status_code=413, detail="El PDF supera 10 MiB.")
+    try:
+        if int(request.headers.get("content-length") or 0) > 10 * 1024 * 1024:
+            raise too_big
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Content-Length inválido.")
+    data = bytearray()
+    async for chunk in request.stream():   # se corta al pasar el tope, no después de recibir todo
+        data += chunk
+        if len(data) > 10 * 1024 * 1024:
+            raise too_big
+    data = bytes(data)
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=415, detail="Subí un archivo PDF.")
+    return await run_in_threadpool(_suggest, uid, lambda: agent_suggest.pdf_text(data))
 
 
 @app.get("/app/agent-templates")
