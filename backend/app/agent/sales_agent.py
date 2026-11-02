@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, customer_memory, inventory, knowledge, opportunities, orders
+from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, opportunities, orders
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -161,6 +161,8 @@ _RE_DOCS = re.compile(r"\b(garantia|garantias|instal\w*|manual|ficha|medidas?|co
 # "Lo mismo que la otra vez", "mis compras anteriores": historial del cliente.
 _RE_HISTORY = re.compile(r"\b(lo mismo que (la otra vez|antes|la ultima)|(mi|mis) (ultima|ultimas|anterior|"
                          r"anteriores) compras?|que (te|les) compre|compre antes|la otra vez)\b")
+_RE_SHIP_TO = re.compile(r"\b(?:envi\w*|llega\w*|manda\w*|entrega\w*|reparte\w*|despacha\w*)\b"
+                         r"(?:\s+\w+){0,2}?\s+(?:a|hasta|para)\s+(?P<place>[a-z0-9 ]{3,40}?)\s*[?.!]*$")
 _RE_PAID_CLAIM = re.compile(r"\bya (te )?(pague|abone|transferi|deposite)\b")
 _RE_STATUS = re.compile(r"\b(estado|salio|llego|llega|donde (esta|anda|viene)|seguimiento|tracking|"
                         r"cuando (llega|sale)|despach|como (va|viene|anda|sigue)|novedad)")
@@ -478,6 +480,11 @@ class _Turn:
         named = next((z for z in zones if normalize(z) in text), None)
         if named and agent_profile.tool_enabled(p, "consultar_envio"):
             return self.shipping(named)
+        if not named and zones and agent_profile.tool_enabled(p, "consultar_envio"):
+            # «¿envían a Bernal?»: el lugar no es una zona cargada; `shipping` lo ubica con Georef.
+            m = _RE_SHIP_TO.search(text)
+            if m:
+                return self.shipping(m.group("place").strip())
         words = {w for w in re.findall(r"[a-z]{4,}", text) if w not in _STOP}
         best, score = None, 0
         for item in p.get("faq") or []:
@@ -1038,11 +1045,23 @@ class _Turn:
             return info or "Eso lo confirma una persona del equipo."
         z = normalize(zone)
         hit = next((x for x in zones if z and (normalize(x) in z or z in normalize(x))), None)
+        where = ""
+        if not hit and z:
+            # «Bernal» no dice «Quilmes»: Georef ubica la localidad y su partido (o zona del GBA).
+            hit, found = georef.match_zone(zone, zones)
+            if hit:
+                place = next(p for p in found if normalize(hit) in georef.names_for(p))
+                where = f" ({georef.describe(place)} entra en {hit})"
+                self.tool("consultar_envio", f"georef: {georef.describe(place)} → {hit}")
+            elif len({(p["departamento"], p["provincia"]) for p in found}) > 1:
+                options = sorted({georef.describe(p) for p in found})[:4]
+                return (f"Hay varias localidades que se llaman así: {'; '.join(options)}. "
+                        "¿Cuál es la tuya?")
         if hit:
             cost = ((self.profile.get("policies") or {}).get("shipping_costs") or {}).get(hit)
             # El costo es el que cargó el negocio; sin costo cargado no se inventa.
             price = f" El envío a {hit} cuesta {_money(cost)}." if cost is not None else ""
-            return f"Sí, enviamos a {hit}.{price}" + (f" {info}" if info else "")
+            return f"Sí, enviamos a {hit}{where}.{price}" + (f" {info}" if info else "")
         return (f"A {zone or 'esa zona'} no figura que enviemos. Las zonas de envío son: "
                 f"{', '.join(zones)}. Si querés, una persona del equipo lo revisa.")
 
