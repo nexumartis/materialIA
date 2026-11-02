@@ -654,3 +654,5 @@ tbody td.num { white-space:nowrap; }
 /* Variantes del mismo modelo en la tarjeta del chat */
 .pcard-variants { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:2px; }
 .pcard-variants .chip { padding:2px 8px; }
+
+.history-modal { width:min(560px,100%); }

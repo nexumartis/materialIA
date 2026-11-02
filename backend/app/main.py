@@ -448,6 +448,15 @@ def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends
         return item
 
 
+@app.get("/app/catalog/{item_id}/movements")
+def app_stock_movements(item_id: UUID, uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        found = backoffice.movements(cur, tenant, str(item_id))
+    if found is None:
+        raise HTTPException(status_code=404, detail="Producto no encontrado.")
+    return found
+
+
 # --- Panel: catálogo desde Google Sheets -------------------------------------------
 @app.get("/app/catalog/sheet")
 def app_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
