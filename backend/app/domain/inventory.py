@@ -36,7 +36,7 @@ def normalize(text: str) -> str:
 # Precio vigente hoy (mismo criterio que catalog.get_price) y disponible, en una sola consulta.
 _OFFER_SELECT = """
 select c.id, c.sku, c.name, c.brand, c.category, c.pricing_mode, c.specs_json, c.currency,
-       c.description, c.image_url, c.datasheet_url, c.unit,
+       c.description, c.image_url, c.datasheet_url, c.variant_group, c.variant_label, c.unit,
        p.amount as price,
        coalesce(s.on_hand - s.reserved, 0) as available,
        (s.item_id is not null) as stock_tracked
@@ -69,7 +69,8 @@ def _offer(row: dict[str, Any]) -> dict[str, Any]:
         "id": str(row["id"]), "sku": row["sku"], "name": row["name"], "brand": row["brand"],
         "category": row["category"], "pricing_mode": row["pricing_mode"],
         "specs": row["specs_json"] or {}, "currency": row["currency"],
-        "description": row["description"], "image_url": _absolute(row["image_url"]), "datasheet_url": row.get("datasheet_url"), "unit": row["unit"],
+        "description": row["description"], "image_url": _absolute(row["image_url"]), "datasheet_url": row.get("datasheet_url"),
+        "variant_group": row.get("variant_group"), "variant_label": row.get("variant_label"), "unit": row["unit"],
         "price": float(row["price"]) if row["price"] is not None else None,
         "available": int(row["available"]), "stock_tracked": bool(row["stock_tracked"]),
     }
@@ -132,6 +133,21 @@ def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
 def offers(tenant_id: str, **kwargs: Any) -> list[dict[str, Any]]:
     with tenant_tx(tenant_id) as cur:
         return _offers(cur, tenant_id, **kwargs)
+
+
+def variant_siblings(cur: Any, tenant_id: str, groups: list[str]) -> list[dict[str, Any]]:
+    """Productos activos de esos modelos (las variantes de cada uno, con su disponible)."""
+    if not groups:
+        return []
+    cur.execute("select c.id, c.name, c.variant_group, c.variant_label, "
+                "s.on_hand - s.reserved as available "
+                "from catalog_items c left join stock_levels s on s.tenant_id = c.tenant_id and s.item_id = c.id "
+                "where c.tenant_id = %s and c.active and c.variant_group = any(%s) "
+                "order by c.variant_group, c.variant_label, c.name", (tenant_id, groups))
+    return [{"id": str(r["id"]), "name": r["name"], "group": r["variant_group"],
+             # Sin stock cargado (no se lleva stock): None, no «sin stock».
+             "label": r["variant_label"] or r["name"],
+             "available": int(r["available"]) if r["available"] is not None else None} for r in cur.fetchall()]
 
 
 def _offer_by_id(cur: Any, tenant_id: str, item_id: str) -> Optional[dict[str, Any]]:

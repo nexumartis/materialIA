@@ -78,6 +78,17 @@ def _ui(turn: "_Turn") -> dict[str, Any]:
     ui: dict[str, Any] = {}
     if turn.products:
         ui["products"] = [_card(i, o) for i, o in enumerate(turn.products, 1)]
+        # Variantes del mismo modelo que no se mostraron: «También en: Cromo · Blanco».
+        groups = sorted({o["variant_group"] for o in turn.products if o.get("variant_group")})
+        if groups:
+            with tenant_tx(turn.tenant) as cur:
+                siblings = inventory.variant_siblings(cur, turn.tenant, groups)
+            shown = {o["id"] for o in turn.products}
+            for card, o in zip(ui["products"], turn.products):
+                card["variant_label"] = o.get("variant_label")
+                card["variants"] = [{"label": s["label"], "available": s["available"],
+                                     "message": f"quiero la {s['name']}"}
+                                    for s in siblings if s["group"] == o.get("variant_group") and s["id"] not in shown]
     if turn.payment:
         ui["payment"] = {"url": turn.payment["checkout_url"], "provider": turn.payment["provider"]}
     cart = orders.get_cart(turn.tenant, turn.conv)

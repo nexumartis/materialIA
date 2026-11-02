@@ -5,9 +5,10 @@ import { SheetSync } from "../components/SheetSync";
 import { Badge, EmptyState, PageHeader, SelectionBar, Stats } from "../components/ui";
 
 const TEMPLATE =
-  "sku,nombre,categoria,marca,precio,stock,descripcion,foto_url,ficha_url,color,ambiente,tipo,a_pedido,activo\n" +
-  "CAN-001,Canilla de cocina monocomando negra,griferia,Mi Marca,89900,6,Pico alto giratorio,https://...,https://.../ficha.pdf,negro,cocina,monocomando,,si\n" +
-  "INO-001,Inodoro largo blanco,sanitarios,Mi Marca,,,Se encarga a fábrica,,,blanco,baño,,si,si\n";
+  "sku,nombre,categoria,marca,precio,stock,descripcion,foto_url,ficha_url,modelo,variante,color,ambiente,tipo,a_pedido,activo\n" +
+  "CAN-001,Canilla de cocina monocomando negra,griferia,Mi Marca,89900,6,Pico alto giratorio,https://...,https://.../ficha.pdf,Canilla monocomando,Negro,negro,cocina,monocomando,,si\n" +
+  "CAN-002,Canilla de cocina monocomando cromo,griferia,Mi Marca,68000,10,Pico alto giratorio,https://...,,Canilla monocomando,Cromo,cromo,cocina,monocomando,,si\n" +
+  "INO-001,Inodoro largo blanco,sanitarios,Mi Marca,,,Se encarga a fábrica,,,,,blanco,baño,,si,si\n";
 
 export function downloadTemplate() {
   const url = URL.createObjectURL(new Blob([TEMPLATE], { type: "text/csv;charset=utf-8" }));
@@ -179,7 +180,10 @@ export function Catalog() {
                           <div className="cimg">{it.image_url ? <img src={it.image_url} alt="" loading="lazy" /> : null}</div>
                           <div className="cinfo">
                             <b title={it.name}>{it.name}</b>
-                            <span className="muted">{it.sku}{it.brand ? ` · ${it.brand}` : ""}</span>
+                            <span className="muted">
+                              {it.sku}{it.brand ? ` · ${it.brand}` : ""}
+                              {it.variant_group ? ` · ${it.variant_group}${it.variant_label ? ` (${it.variant_label})` : ""}` : ""}
+                            </span>
                           </div>
                         </div>
                       </td>

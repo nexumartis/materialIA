@@ -92,6 +92,17 @@ function Cards({
             <div className="pcard-body">
               <b className="pcard-name">{c.name}</b>
               {c.brand && <span className="pcard-brand">{c.brand}</span>}
+              {c.variants && c.variants.length > 0 && (
+                <div className="pcard-variants" aria-label="Otras variantes">
+                  <span className="muted small">También en:</span>
+                  {c.variants.map((v) => (
+                    <button key={v.message} type="button" className="chip" disabled={disabled}
+                      onClick={() => onAction(v.message)}>
+                      {v.label}{v.available !== null && v.available <= 0 ? " (sin stock)" : ""}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="pcard-row">
                 <span className="pcard-price">{c.price != null ? money(c.price) : "Consultar"}</span>
                 <span className={`pill ${st.cls}`}>{st.text}</span>
