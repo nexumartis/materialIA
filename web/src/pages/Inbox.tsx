@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, type InboxConversation, type InboxFilter, type InboxItem } from "../lib/api";
-import { Bell, MessageSquareText, MessagesSquare } from "lucide-react";
+import { ApiError, api, type InboxConversation, type InboxFilter, type InboxItem, type InternalNote } from "../lib/api";
+import { Bell, MessageSquareText, MessagesSquare, StickyNote } from "lucide-react";
 import { EmptyState } from "../components/ui";
 import { notificationsOn, notificationsSupported } from "../lib/alerts";
 import { fmtAmount } from "../lib/format";
@@ -221,6 +221,7 @@ export function Inbox() {
                   </div>
                 )}
               </div>
+              <InternalNotes key={conv.id} conversationId={conv.id} initial={conv.notes} />
             </>
           )}
         </section>
@@ -244,5 +245,51 @@ function NotifyButton() {
         <Bell size={15} strokeWidth={1.8} aria-hidden /> Avisarme de derivaciones
       </button>
     </div>
+  );
+}
+
+/** Notas del equipo sobre la conversación: el cliente y el asistente no las ven. */
+function InternalNotes({ conversationId, initial }: { conversationId: string; initial: InternalNote[] }) {
+  const [notes, setNotes] = useState(initial);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!text.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const n = await api.addNote(conversationId, text.trim());
+      setNotes((prev) => [...prev, n]);
+      setText("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No pude guardar la nota.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="inbox-notes" aria-label="Notas internas">
+      <h3><StickyNote size={14} strokeWidth={1.8} aria-hidden /> Notas internas <span className="muted small">· sólo las ve tu equipo</span></h3>
+      {notes.length > 0 && (
+        <ul>
+          {notes.map((n) => (
+            <li key={n.id}>
+              <span className="muted small">{n.author} · {when(n.at)}</span>
+              <p>{n.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="composer" onSubmit={(e) => void add(e)}>
+        <input type="text" aria-label="Nueva nota interna" maxLength={2000} autoComplete="off"
+          placeholder="Ej.: es de obra, llamarlo mañana" value={text} onChange={(e) => setText(e.target.value)} />
+        <button className="btn sm" type="submit" disabled={saving || !text.trim()}>Anotar</button>
+      </form>
+      {error && <p className="state err" role="alert">{error}</p>}
+    </section>
   );
 }

@@ -12,7 +12,7 @@ from typing import Any, Optional
 from ..db import tenant_tx
 from ..documents import store as documents
 from ..schemas import MAX_HUMAN_REPLY
-from . import opportunities, orders
+from . import opportunities, orders, team
 
 FILTERS = {
     "todas": "true",
@@ -86,6 +86,7 @@ def detail(cur: Any, tenant_id: str, uid: str, conversation_id: str) -> Optional
         "cart": orders._view(cur, cart) if cart else None,
         "orders": orders._conversation_orders(cur, tenant_id, conversation_id, limit=20),
         "documents": documents._for_conversation(cur, tenant_id, conversation_id),
+        "notes": team.notes(cur, tenant_id, conversation_id),
     }
 
 

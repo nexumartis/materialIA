@@ -64,7 +64,13 @@ export interface Me {
   user_id: string;
   tenant_id: string;
   business_name: string;
+  role: "owner" | "staff";
 }
+
+export interface TeamMember { user_id: string; email: string | null; role: "owner" | "staff"; since: string }
+export interface TeamInvite { email: string; role: "staff"; created_at: string }
+export interface Team { members: TeamMember[]; invites: TeamInvite[] }
+export interface InternalNote { id: string; author_id: string | null; author: string; body: string; at: string }
 
 class ApiError extends Error {
   /** `code`: código estructurado del servidor (header X-Error-Code), p. ej. "evals_failed". */
@@ -184,6 +190,17 @@ export const api = {
   disconnectCatalogSheet: () => authed<{ disconnected: boolean }>("/app/catalog/sheet", { method: "DELETE" }),
   // Bandeja: el dueño toma conversaciones, responde como persona y las devuelve al agente.
   inbox: (filter: InboxFilter) => authed<InboxItem[]>(`/app/inbox?filter=${filter}`),
+  addNote: (id: string, body: string) =>
+    authed<InternalNote>(`/app/inbox/${id}/notes`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ body }),
+    }),
+  team: () => authed<Team>("/app/team"),
+  invite: (email: string) =>
+    authed<Team>("/app/team/invites", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }),
+    }),
+  cancelInvite: (email: string) => authed<Team>(`/app/team/invites/${encodeURIComponent(email)}`, { method: "DELETE" }),
+  removeMember: (id: string) => authed<Team>(`/app/team/members/${id}`, { method: "DELETE" }),
   inboxConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}`),
   takeConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}/take`, { method: "POST" }),
   releaseConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}/release`, { method: "POST" }),
@@ -542,6 +559,7 @@ export interface InboxConversation {
   cart: Order | null;
   orders: Order[];
   documents: BuyerDocument[];
+  notes: InternalNote[];
 }
 
 export interface TransferConfirm {

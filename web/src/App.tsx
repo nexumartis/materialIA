@@ -11,6 +11,7 @@ import { AgentWizard } from "./pages/AgentWizard";
 import { Catalog } from "./pages/Catalog";
 import { OrdersPage } from "./pages/OrdersPage";
 import { Inbox } from "./pages/Inbox";
+import { TeamPage } from "./pages/Team";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -32,6 +33,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/catalogo") return "catalogo";
   if (hash === "#/pedidos") return "pedidos";
   if (hash === "#/conversaciones") return "conversaciones";
+  if (hash === "#/equipo") return "equipo";
   if (hash === "#/login") return "login";
   if (hash === "#/signup") return "signup";
   return "oportunidades";
@@ -98,7 +100,7 @@ function Backoffice({ hash }: { hash: string }) {
 
 /** Secciones que dependen de la cuenta: login, registro y el panel del negocio. */
 function Panel({ active, health }: { active: Section; health: Health | null }) {
-  const { status, retry, signOut } = useSession();
+  const { status, retry, signOut, me } = useSession();
 
   if (status === "unconfigured") {
     return (
@@ -113,7 +115,7 @@ function Panel({ active, health }: { active: Section; health: Health | null }) {
   if (status === "no_business") {
     return (
       <Notice title="Tu cuenta no tiene un negocio asociado" pill="Sin negocio">
-        No encontramos un negocio para esta cuenta. Escribinos para revisarlo.
+        No encontramos un negocio para esta cuenta. Si te invitó un negocio, confirmá tu email y volvé a entrar; si no, escribinos para revisarlo.
         <br />
         <button className="btn sm" type="button" style={{ marginTop: 12 }} onClick={() => void signOut()}>
           Cerrar sesión
@@ -132,11 +134,15 @@ function Panel({ active, health }: { active: Section; health: Health | null }) {
       </Notice>
     );
   }
+  if (me?.role === "staff" && (active === "agente" || active === "asistente" || active === "equipo")) {
+    return <Notice title="Sólo para el dueño" pill="Equipo">Esta sección la maneja el dueño del negocio.</Notice>;
+  }
   if (active === "agente") return <AgentSetup />;
   if (active === "asistente") return <AgentWizard health={health} />;
   if (active === "catalogo") return <Catalog />;
   if (active === "pedidos") return <OrdersPage />;
   if (active === "conversaciones") return <Inbox />;
+  if (active === "equipo") return <TeamPage />;
   return <Opportunities />;
 }
 
