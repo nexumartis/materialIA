@@ -656,3 +656,9 @@ tbody td.num { white-space:nowrap; }
 .pcard-variants .chip { padding:2px 8px; }
 
 .history-modal { width:min(560px,100%); }
+
+/* Propuesta desde web o PDF */
+.suggest-card { border-top:1px solid var(--rule); margin-top:8px; padding-top:12px; display:flex; flex-direction:column; gap:8px; }
+.suggest-result { display:flex; flex-direction:column; gap:8px; background:var(--ground); border:1px solid var(--border);
+  border-radius:var(--radius-card); padding:12px; }
+.suggest-item { align-items:flex-start; white-space:pre-line; }
