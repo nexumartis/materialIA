@@ -18,8 +18,8 @@ GUIDES: dict[str, tuple[str, list[tuple[str, Optional[str]]], str]] = {
           "armes listas propias ni elijas un subconjunto.", "buscar_productos"),
          ("Si nombra marca, modelo o rasgo, buscalo primero en la última lista. Si coincide más de una "
           "opción, preguntá cuál.", None),
-         ("Si corrige color, presupuesto o ambiente, conservá lo demás; otro tipo de producto empieza de cero.", None),
-         ("Si falta un dato que cambia la elección (ambiente, medida), hacé una sola pregunta concreta.", None),
+         ("Si corrige color, talle, presupuesto u otro detalle, conservá lo demás; otro tipo de producto empieza de cero.", None),
+         ("Si falta un dato que cambia la elección (talle, medida, uso, variante), hacé una sola pregunta concreta.", None),
          ("Para comparar o recomendar entre opciones: comparar_productos.", "comparar_productos"),
          ("Precio de varias unidades sin pedido de agregar: consultar_producto con cantidad.", "consultar_producto")],
         "Sin rasgos, usos, marcas ni categorías que no salgan de las herramientas o de la ficha."),

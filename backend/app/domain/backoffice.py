@@ -18,7 +18,7 @@ from . import inventory, orders
 
 MAX_ROWS = 2000
 _TRUE = {"si", "sí", "true", "1", "x", "yes", "s"}
-_SPEC_COLUMNS = ("color", "ambiente", "tipo", "material", "medida")
+_SPEC_COLUMNS = ("color", "ambiente", "tipo", "material", "medida", "talle", "sabor")
 
 
 def list_catalog(cur: Any, tenant_id: str) -> list[dict[str, Any]]:

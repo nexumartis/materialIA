@@ -80,7 +80,7 @@ def _offer(row: dict[str, Any]) -> dict[str, Any]:
 def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
             keywords: Iterable[str] = (), color: Optional[str] = None,
             max_price: Optional[float] = None, category: Optional[str] = None,
-            ambiente: Optional[str] = None, in_stock_only: bool = False,
+            ambiente: Optional[str] = None, talle: Optional[str] = None, in_stock_only: bool = False,
             exclude: Iterable[str] = (), variant_group: Optional[str] = None,
             limit: int = 10) -> list[dict[str, Any]]:
     """Ofertas activas de la empresa. Con `keywords`, devuelve sólo las que coinciden con MÁS
@@ -95,10 +95,13 @@ def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
         # («negra mate»): raíz sin la vocal final (negro/negra -> negr).
         # Palabra completa que empieza con la raíz (negr -> negra/negro; «oro» no matchea «inodoro»).
         stem = re.sub(r"[^a-z]", "", normalize(color))
-        stem = stem[:-1] if len(stem) > 4 else stem
+        # rojo/roja -> roj; negro -> negr; rosa queda «rosa» (rosado, rosas).
+        stem = stem[:-1] if (len(stem) > 4 or (len(stem) == 4 and stem.endswith("o"))) else stem
         if stem:
-            sql.append(f"and (c.specs_json->>'color' = %(color)s or (c.specs_json->>'color' is null "
-                       f"and {_HAYSTACK} ~ %(color_re)s))")
+            # La ficha también se compara por raíz: el negocio puede haber cargado «Roja» o «rojos».
+            sql.append(f"and (c.specs_json->>'color' = %(color)s "
+                       f"or translate(lower(c.specs_json->>'color'), 'áéíóúñ', 'aeioun') ~ %(color_re)s "
+                       f"or (c.specs_json->>'color' is null and {_HAYSTACK} ~ %(color_re)s))")
             params["color_re"] = rf"\m{stem}[a-z]*\M"
         else:
             sql.append("and c.specs_json->>'color' = %(color)s")
@@ -112,6 +115,9 @@ def _offers(cur: Any, tenant_id: str, *, ids: Optional[Iterable[str]] = None,
     if ambiente:
         sql.append("and translate(lower(c.specs_json->>'ambiente'), 'ñ', 'n') = %(ambiente)s")
         params["ambiente"] = normalize(ambiente)
+    if talle:
+        sql.append("and upper(c.specs_json->>'talle') = %(talle)s")
+        params["talle"] = talle.upper()
     if max_price is not None:
         sql.append("and p.amount <= %(max_price)s")
         params["max_price"] = max_price

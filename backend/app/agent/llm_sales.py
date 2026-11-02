@@ -45,7 +45,7 @@ _TOOLS: list[dict[str, Any]] = [
      "description": "Busca en el catálogo de ESTE negocio. Devuelve opciones numeradas con precio y "
                     "disponible reales. Usala para cualquier consulta de productos.",
      "parameters": {"type": "object", "properties": {
-         "consulta": {"type": "string", "description": "qué busca el cliente, p. ej. 'canilla negra cocina'"},
+         "consulta": {"type": "string", "description": "qué busca el cliente, con sus palabras: tipo de producto, color, talle, medida…"},
          "precio_maximo": {"type": "number", "description": "presupuesto máximo en pesos, si lo dijo"}},
          "required": ["consulta"]}},
     {"name": "consultar_producto",
@@ -126,9 +126,9 @@ Reglas que no se rompen:
 
 Guías del vendedor (aplicá la que corresponda al mensaje):
 {guias}
-Ejemplos de estilo (orientan, no se copian): «¡Gracias a vos! Que la disfrutes.» · «Con tu
-presupuesto, la negra mate es la que entra y tiene stock.» · «En cromo para cocina no tengo;
-¿te sirve negra?»
+Ejemplos de estilo (orientan, no se copian; usá los productos de ESTE negocio): «¡Gracias a
+vos! Que lo disfrutes.» · «Con tu presupuesto, la opción 2 es la que entra y tiene stock.» ·
+«En ese color no tengo; ¿te sirve en negro?»
 
 Lo que el negocio informa de sí mismo (podés repetirlo tal cual; si algo no está acá, decí que
 lo confirma una persona del equipo):
