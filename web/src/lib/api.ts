@@ -198,6 +198,7 @@ export const api = {
     authed<Order>(`/app/inbox/${conversationId}/quote`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines, deposit }),
     }),
+  insights: (days: number) => authed<Insights>(`/app/insights?days=${days}`),
   team: () => authed<Team>("/app/team"),
   invite: (email: string) =>
     authed<Team>("/app/team/invites", {
@@ -501,6 +502,21 @@ export interface Order {
   deposit?: number | null;
   /** Lo que falta cobrar ahora: la seña, el saldo o el total (0 si no espera pago). */
   amount_due?: number;
+}
+
+export interface Insights {
+  days: number;
+  funnel: { conversations: number; with_cart: number; with_order: number; with_payment: number };
+  conversion: number | null;
+  solo_agent: number;
+  solo_agent_rate: number | null;
+  waiting_human: number;
+  off_hours_conversations: number;
+  sales: { orders: number; revenue: number; average_ticket: number | null; off_hours_orders: number; off_hours_revenue: number };
+  deposits: { orders: number; amount: number };
+  series: { day: string; conversations: number; revenue: number }[];
+  top_products: { name: string; qty: number; revenue: number }[];
+  ai: { calls: number; cost: number | null; currency: string };
 }
 
 export interface QuoteLine { item_id: string; qty: number; unit_price: number }

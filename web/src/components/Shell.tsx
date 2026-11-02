@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Bot, Code2, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
+  BarChart3, Bot, Code2, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -8,7 +8,7 @@ import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -25,6 +25,7 @@ const TITLES: Record<Section, string> = {
   asistente: "Mi agente",
   venta: "Demo del agente",
   equipo: "Equipo",
+  resultados: "Resultados",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -33,6 +34,7 @@ const TITLES: Record<Section, string> = {
 interface NavItem { section: Section | null; href: string; label: string; icon: LucideIcon; also?: Section[]; external?: boolean; ownerOnly?: boolean }
 const NAV: { title: string; items: NavItem[] }[] = [
   { title: "Ventas", items: [
+    { section: "resultados", href: "#/resultados", label: "Resultados", icon: BarChart3, ownerOnly: true },
     { section: "conversaciones", href: "#/conversaciones", label: "Conversaciones", icon: MessagesSquare },
     { section: "oportunidades", href: "#/oportunidades", label: "Oportunidades", icon: Target },
     { section: "pedidos", href: "#/pedidos", label: "Pedidos", icon: ShoppingBag },
