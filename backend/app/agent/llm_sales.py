@@ -354,7 +354,7 @@ def _verified(reply: str, evidence: str) -> bool:
 _CLAIMS = [
     (re.compile(r"\b(pagar|paga|pagues|abonar|abona|abones|link (de|para) pago|esperando (el|tu) pago|"
                 r"espera el pago|pendiente de pago|falta (el )?pago)\b"),
-     "pide pagar", lambda o: o["status"] == "PENDING_PAYMENT" and not o["attention_reason"]),
+     "pide pagar", lambda o: o["status"] in orders.AWAITING_PAYMENT and not o["attention_reason"]),
     (re.compile(r"\b(pagad[oa]s?|acreditad[oa]s?|recibimos (el|tu) pago|pago (fue |esta )?(aprobado|confirmado))\b"),
      "lo da por pagado", lambda o: o["status"] in _PAID or o["attention_reason"] == "paid_without_stock"),
     (re.compile(r"\b(despachad[oa]s?|en camino|ya salio|entregad[oa]s?|ya (te )?llego)\b"),

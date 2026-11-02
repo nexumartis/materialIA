@@ -40,7 +40,7 @@ function fieldText(f: DocField | undefined): string {
   return f.candidates.length ? `¿${f.candidates.join(" / ")}?` : "?";
 }
 
-const canConfirm = (o: Order) => o.status === "PENDING_PAYMENT" || o.status === "CANCELLED";
+const canConfirm = (o: Order) => o.status === "PENDING_PAYMENT" || o.status === "DEPOSIT_PAID" || o.status === "CANCELLED";
 
 export function OrdersPage() {
   const [list, setList] = useState<Order[] | null>(null);
@@ -132,9 +132,15 @@ export function OrdersPage() {
                         <b>#{o.number}</b>
                         <small>{o.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}</small>
                       </td>
-                      <td className="num" data-label="Total">${fmtAmount(o.total)} <span className="muted">{o.currency}</span></td>
+                      <td className="num" data-label="Total">${fmtAmount(o.total)} <span className="muted">{o.currency}</span>
+                        {o.deposit != null && (
+                          <small className="muted" style={{ display: "block" }}>
+                            Seña ${fmtAmount(o.deposit)}{o.amount_due ? ` · cobrar ahora $${fmtAmount(o.amount_due)}` : ""}
+                          </small>
+                        )}
+                      </td>
                       <td data-label="Estado">
-                        <Badge tone={o.status === "PENDING_PAYMENT" ? "warn" : o.status === "CANCELLED" || o.status === "REFUNDED" ? "neg"
+                        <Badge tone={o.status === "PENDING_PAYMENT" || o.status === "DEPOSIT_PAID" ? "warn" : o.status === "CANCELLED" || o.status === "REFUNDED" ? "neg"
                           : o.status === "DELIVERED" ? "neu" : "pos"}>{o.status_label}</Badge>
                         {o.attention_reason && <Badge tone="neg">{ATTENTION[o.attention_reason] ?? "Revisar"}</Badge>}
                       </td>
@@ -268,7 +274,7 @@ function TransferForm({ order, docs, onCancel, onDone }: {
   onDone: () => void;
 }) {
   const [reference, setReference] = useState("");
-  const [amount, setAmount] = useState(String(order.total));
+  const [amount, setAmount] = useState(String(order.amount_due || order.total));
   const [currency, setCurrency] = useState(order.currency);
   const [linked, setLinked] = useState<string[]>(() => docs.map((d) => d.id));
   const [busy, setBusy] = useState(false);

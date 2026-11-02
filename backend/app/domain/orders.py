@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -23,6 +24,7 @@ log = logging.getLogger(__name__)
 STATUS_LABELS = {
     "CART_OPEN": "carrito abierto",
     "PENDING_PAYMENT": "esperando el pago",
+    "DEPOSIT_PAID": "señado, falta pagar el saldo",
     "PAID": "pagado, todavía no despachado",
     "PREPARING": "en preparación",
     "DISPATCHED": "despachado",
@@ -31,6 +33,11 @@ STATUS_LABELS = {
     "CANCELLED": "cancelado",
     "REFUNDED": "reintegrado",
 }
+
+# Estados en los que el cliente todavía tiene algo para pagar (la seña o el pedido / el saldo).
+AWAITING_PAYMENT = ("PENDING_PAYMENT", "DEPOSIT_PAID")
+QUOTE_VALID_DAYS = 7
+MAX_QUOTE_LINES = 20
 
 # Avance operativo del pedido después del pago (lo hace el negocio, no el agente).
 FULFILLMENT_NEXT = {
@@ -42,10 +49,20 @@ FULFILLMENT_NEXT = {
 
 _ORDER_COLUMNS = ("id, number, tenant_id, conversation_id, status, currency, subtotal, shipping, "
                   "total, reserved_until, cancel_reason, attention_reason, paid_at, created_at, "
-                  "updated_at")
+                  "updated_at, quote, deposit, deposit_paid_at")
 
 
 # --- Lectura ------------------------------------------------------------------
+def amount_due(row: dict[str, Any]) -> tuple[float, str]:
+    """(monto a cobrar ahora, qué se cobra): la seña, el saldo o el total del pedido."""
+    total, deposit = float(row["total"]), float(row["deposit"]) if row.get("deposit") is not None else None
+    if deposit is not None and row["status"] == "PENDING_PAYMENT":
+        return deposit, "deposit"
+    if deposit is not None and row["status"] == "DEPOSIT_PAID":
+        return round(total - deposit, 2), "balance"
+    return total, "total"
+
+
 def _items(cur: Any, tenant_id: str, order_id: str) -> list[dict[str, Any]]:
     cur.execute(
         "select item_id, sku, name, qty, unit_price, line_total from order_items "
@@ -79,6 +96,10 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "payment": ({"provider": pay["provider"], "checkout_url": pay["checkout_url"],
                      "status": pay["status"]} if pay else None),
         "receipt_id": str(receipt["id"]) if receipt else None,   # constancia de compra emitida
+        "quote": bool(row.get("quote")),
+        "deposit": float(row["deposit"]) if row.get("deposit") is not None else None,
+        "deposit_paid_at": row["deposit_paid_at"].isoformat() if row.get("deposit_paid_at") else None,
+        "amount_due": amount_due(row)[0] if row["status"] in AWAITING_PAYMENT else 0.0,
     }
 
 
@@ -333,8 +354,9 @@ def checkout(tenant_id: str, conversation_id: str) -> CheckoutResult:
 # --- Vencimientos y avance operativo --------------------------------------------
 def _cancel_pending(cur: Any, tenant_id: str, order: dict[str, Any], reason: str) -> None:
     order_id = str(order["id"])
-    inventory._release(cur, tenant_id, order_id,
-                       [(it["item_id"], it["qty"]) for it in _items(cur, tenant_id, order_id)])
+    if not order.get("quote"):          # un pedido a medida no aparta stock
+        inventory._release(cur, tenant_id, order_id,
+                           [(it["item_id"], it["qty"]) for it in _items(cur, tenant_id, order_id)])
     cur.execute(
         "update orders set status = 'CANCELLED', cancel_reason = %s, updated_at = now() "
         "where tenant_id = %s and id = %s",
@@ -353,6 +375,55 @@ def cancel_pending(cur: Any, tenant_id: str, order_id: str, reason: str,
     if row["status"] != "PENDING_PAYMENT":
         raise ValueError("sólo se puede cancelar un pedido que espera el pago")
     _cancel_pending(cur, tenant_id, row, reason)
+    return _view(cur, _fetch(cur, tenant_id, order_id))
+
+
+def create_quote(cur: Any, tenant_id: str, conversation_id: str, lines: list[dict[str, Any]],
+                 deposit: Optional[float] = None) -> dict[str, Any]:
+    """Pedido a medida que arma una PERSONA del negocio para productos a pedido (`custom_quote`):
+    ella fija precio y cantidad; la seña es opcional (0 < seña < total). Queda esperando el pago
+    `QUOTE_VALID_DAYS` días y no aparta stock (se fabrica o se encarga). LookupError si la
+    conversación no es del negocio; ValueError con un mensaje para el dueño si algo no cierra."""
+    cur.execute("select 1 from conversations where tenant_id = %s and id = %s", (tenant_id, conversation_id))
+    if cur.fetchone() is None:
+        raise LookupError("conversación inexistente")
+    if not lines or len(lines) > MAX_QUOTE_LINES:
+        raise ValueError(f"Agregá entre 1 y {MAX_QUOTE_LINES} productos.")
+    parsed: dict[str, tuple[int, float]] = {}
+    for ln in lines:
+        try:
+            item_id, qty, price = str(uuid.UUID(str(ln["item_id"]))), int(ln["qty"]), round(float(ln["unit_price"]), 2)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            raise ValueError("Cada producto necesita cantidad y precio.") from None
+        if qty <= 0 or qty > 10_000 or price <= 0 or price > 1e10:
+            raise ValueError("Cantidad y precio tienen que ser mayores a cero.")
+        if item_id in parsed:
+            raise ValueError("Hay un producto repetido.")
+        parsed[item_id] = (qty, price)
+    cur.execute("select id, sku, name, pricing_mode = 'custom_quote' as custom_quote from catalog_items "
+                "where tenant_id = %s and active and id = any(%s::uuid[])",
+                (tenant_id, list(parsed)))
+    items = {str(r["id"]): r for r in cur.fetchall()}
+    if len(items) != len(parsed):
+        raise ValueError("Algún producto no es de tu catálogo o está pausado.")
+    if not all(r["custom_quote"] for r in items.values()):
+        # Lo que tiene stock y precio lo vende el agente con su reserva; acá sólo lo «a pedido».
+        raise ValueError("Sólo se cotizan acá los productos «a pedido»; el resto lo vende el agente.")
+    total = round(sum(q * p for q, p in parsed.values()), 2)
+    if deposit is not None:
+        deposit = round(float(deposit), 2)
+        if not 0 < deposit < total:
+            raise ValueError("La seña tiene que ser mayor a cero y menor que el total.")
+    cur.execute(
+        "insert into orders (tenant_id, conversation_id, status, quote, subtotal, shipping, total, deposit, "
+        "reserved_until) values (%s, %s, 'PENDING_PAYMENT', true, %s, 0, %s, %s, now() + make_interval(days => %s)) "
+        "returning id", (tenant_id, conversation_id, total, total, deposit, QUOTE_VALID_DAYS))
+    order_id = str(cur.fetchone()["id"])
+    for item_id, (qty, price) in parsed.items():
+        r = items[item_id]
+        cur.execute("insert into order_items (tenant_id, order_id, item_id, sku, name, qty, unit_price, line_total) "
+                    "values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (tenant_id, order_id, item_id, r["sku"], r["name"], qty, price, round(qty * price, 2)))
     return _view(cur, _fetch(cur, tenant_id, order_id))
 
 

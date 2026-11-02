@@ -1053,7 +1053,7 @@ class _Turn:
         if not cart or not cart["items"]:
             # Con un pedido ya esperando pago, "la compro" pide ese link; no arma otro carrito.
             pending = [o for o in orders.conversation_orders(self.tenant, self.conv)
-                       if o["status"] == "PENDING_PAYMENT" and not o["attention_reason"]]
+                       if o["status"] in orders.AWAITING_PAYMENT and not o["attention_reason"]]
             if pending:
                 return self.pay_link(pending[0], f"Ya tenés el pedido #{pending[0]['number']} "
                                                  "esperando el pago.")
@@ -1066,7 +1066,7 @@ class _Turn:
         self.tool("ver_carrito", "vacío" if not cart or not cart["items"] else f"{len(cart['items'])} ítem(s)")
         if not cart or not cart["items"]:
             pending = [o for o in orders.conversation_orders(self.tenant, self.conv)
-                       if o["status"] == "PENDING_PAYMENT"]
+                       if o["status"] in orders.AWAITING_PAYMENT]
             if pending:
                 return self.pay_link(pending[0], "Ya tenés un pedido esperando el pago.")
             return "Todavía no agregaste nada al carrito. ¿Qué producto querés llevar?"
@@ -1176,6 +1176,10 @@ class _Turn:
                     if paid_claim else f"Tu pedido #{o['number']} está esperando el pago")
             head += (". Apenas se acredite, te aviso por acá." if paid_claim else ".")
             return self.pay_link(o, head) if not paid_claim else head
+        if o["status"] == "DEPOSIT_PAID":
+            head = (f"Tu pedido #{o['number']} está señado: falta pagar el saldo de "
+                    f"{_money(o['amount_due'])}.")
+            return self.pay_link(o, head) if not paid_claim else head + " Apenas se acredite, te aviso por acá."
         if o["status"] == "CANCELLED":
             why = (" porque venció la reserva sin pago" if o["cancel_reason"] == "reservation_expired"
                    else "")

@@ -46,7 +46,18 @@ def _snapshot(cur: Any, tenant_id: str, order: dict[str, Any], payment: dict[str
         "paid_at": order["paid_at"].isoformat(),
         "payment": {"origin": ORIGINS[payment["provider"]], "reference": reference,
                     "amount": float(payment["amount"]), "currency": payment["currency"]},
+        # Pedido con seña: se cobró en dos pagos verificados; la constancia muestra los dos.
+        "payments": _all_payments(cur, tenant_id, str(order["id"])) if order.get("deposit") is not None else None,
     }
+
+
+def _all_payments(cur: Any, tenant_id: str, order_id: str) -> list[dict[str, Any]]:
+    cur.execute("select provider, provider_payment_id, amount, currency, charge from payments "
+                "where tenant_id = %s and order_id = %s and status = 'approved' order by verified_at, created_at",
+                (tenant_id, order_id))
+    return [{"origin": ORIGINS[r["provider"]], "reference": payment_reference(r["provider"], r["provider_payment_id"]),
+             "amount": float(r["amount"]), "currency": r["currency"],
+             "concept": {"deposit": "Seña", "balance": "Saldo"}.get(r["charge"] or "", "Pago")} for r in cur.fetchall()]
 
 
 def issue(cur: Any, tenant_id: str, order_id: str, payment_id: str) -> Optional[str]:
@@ -154,12 +165,14 @@ def render_pdf(receipt: dict[str, Any]) -> bytes:
     c.setFont(bold, 12)
     c.drawRightString(right, y + 26, _amount(receipt["total"], receipt["currency"]))
 
-    pay = receipt["payment"]
-    line("Pago verificado", 11, bold)
-    line(f"Origen: {pay['origin']}")
-    if pay["reference"]:
-        line(f"Referencia: {pay['reference']}")
-    line(f"Importe: {_amount(pay['amount'], pay['currency'])} {pay['currency']}", step=28)
+    pays = receipt.get("payments") or [{**receipt["payment"], "concept": None}]
+    line("Pagos verificados" if len(pays) > 1 else "Pago verificado", 11, bold)
+    for i, pay in enumerate(pays):
+        line(f"{pay['concept'] + ' · ' if pay.get('concept') else ''}Origen: {pay['origin']}")
+        if pay["reference"]:
+            line(f"Referencia: {pay['reference']}")
+        line(f"Importe: {_amount(pay['amount'], pay['currency'])} {pay['currency']}",
+             step=28 if i == len(pays) - 1 else 18)
     line("Este documento acredita una compra pagada en el negocio. No es una factura ni un comprobante fiscal.",
          8, step=12)
     line(f"Constancia {receipt['id']}", 7)

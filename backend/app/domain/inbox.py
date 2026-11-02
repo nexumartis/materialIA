@@ -81,7 +81,7 @@ def detail(cur: Any, tenant_id: str, uid: str, conversation_id: str) -> Optional
         "id": str(conv["id"]), "channel": conv["channel"], "created_at": conv["created_at"].isoformat(),
         **_flags(conv, uid),
         "messages": [{"author": "cliente" if m["direction"] == "inbound"
-                      else "persona" if (m["payload"] or {}).get("type") == "human" else "agente",
+                      else "persona" if (m["payload"] or {}).get("type") in ("human", "quote") else "agente",
                       "content": m["content"], "at": m["created_at"].isoformat()} for m in rows],
         "cart": orders._view(cur, cart) if cart else None,
         "orders": orders._conversation_orders(cur, tenant_id, conversation_id, limit=20),
