@@ -4,18 +4,45 @@ import { Download, Package, Pause, Play, Upload } from "lucide-react";
 import { SheetSync } from "../components/SheetSync";
 import { Badge, EmptyState, PageHeader, SelectionBar, Stats } from "../components/ui";
 
-const TEMPLATE =
-  "sku,nombre,categoria,marca,precio,stock,descripcion,foto_url,ficha_url,modelo,variante,color,ambiente,tipo,a_pedido,activo,complementos\n" +
-  "CAN-001,Canilla de cocina monocomando negra,griferia,Mi Marca,89900,6,Pico alto giratorio,https://...,https://.../ficha.pdf,Canilla monocomando,Negro,negro,cocina,monocomando,,si,FLX-001\n" +
-  "CAN-002,Canilla de cocina monocomando cromo,griferia,Mi Marca,68000,10,Pico alto giratorio,https://...,,Canilla monocomando,Cromo,cromo,cocina,monocomando,,si,FLX-001\n" +
-  "FLX-001,Flexible de acero 40 cm,griferia,Mi Marca,4500,30,,,,,,,,,,si,\n" +
-  "INO-001,Inodoro largo blanco,sanitarios,Mi Marca,,,Se encarga a fábrica,,,,,blanco,baño,,si,si,\n";
+// Plantillas CSV por rubro (mismas columnas; las vacías se pueden borrar). El rubro sale del perfil.
+const COLS = "sku,nombre,categoria,marca,precio,stock,descripcion,foto_url,ficha_url,modelo,variante,color,talle,sabor,ambiente,tipo,a_pedido,activo,complementos\n";
+const TEMPLATES: Record<string, string> = {
+  ferreteria: COLS +
+    "CAN-001,Canilla de cocina monocomando negra,griferia,Mi Marca,89900,6,Pico alto giratorio,https://...,https://.../ficha.pdf,Canilla monocomando,Negro,negro,,,cocina,monocomando,,si,FLX-001\n" +
+    "CAN-002,Canilla de cocina monocomando cromo,griferia,Mi Marca,68000,10,Pico alto giratorio,https://...,,Canilla monocomando,Cromo,cromo,,,cocina,monocomando,,si,FLX-001\n" +
+    "FLX-001,Flexible de acero 40 cm,griferia,Mi Marca,4500,30,,,,,,,,,,,,si,\n" +
+    "INO-001,Inodoro largo blanco,sanitarios,Mi Marca,,,Se encarga a fábrica,,,,,blanco,,,baño,,si,si,\n",
+  ropa: COLS +
+    "REM-NEG-M,Remera básica,remeras,Mi Marca,15000,8,Algodón peinado,https://...,,Remera básica,Negra M,negro,M,,,,,si,JEA-AZ-42\n" +
+    "REM-NEG-L,Remera básica,remeras,Mi Marca,15000,5,Algodón peinado,https://...,,Remera básica,Negra L,negro,L,,,,,si,JEA-AZ-42\n" +
+    "JEA-AZ-42,Jean recto,pantalones,Mi Marca,45000,3,,https://...,,Jean recto,Azul 42,azul,42,,,,,si,CIN-001\n" +
+    "CIN-001,Cinturón de cuero,accesorios,Mi Marca,12000,6,,,,,,marron,,,,,,si,\n" +
+    "VES-001,Vestido a medida,vestidos,Mi Marca,,,Se confecciona a pedido,,,,,,,,,,si,si,\n",
+  gastronomia: COLS +
+    "HAM-001,Hamburguesa clásica,hamburguesas,,8500,50,Doble carne y cheddar,https://...,,,,,,,,,,si,PAP-001 GAS-001\n" +
+    "PAP-001,Papas fritas,acompañamientos,,3500,80,,,,,,,,,,,,si,\n" +
+    "GAS-001,Gaseosa 500 ml,bebidas,,2000,100,,,,,,,,,,,,si,\n" +
+    "TOR-001,Torta brownie,postres,,22000,2,,,,,,,,chocolate,,,,si,\n" +
+    "TOR-002,Torta de cumpleaños,postres,,,,Se encarga con 48 h,,,,,,,,,,si,si,\n",
+  generico: COLS +
+    "PROD-001,Producto de ejemplo,general,Mi Marca,10000,5,Descripción corta,https://...,,,,,,,,,,si,PROD-002\n" +
+    "PROD-002,Producto complementario,general,Mi Marca,3000,10,,,,,,,,,,,,si,\n" +
+    "PROD-003,Producto a pedido,general,,,,Precio y plazo los confirma una persona,,,,,,,,,,si,si,\n",
+};
+const RUBRO: Record<string, string> = { sanitarios: "ferreteria", ferreteria: "ferreteria", construccion: "ferreteria",
+  ropa: "ropa", gastronomia: "gastronomia" };
 
-export function downloadTemplate() {
-  const url = URL.createObjectURL(new Blob([TEMPLATE], { type: "text/csv;charset=utf-8" }));
+/** Descarga la plantilla del rubro del negocio (si no se puede saber, la genérica). */
+export async function downloadTemplate(businessType?: string) {
+  let kind = businessType;
+  if (kind === undefined) {
+    try { kind = (await api.agentProfile()).business_type; } catch { kind = ""; }
+  }
+  const key = RUBRO[kind ?? ""] ?? "generico";
+  const url = URL.createObjectURL(new Blob([TEMPLATES[key]], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = "catalogo-plantilla.csv";
+  a.download = `catalogo-plantilla-${key}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -99,7 +126,7 @@ export function Catalog() {
         description="Lo que tu agente puede ofrecer: precio y stock reales. Lo apartado por pedidos en curso no se vende dos veces."
         actions={
           <>
-            <button className="btn" type="button" onClick={downloadTemplate}>
+            <button className="btn" type="button" onClick={() => void downloadTemplate()}>
               <Download size={15} strokeWidth={1.8} aria-hidden /> Plantilla CSV
             </button>
             <label className={`btn primary${busy ? " disabled" : ""}`}>
