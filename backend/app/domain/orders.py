@@ -84,6 +84,8 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
     pay = cur.fetchone()
     cur.execute("select id from receipts where tenant_id = %s and order_id = %s", (tenant_id, order_id))
     receipt = cur.fetchone()
+    cur.execute("select score from order_ratings where tenant_id = %s and order_id = %s", (tenant_id, order_id))
+    rating = cur.fetchone()
     return {
         "id": order_id, "number": row["number"], "status": row["status"],
         "status_label": STATUS_LABELS[row["status"]], "currency": row["currency"],
@@ -100,6 +102,7 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "deposit": float(row["deposit"]) if row.get("deposit") is not None else None,
         "deposit_paid_at": row["deposit_paid_at"].isoformat() if row.get("deposit_paid_at") else None,
         "amount_due": amount_due(row)[0] if row["status"] in AWAITING_PAYMENT else 0.0,
+        "rating": rating["score"] if rating else None,     # calificación del comprador (1 a 5)
     }
 
 

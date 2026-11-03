@@ -33,7 +33,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/asistente") return "asistente";
   if (hash === "#/catalogo") return "catalogo";
   if (hash === "#/pedidos") return "pedidos";
-  if (hash === "#/conversaciones") return "conversaciones";
+  if (hash === "#/conversaciones" || hash.startsWith("#/conversaciones/")) return "conversaciones";
   if (hash === "#/equipo") return "equipo";
   if (hash === "#/resultados") return "resultados";
   if (hash === "#/login") return "login";

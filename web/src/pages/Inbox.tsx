@@ -33,7 +33,9 @@ export function Inbox() {
   const { me } = useSession();
   const [filter, setFilter] = useState<InboxFilter>("derivadas");
   const [list, setList] = useState<InboxItem[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // «#/conversaciones/<id>» abre esa conversación (enlaces desde Resultados).
+  const [selected, setSelected] = useState<string | null>(
+    () => /^#\/conversaciones\/([0-9a-f-]{36})$/.exec(window.location.hash)?.[1] ?? null);
   const [conv, setConv] = useState<InboxConversation | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);

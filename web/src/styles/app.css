@@ -719,3 +719,12 @@ tbody td.num { white-space:nowrap; }
 .results-table { min-width:0; table-layout:auto; }
 .results-table td:first-child { overflow-wrap:anywhere; }
 @media (max-width:520px) { .funnel li { grid-template-columns:96px minmax(0,1fr) 84px; } .results-table th, .results-table td { padding:6px 2px; } }
+
+/* Encuesta de satisfacción (tienda) */
+.rate { border:1px dashed var(--rule); border-radius:var(--radius-card); padding:8px 10px; margin:6px 0 0; width:100%; }
+.rate legend { padding:0 4px; }
+.rate-scale { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.rate-send { display:flex; gap:6px; margin-top:6px; }
+.rate-send input { flex:1; min-width:0; height:32px; }
+.csat-list { list-style:none; margin:6px 0 0; padding:0; display:grid; gap:8px; }
+.csat-list li { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; padding:8px 0; border-top:1px solid var(--rule); }

@@ -82,6 +82,7 @@ function Body({ data }: { data: Insights }) {
           </table>
         </section>
       )}
+      <Satisfaction data={data} />
       {data.ai.calls > 0 && (
         <p className="muted small">
           Uso de IA: {data.ai.calls} llamadas{data.ai.cost != null ? ` · costo estimado ${data.ai.cost} ${data.ai.currency}` : ""}.
@@ -157,6 +158,42 @@ function DailyChart({ data }: { data: Insights }) {
           ))}</tbody>
         </table>
       </details>
+    </section>
+  );
+}
+
+/** Encuesta de satisfacción: promedio y a quién conviene llamar (calificó 1 o 2). */
+function Satisfaction({ data }: { data: Insights }) {
+  const s = data.satisfaction;
+  return (
+    <section className="results-card" aria-labelledby="csat-title">
+      <h2 id="csat-title">Satisfacción de los clientes</h2>
+      {s.count === 0 ? (
+        <p className="muted small">
+          Todavía nadie calificó. Después de pagar, el cliente puede calificar su pedido de 1 a 5 desde el chat.
+        </p>
+      ) : (
+        <>
+          <p>
+            <b>{s.average?.toFixed(1)} / 5</b> promedio en {s.count} calificación{s.count === 1 ? "" : "es"} ·{" "}
+            {pct(s.satisfied_rate)} conformes (4 o 5)
+          </p>
+          {s.unhappy.length > 0 ? (
+            <>
+              <h3 className="small">Para contactar ({s.unhappy.length})</h3>
+              <ul className="csat-list">
+                {s.unhappy.map((u) => (
+                  <li key={u.order_id}>
+                    <span><b>{u.score}/5</b> · pedido #{u.order_number} · {money(u.total)}</span>
+                    {u.comment && <span className="muted">«{u.comment}»</span>}
+                    {u.conversation_id && <a href={`#/conversaciones/${u.conversation_id}`}>Abrir conversación</a>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : <p className="muted small">Nadie quedó insatisfecho en este período.</p>}
+        </>
+      )}
     </section>
   );
 }

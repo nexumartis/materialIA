@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import ai_usage
+from . import ai_usage, ratings
 
 PAID = ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED")
 _TZ = "America/Argentina/Buenos_Aires"
@@ -102,4 +102,5 @@ def summary(cur: Any, tenant_id: str, days: int = 30) -> dict[str, Any]:
         "series": series,
         "top_products": top,
         "ai": {"calls": ai["calls"], "cost": ai["cost"], "currency": ai["currency"]},
+        "satisfaction": ratings.summary(cur, tenant_id, days),
     }

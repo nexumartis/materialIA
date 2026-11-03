@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, ratings, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -940,6 +940,23 @@ def public_cancel_order(slug: str, conversation_id: UUID, order_id: UUID,
             raise HTTPException(status_code=409, detail=str(exc))
         opportunities._audit(cur, tenant, "order_cancelled", str(order_id), {"by": "cliente"})
         return order
+
+
+@app.post("/public/{slug}/conversations/{conversation_id}/orders/{order_id}/rating")
+def public_rate_order(slug: str, conversation_id: UUID, order_id: UUID, request: Request, body: dict = Body(...),
+                      token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
+    """El comprador califica SU pedido pagado (1 a 5, comentario opcional). No cambia el pedido."""
+    store = _store(slug)
+    tenant, conv = store["tenant_id"], str(conversation_id)
+    limits.guard_public_chat(request, tenant, conv)
+    _owned(tenant, conv, token)
+    try:
+        with tenant_tx(tenant) as cur:
+            return ratings.rate(cur, tenant, conv, str(order_id), body.get("score"), body.get("comment"))
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _receipt_pdf(receipt: dict | None) -> Response:
