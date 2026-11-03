@@ -3,7 +3,7 @@ import { ApiError, api, resetBuyerKey, type StoreInfo } from "../lib/api";
 import { Sales, type ChatSource } from "./Sales";
 
 /** Tienda pública de un negocio (`#/tienda/<slug>`): lo que ve el cliente, sin cuenta. */
-export function Store({ slug }: { slug: string }) {
+export function Store({ slug, embed = false }: { slug: string; embed?: boolean }) {
   const [info, setInfo] = useState<StoreInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +43,7 @@ export function Store({ slug }: { slug: string }) {
   );
 
   return (
-    <div className="store">
+    <div className={embed ? "store embed" : "store"}>
       {error ? (
         <div className="sheet">
           <div className="state err">{error}</div>

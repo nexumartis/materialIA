@@ -520,7 +520,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             <input
               type="text"
               autoComplete="off"
-              placeholder="Escribí como cliente…"
+              placeholder={source.customerView ? "Escribí tu consulta…" : "Escribí como cliente…"}
               maxLength={2000}
               aria-label="Mensaje"
               value={input}

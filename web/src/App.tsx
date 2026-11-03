@@ -48,7 +48,16 @@ export default function App() {
   // La tienda pública de un negocio es la vista del cliente: sin panel ni menú. Una instancia por
   // tienda: al cambiar de tienda se desmonta la anterior y se descartan sus respuestas pendientes.
   const store = /^#\/tienda\/([a-z0-9-]{3,48})$/.exec(hash);
-  if (store) return <Store key={store[1]} slug={store[1]} />;
+  const framed = window.top !== window.self;
+  if (store) return <Store key={store[1]} slug={store[1]} embed={framed} />;
+  // Sólo la tienda se puede embeber (widget). El panel dentro de otra página sería clickjacking.
+  if (framed) {
+    return (
+      <div className="sheet"><div className="state err">
+        El panel no se puede abrir dentro de otra página. <a href={window.location.href} target="_top" rel="noopener">Abrilo acá</a>.
+      </div></div>
+    );
+  }
   return <Backoffice hash={hash} />;
 }
 

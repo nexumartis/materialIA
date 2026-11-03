@@ -735,3 +735,8 @@ tbody td.num { white-space:nowrap; }
 .handoff-card p { margin:0 0 4px; }
 .quick-pick { margin:6px 0 0; height:32px; max-width:100%; }
 .inbox-privacy { display:flex; gap:4px; flex-wrap:wrap; }
+
+/* Tienda dentro del widget de la web del comercio */
+.store.embed { min-height:100vh; }
+.store.embed .memory-note { font-size:11px; margin:4px 8px; }
+@media (max-width:520px) { .store.embed { padding-top:44px; } }

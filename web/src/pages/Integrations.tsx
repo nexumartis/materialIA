@@ -128,6 +128,7 @@ export function Integrations() {
           </table>
         </section>
       )}
+      <WebChatSnippet />
       <details className="results-table-toggle">
         <summary>Cómo verificar la firma</summary>
         <p className="small">Cada envío trae <code>X-PV-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>. Calculá
@@ -136,5 +137,29 @@ export function Integrations() {
           Si tu servidor no responde 2xx, reintentamos a los 1, 5 y 30 minutos, 2 y 6 horas.</p>
       </details>
     </div>
+  );
+}
+
+/** Código para pegar el chat de la tienda en la web del comercio (botón flotante + ventana). */
+function WebChatSnippet() {
+  const [slug, setSlug] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { api.agentProfile().then((p) => setSlug(p.public_slug ?? null), () => setSlug(null)); }, []);
+  if (!slug) return null;
+  const code = `<script src="${window.location.origin}/widget.js" data-tienda="${slug}" async></script>`;
+  return (
+    <section className="results-card" aria-labelledby="webchat-title">
+      <h2 id="webchat-title">Chat para tu página web</h2>
+      <p className="muted small">
+        Pegá este código antes de <code>&lt;/body&gt;</code> en tu web (o en el «HTML personalizado» de tu plataforma). Aparece un
+        botón «¿Te ayudo?» que abre tu asistente, con tu catálogo, carrito y cobro verificado. Opcional: <code>data-color="#1b1c1f"</code>.
+      </p>
+      <div className="wh-secret"><code>{code}</code>
+        <button className="btn sm" type="button" onClick={() => void navigator.clipboard?.writeText(code).then(() => setCopied(true))}>
+          <Copy size={14} strokeWidth={1.8} aria-hidden /> {copied ? "Copiado" : "Copiar"}
+        </button>
+        <a className="btn sm ghost" href={`#/tienda/${slug}`} target="_blank" rel="noopener noreferrer">Ver la tienda</a>
+      </div>
+    </section>
   );
 }
