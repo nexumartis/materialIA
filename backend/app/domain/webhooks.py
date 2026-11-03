@@ -28,7 +28,8 @@ from . import opportunities, safe_http
 
 log = logging.getLogger(__name__)
 
-EVENTS = ("order.paid", "order.deposit_paid", "order.cancelled", "conversation.needs_human", "order.rated")
+EVENTS = ("order.paid", "order.deposit_paid", "order.cancelled", "conversation.needs_human", "order.rated",
+          "appointment.booked")
 MAX_ENDPOINTS = 3
 TIMEOUT_S = 5.0
 RETRY_DELAYS_S = (60, 300, 1800, 7200, 21600)       # 1 min, 5 min, 30 min, 2 h, 6 h; después: failed

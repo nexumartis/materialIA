@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  BarChart3, Bot, Code2, PlugZap, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
+  BarChart3, Bot, CalendarDays, Code2, PlugZap, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -8,7 +8,7 @@ import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -27,6 +27,7 @@ const TITLES: Record<Section, string> = {
   equipo: "Equipo",
   resultados: "Resultados",
   integraciones: "Integraciones",
+  turnos: "Turnos",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -39,6 +40,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
     { section: "conversaciones", href: "#/conversaciones", label: "Conversaciones", icon: MessagesSquare },
     { section: "oportunidades", href: "#/oportunidades", label: "Oportunidades", icon: Target },
     { section: "pedidos", href: "#/pedidos", label: "Pedidos", icon: ShoppingBag },
+    { section: "turnos", href: "#/turnos", label: "Turnos", icon: CalendarDays },
   ] },
   { title: "Tu agente", items: [
     // «Mi agente» abre el asistente paso a paso; el formulario completo queda como ajustes.

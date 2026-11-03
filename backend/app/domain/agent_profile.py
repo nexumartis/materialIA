@@ -109,7 +109,9 @@ TOGGLEABLE_TOOLS = {
 #   delivery_zones         zonas a las que se envía (vacío = no se informa por zona)
 #   human_only_categories  categorías que sólo vende una persona (no entran al carrito)
 #   handoff_topics         temas que siempre atiende una persona: [{keywords: [...], reply: str|None}]
-POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories", "handoff_topics")
+#   booking                turnos: servicios, días y horarios, cupo (ver domain/booking.py)
+POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories", "handoff_topics",
+               "booking")
 MAX_TOPICS = 10
 
 
@@ -256,6 +258,10 @@ def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
     cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
     if cats:
         out["human_only_categories"] = cats
+    from . import booking
+    cfg = booking.validate(raw.get("booking"))
+    if cfg:
+        out["booking"] = cfg
     topics = _topics(raw.get("handoff_topics"))
     if topics:
         out["handoff_topics"] = topics

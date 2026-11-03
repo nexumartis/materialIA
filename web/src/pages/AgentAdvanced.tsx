@@ -24,6 +24,13 @@ const topicsText = (p: Policies) =>
   typeof p.handoff_topics === "string" ? p.handoff_topics
     : (p.handoff_topics ?? []).map((t) => t.keywords.join(", ") + (t.reply ? ` => ${t.reply}` : "")).join("\n");
 
+const DAY = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"];
+const servicesText = (b: Policies["booking"]) =>
+  !b ? "" : typeof b.services === "string" ? b.services : b.services.map((s) => `${s.name}: ${s.minutes}`).join(", ");
+const hoursText = (b: Policies["booking"]) =>
+  !b ? "" : typeof b.hours === "string" ? b.hours
+    : Object.entries(b.hours).sort().flatMap(([d, rs]) => rs.map(([a, z]) => `${DAY[Number(d)]} ${a}-${z}`)).join("; ");
+
 /** Reglas que el CÓDIGO hace cumplir (no dependen de que el modelo las respete). */
 export function PoliciesSection({ policies, onChange }: { policies: Policies; onChange: (p: Policies) => void }) {
   return (
@@ -68,6 +75,30 @@ export function PoliciesSection({ policies, onChange }: { policies: Policies; on
         />
         <small>Si el cliente nombra una de esas palabras, el agente le pasa la charla a tu equipo con tu mensaje (después de «=&gt;», opcional).</small>
       </label>
+      <fieldset className="field">
+        <legend>Turnos (retiro, medición, instalación, probador…)</legend>
+        <div className="grid2">
+          <label className="field">
+            <span>Servicios y duración en minutos</span>
+            <input value={servicesText(policies.booking)} placeholder="Ej.: Medición a domicilio: 60, Retiro: 15"
+              onChange={(e) => onChange({ ...policies, booking: e.target.value.trim()
+                ? { services: e.target.value, hours: policies.booking?.hours ?? "", capacity: policies.booking?.capacity ?? 1 }
+                : null })} />
+          </label>
+          <label className="field">
+            <span>Días y horarios</span>
+            <input value={hoursText(policies.booking)} placeholder="Ej.: lun-vie 9-18; sab 9-13"
+              disabled={!policies.booking}
+              onChange={(e) => policies.booking && onChange({ ...policies, booking: { ...policies.booking, hours: e.target.value } })} />
+          </label>
+        </div>
+        <label className="field">
+          <span>Turnos al mismo tiempo</span>
+          <input type="number" min={1} max={20} value={policies.booking?.capacity ?? 1} disabled={!policies.booking}
+            onChange={(e) => policies.booking && onChange({ ...policies, booking: { ...policies.booking, capacity: Number(e.target.value) } })} />
+          <small>El agente ofrece sólo horarios libres desde 2 horas después y hasta 14 días; los turnos se ven en «Turnos».</small>
+        </label>
+      </fieldset>
     </section>
   );
 }

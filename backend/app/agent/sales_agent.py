@@ -18,11 +18,12 @@ from __future__ import annotations
 import difflib
 import json
 import re
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
+from ..domain import agent_profile, ai_usage, booking, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -451,6 +452,8 @@ class _Turn:
         self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
         self.offer: Optional[dict[str, Any]] = None   # propuesta de agregar del turno anterior
+        self.slots: Optional[dict[str, Any]] = None   # turnos ofrecidos en el mensaje anterior
+        self.booking_ask = False
         self.consent = "read"   # ver _consent
         self.no_cart = False    # "todavía no quiero carrito": no se propone agregar
         self.blocked = False    # la última herramienta del modelo fue rechazada por el servidor
@@ -1307,6 +1310,42 @@ class _Turn:
                     else f" Tu pedido #{o['number']} está {o['status_label']}.")
         return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
+    def offer_slots(self, cfg: dict[str, Any], text: str) -> str:
+        service = booking.pick_service(cfg, text)
+        if service is None:
+            self.state["booking_ask"] = True
+            names = ", ".join(s["name"] for s in cfg["services"])
+            return f"¿Para qué es el turno? Tengo: {names}."
+        with tenant_tx(self.tenant) as cur:
+            slots = booking.free_slots(cur, self.tenant, cfg, service)
+        self.tool("turnos", f"{service['name']}: {len(slots)} horario(s) libre(s)")
+        if not slots:
+            return (f"No tengo turnos libres para {service['name']} en los próximos días. Si querés, "
+                    "le paso tu consulta a una persona del equipo.")
+        self.state["slots"] = {"service": service["name"], "options": [s.isoformat() for s in slots]}
+        lines = "\n".join(f"{i}. {booking.label(s)}" for i, s in enumerate(slots, 1))
+        return (f"Turnos libres para {service['name']} ({service['minutes']} min):\n{lines}\n"
+                "¿Cuál te sirve? Decime el número.")
+
+    def book_slot(self, cfg: dict[str, Any], n: int) -> str:
+        options = self.slots["options"]
+        service = next((s for s in cfg["services"] if s["name"] == self.slots["service"]), None)
+        if service is None or not 0 < n <= len(options):
+            self.state["slots"] = self.slots
+            return f"Decime un número de la lista (1 a {len(options)})."
+        if self.dry_run:
+            return f"(Vista previa) Reservaría {service['name']} el {booking.label(datetime.fromisoformat(options[n - 1]))}."
+        with tenant_tx(self.tenant) as cur:
+            appt = booking.book(cur, self.tenant, self.conv, cfg, service, datetime.fromisoformat(options[n - 1]))
+        if appt.get("error"):
+            self.tool("turnos", f"no se pudo reservar: {appt['error']}")
+            why = ("Ese horario ya quedó muy cerca para reservarlo." if appt["error"] == "too_soon"
+                   else "Ese horario se acaba de ocupar.")
+            return why + " " + self.offer_slots(cfg, normalize(service["name"]))
+        self.tool("turnos", f"reservado {service['name']}")
+        return (f"¡Listo! Te reservé {service['name']} el {booking.label(datetime.fromisoformat(appt['starts_at']))}. "
+                "Si no podés venir, avisanos por acá.")
+
     def reorder(self) -> Optional[str]:
         """Arma el carrito con el último pedido pagado del cliente recordado, con el precio y el
         stock de HOY (nunca los de entonces); lo que ya no se puede vender se avisa, no se agrega."""
@@ -1385,6 +1424,24 @@ class _Turn:
         opportunities.upsert_opportunity(self.tenant, OpportunityInput(
             conversation_id=self.conv, stage="para_cotizar", origin="venta_chat",
             requirements={"producto": o["name"], "sku": o["sku"]}, requires_human_quote=True))
+
+
+_RE_BOOKING = re.compile(r"\b(turnos?|reserv\w*|agend\w*|cita|coordinar (una )?(visita|medicion|retiro|instalacion))\b")
+
+
+def _booking_reply(turn: _Turn, text: str) -> Optional[str]:
+    """Turnos: pedir uno (ofrece horarios libres) o elegir uno de los ofrecidos («el 2»).
+    Determinista también con IA: los horarios salen de la agenda real."""
+    cfg = booking.config(turn.profile)
+    if not cfg:
+        return None
+    if turn.slots:
+        n = _option(text)
+        if n is not None:
+            return turn.book_slot(cfg, n)
+    if _RE_BOOKING.search(text) or (turn.booking_ask and booking.pick_service(cfg, text)):
+        return turn.offer_slots(cfg, text)
+    return None
 
 
 def _reorder_reply(turn: _Turn, text: str) -> Optional[str]:
@@ -1513,11 +1570,14 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     mode = "mock"
     # Una propuesta de agregar vale sólo para el mensaje siguiente; la derivación, para su seguimiento.
     turn.offer = state.pop("offer", None)
+    turn.slots = state.pop("slots", None)      # turnos ofrecidos en el mensaje anterior
+    turn.booking_ask = bool(state.pop("booking_ask", None))   # preguntó «¿para qué es el turno?»
     handoff = bool(state.pop("handoff", None))
     turn.no_cart = all(_RE_NO_CART.search(part) for part in _parts(text))
     turn.consent = _consent(message, text, turn.offer)
 
-    reply = _confirmation_reply(turn, text) or _human_reply(turn, text, handoff) or _reorder_reply(turn, text)
+    reply = (_confirmation_reply(turn, text) or _human_reply(turn, text, handoff) or _reorder_reply(turn, text)
+             or _booking_reply(turn, text))
     if reply is None:
         planner = planner or llm_sales.default_planner()
         if planner is not None and limits.ai_allowed(tenant_id):
