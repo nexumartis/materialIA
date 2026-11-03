@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Copy, PlugZap, Trash2 } from "lucide-react";
+import { Copy, Landmark, MapPin, MessageSquareCode, PlugZap, Trash2, Webhook, X, type LucideIcon } from "lucide-react";
+import { siGooglecalendar, siGooglesheets, siInstagram, siMake, siMercadopago, siShopify, siWhatsapp, siWoocommerce,
+  siZapier, type SimpleIcon } from "simple-icons";
+import { SheetSync } from "../components/SheetSync";
 import { Badge, EmptyState, PageHeader } from "../components/ui";
-import { api, type Webhooks } from "../lib/api";
+import { api, type Health, type Webhooks } from "../lib/api";
 
 const EVENT_LABEL: Record<string, string> = {
   "order.paid": "Pedido pagado",
@@ -13,7 +16,7 @@ const EVENT_LABEL: Record<string, string> = {
 const when = (iso: string) => new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 /** Webhooks: el negocio recibe eventos firmados en su sistema (planilla, ERP, CRM, Zapier/Make). */
-export function Integrations() {
+function WebhooksPanel({ onChange }: { onChange?: () => void }) {
   const [data, setData] = useState<Webhooks | null>(null);
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<string[]>([]);
@@ -36,6 +39,7 @@ export function Integrations() {
       const r = await action();
       done?.(r);
       load();
+      onChange?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo completar.");
     } finally {
@@ -44,9 +48,7 @@ export function Integrations() {
   }
 
   return (
-    <div className="sheet">
-      <PageHeader title="Integraciones"
-        description="Webhooks: tu sistema (planilla, ERP, CRM, Zapier o Make) recibe un aviso firmado cuando pasa algo en tu tienda." />
+    <div>
       <form className="team-invite" onSubmit={(e) => {
         e.preventDefault();
         void run(() => api.createWebhook(url.trim(), events), (r) => { setSecret(r.secret); setUrl(""); });
@@ -128,7 +130,6 @@ export function Integrations() {
           </table>
         </section>
       )}
-      <WebChatSnippet />
       <details className="results-table-toggle">
         <summary>Cómo verificar la firma</summary>
         <p className="small">Cada envío trae <code>X-PV-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>. Calculá
@@ -141,7 +142,7 @@ export function Integrations() {
 }
 
 /** Código para pegar el chat de la tienda en la web del comercio (botón flotante + ventana). */
-function WebChatSnippet() {
+export function WebChatSnippet() {
   const [slug, setSlug] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => { api.agentProfile().then((p) => setSlug(p.public_slug ?? null), () => setSlug(null)); }, []);
@@ -161,5 +162,157 @@ function WebChatSnippet() {
         <a className="btn sm ghost" href={`#/tienda/${slug}`} target="_blank" rel="noopener noreferrer">Ver la tienda</a>
       </div>
     </section>
+  );
+}
+
+// --- Catálogo de integraciones ---------------------------------------------------------
+type Status = "on" | "available" | "soon";
+type Category = "pagos" | "catalogo" | "automatizacion" | "canales" | "operacion";
+interface Item {
+  key: string; name: string; category: Category; blurb: string;
+  logo: SimpleIcon | { mono: string; color: string; ink?: string } | LucideIcon;
+  status: (s: Ctx) => Status; statusText?: (s: Ctx) => string;
+  detail?: (s: Ctx) => React.ReactNode;
+}
+interface Ctx { health: Health | null; sheet: boolean; webhooks: number; reload: () => void }
+
+const CATEGORIES: { key: Category | "todas"; label: string }[] = [
+  { key: "todas", label: "Todas" }, { key: "pagos", label: "Pagos" }, { key: "catalogo", label: "Catálogo" },
+  { key: "automatizacion", label: "Automatización" }, { key: "canales", label: "Canales" }, { key: "operacion", label: "Operación" },
+];
+
+const steps = (lines: string[]) => <ol className="intg-steps">{lines.map((l) => <li key={l}>{l}</li>)}</ol>;
+
+const ITEMS: Item[] = [
+  { key: "mercadopago", name: "Mercado Pago", category: "pagos", logo: siMercadopago,
+    blurb: "Link de pago en el chat. El pedido figura pagado sólo con el aviso verificado de Mercado Pago.",
+    status: (c) => (c.health?.payments?.provider === "mercadopago" ? "on" : "available"),
+    statusText: (c) => (c.health?.payments?.provider === "mercadopago" ? "Conectada" : "Modo prueba"),
+    detail: (c) => (c.health?.payments?.provider === "mercadopago"
+      ? <p>Cobros reales activos. Cada pago se consulta a Mercado Pago antes de marcar el pedido como pagado.</p>
+      : <p>Hoy los pagos son <b>simulados</b> (no se cobra nada). Para cobrar de verdad, el equipo técnico carga las credenciales de Mercado Pago del negocio.</p>) },
+  { key: "transfer", name: "Transferencia bancaria", category: "pagos", logo: Landmark,
+    blurb: "El cliente adjunta el comprobante; vos lo cotejás en tu banco y acreditás el pedido.",
+    status: () => "on", detail: () => <p>Activa. Un comprobante nunca acredita solo: el pedido pasa a pagado cuando confirmás la transferencia en <a href="#/pedidos">Pedidos</a>.</p> },
+  { key: "sheets", name: "Google Sheets", category: "catalogo", logo: siGooglesheets,
+    blurb: "Tu planilla como catálogo vivo: precios y stock se sincronizan cada 15 minutos.",
+    status: (c) => (c.sheet ? "on" : "available"), detail: (c) => <SheetSync onSynced={c.reload} /> },
+  { key: "webhooks", name: "Webhooks", category: "automatizacion", logo: Webhook,
+    blurb: "Avisos firmados a tu sistema cuando se paga, se cancela, se deriva o se reserva un turno.",
+    status: (c) => (c.webhooks ? "on" : "available"), detail: (c) => <WebhooksPanel onChange={c.reload} /> },
+  { key: "zapier", name: "Zapier", category: "automatizacion", logo: siZapier,
+    blurb: "Conectá con miles de apps (planillas, CRMs, mail) usando nuestros webhooks.",
+    status: (c) => (c.webhooks ? "on" : "available"), statusText: (c) => (c.webhooks ? "Vía webhooks" : "Disponible"),
+    detail: () => steps(["En Zapier creá un Zap con «Webhooks by Zapier → Catch Hook».", "Copiá la URL que te da.",
+      "Pegala en la tarjeta Webhooks de esta página y elegí los eventos.", "Tocá «Probar» y seguí armando el Zap."]) },
+  { key: "make", name: "Make", category: "automatizacion", logo: siMake,
+    blurb: "Escenarios automáticos con cada venta o derivación, sin programar.",
+    status: (c) => (c.webhooks ? "on" : "available"), statusText: (c) => (c.webhooks ? "Vía webhooks" : "Disponible"),
+    detail: () => steps(["En Make agregá el módulo «Webhooks → Custom webhook».", "Copiá la dirección.",
+      "Pegala en la tarjeta Webhooks y tocá «Probar»."]) },
+  { key: "webchat", name: "Chat para tu web", category: "canales", logo: MessageSquareCode,
+    blurb: "Un botón «¿Te ayudo?» en tu página con tu agente, carrito y cobro verificado.",
+    status: () => "available", detail: () => <WebChatSnippet /> },
+  { key: "georef", name: "Georef (datos.gob.ar)", category: "operacion", logo: MapPin,
+    blurb: "Entiende «Bernal» o «Ramos Mejía» y lo cruza con tus zonas de envío.",
+    status: () => "on", detail: () => <p>Activa y gratuita. Cargá tus zonas en <a href="#/agente">Ajustes del agente → Políticas</a> (ej.: «Quilmes: 4000, Zona Oeste»).</p> },
+  { key: "gcal", name: "Google Calendar", category: "operacion", logo: siGooglecalendar,
+    blurb: "Tus turnos del chat en tu calendario.", status: () => "soon" },
+  { key: "tiendanube", name: "Tiendanube", category: "catalogo", logo: { mono: "TN", color: "#2b3a67" },
+    blurb: "Catálogo y stock de tu tienda online, sincronizados.", status: () => "soon" },
+  { key: "shopify", name: "Shopify", category: "catalogo", logo: siShopify,
+    blurb: "Productos y stock de tu Shopify en el agente.", status: () => "soon" },
+  { key: "woocommerce", name: "WooCommerce", category: "catalogo", logo: siWoocommerce,
+    blurb: "Tu tienda WordPress como catálogo del agente.", status: () => "soon" },
+  { key: "mercadolibre", name: "Mercado Libre", category: "canales", logo: { mono: "ML", color: "#ffe600", ink: "#2d3277" },
+    blurb: "Responder preguntas de compradores con tu stock real.", status: () => "soon" },
+  { key: "whatsapp", name: "WhatsApp", category: "canales", logo: siWhatsapp,
+    blurb: "El mismo agente en WhatsApp, con recordatorios de pago y turnos.", status: () => "soon" },
+  { key: "instagram", name: "Instagram", category: "canales", logo: siInstagram,
+    blurb: "Responder mensajes directos con tu catálogo.", status: () => "soon" },
+];
+
+function Logo({ logo }: { logo: Item["logo"] }) {
+  if (typeof logo === "function" || (typeof logo === "object" && "$$typeof" in logo)) {
+    const Icon = logo as LucideIcon;
+    return <span className="intg-logo intg-logo-neutral"><Icon size={22} strokeWidth={1.8} aria-hidden /></span>;
+  }
+  if ("mono" in logo) {
+    return <span className="intg-logo" style={{ background: logo.color, color: logo.ink ?? "#fff" }} aria-hidden>{logo.mono}</span>;
+  }
+  return (
+    <span className="intg-logo" style={{ background: `#${logo.hex}1a` }} aria-hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill={`#${logo.hex}`}><path d={logo.path} /></svg>
+    </span>
+  );
+}
+
+const STATUS_LABEL: Record<Status, string> = { on: "Conectada", available: "Disponible", soon: "Próximamente" };
+
+/** Integraciones como catálogo: logo, estado y configuración en el lugar. */
+export function Integrations() {
+  const [health, setHealth] = useState<Health | null>(null);
+  const [sheet, setSheet] = useState(false);
+  const [webhooks, setWebhooks] = useState(0);
+  const [cat, setCat] = useState<Category | "todas">("todas");
+  const [open, setOpen] = useState<string | null>(null);
+
+  const reload = useCallback(() => {
+    api.health().then(setHealth, () => setHealth(null));
+    api.catalogSheet().then((r) => setSheet(Boolean(r.sheet)), () => setSheet(false));
+    api.webhooks().then((w) => setWebhooks(w.endpoints.length), () => setWebhooks(0));
+  }, []);
+  useEffect(reload, [reload]);
+
+  const ctx: Ctx = { health, sheet, webhooks, reload };
+  const list = ITEMS.filter((i) => cat === "todas" || i.category === cat);
+  const order: Record<Status, number> = { on: 0, available: 1, soon: 2 };
+  list.sort((a, b) => order[a.status(ctx)] - order[b.status(ctx)]);
+  const active = ITEMS.find((i) => i.key === open);
+  const connected = ITEMS.filter((i) => i.status(ctx) === "on").length;
+
+  return (
+    <div className="sheet">
+      <PageHeader title="Integraciones"
+        description={`${connected} conectadas. Conectá tu catálogo, tus cobros y tus otros sistemas; lo marcado «Próximamente» está en camino.`} />
+      <div className="results-range intg-filters" role="group" aria-label="Categoría">
+        {CATEGORIES.map((c) => (
+          <button key={c.key} type="button" className="chip" aria-pressed={cat === c.key} onClick={() => setCat(c.key)}>{c.label}</button>
+        ))}
+      </div>
+      <ul className="intg-grid">
+        {list.map((i) => {
+          const st = i.status(ctx);
+          return (
+            <li key={i.key}>
+              <button type="button" className={`intg-card intg-${st}${open === i.key ? " is-open" : ""}`}
+                aria-expanded={open === i.key} disabled={st === "soon"}
+                onClick={() => setOpen(open === i.key ? null : i.key)}>
+                <span className="intg-head">
+                  <Logo logo={i.logo} />
+                  <span className={`intg-status intg-status-${st}`}>
+                    <span className="dot" aria-hidden />{i.statusText?.(ctx) ?? STATUS_LABEL[st]}
+                  </span>
+                </span>
+                <b>{i.name}</b>
+                <span className="muted small">{i.blurb}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {active?.detail && (
+        <section className="intg-detail results-card" aria-labelledby="intg-detail-title">
+          <div className="intg-detail-head">
+            <Logo logo={active.logo} />
+            <h2 id="intg-detail-title">{active.name}</h2>
+            <button className="btn sm ghost" type="button" aria-label="Cerrar" onClick={() => setOpen(null)}>
+              <X size={16} strokeWidth={1.8} aria-hidden />
+            </button>
+          </div>
+          {active.detail(ctx)}
+        </section>
+      )}
+    </div>
   );
 }
