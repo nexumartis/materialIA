@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, type CatalogItem, type InboxConversation, type InboxFilter, type InboxItem, type InternalNote } from "../lib/api";
+import { ApiError, api, type CatalogItem, type InboxConversation, type InboxFilter, type InboxItem, type InternalNote, type QuickReply } from "../lib/api";
 import { Bell, FileSignature, MessageSquareText, MessagesSquare, StickyNote } from "lucide-react";
 import { useSession } from "../lib/session";
 import { EmptyState } from "../components/ui";
@@ -39,6 +39,8 @@ export function Inbox() {
     () => /^#\/conversaciones\/([0-9a-f-]{36})$/.exec(window.location.hash)?.[1] ?? null);
   const [conv, setConv] = useState<InboxConversation | null>(null);
   const [draft, setDraft] = useState("");
+  const [shortcuts, setShortcuts] = useState<QuickReply[]>([]);
+  useEffect(() => { api.quickReplies().then(setShortcuts, () => setShortcuts([])); }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -212,6 +214,16 @@ export function Inbox() {
                   </div>
                 ))}
               </div>
+              {shortcuts.length > 0 && (
+                <select className="quick-pick" aria-label="Insertar respuesta rápida" value=""
+                  onChange={(e) => {
+                    const q = shortcuts.find((x) => x.id === e.target.value);
+                    if (q) setDraft((d) => (d.trim() ? `${d.trim()} ${q.body}` : q.body));
+                  }}>
+                  <option value="">Respuestas rápidas…</option>
+                  {shortcuts.map((q) => <option key={q.id} value={q.id}>{q.title}</option>)}
+                </select>
+              )}
               <form className="composer" onSubmit={(e) => void send(e)}>
                 <input type="text" aria-label="Respuesta" autoComplete="off" maxLength={2000}
                   placeholder={conv.taken ? "Escribile al cliente…" : "Escribí para tomar el control y responder…"}

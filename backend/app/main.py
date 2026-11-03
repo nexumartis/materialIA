@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -685,6 +685,32 @@ def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = De
         opportunities._add_message(cur, tenant, conv, "outbound", text,
                                    {"type": "quote", "order_id": order["id"], "author_id": uid})
         return orders._view(cur, orders._fetch(cur, tenant, order["id"]))
+
+
+# --- Panel: respuestas rápidas (las usa el equipo; las administra el dueño) ---------------
+@app.get("/app/quick-replies")
+def app_quick_replies(uid: str = Depends(current_uid)) -> list[dict]:
+    with user_tx(uid) as (cur, tenant):
+        return quick_replies.list_all(cur, tenant)
+
+
+@app.post("/app/quick-replies")
+def app_quick_reply_create(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return quick_replies.create(cur, tenant, uid, str(body.get("title") or ""), str(body.get("body") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/app/quick-replies/{reply_id}")
+def app_quick_reply_delete(reply_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        if not quick_replies.delete(cur, tenant, str(reply_id)):
+            raise HTTPException(status_code=404, detail="Respuesta rápida no encontrada.")
+    return {"deleted": True}
 
 
 # --- Panel: webhooks (sólo el dueño) ----------------------------------------------------

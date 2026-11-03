@@ -134,6 +134,10 @@ def reply(cur: Any, tenant_id: str, uid: str, conversation_id: str, text: str) -
     if not take(cur, tenant_id, uid, conversation_id):
         return False
     opportunities._add_message(cur, tenant_id, conversation_id, "outbound", text, {"type": "human"})
+    # Primera respuesta de una persona a la derivación abierta (métrica de tiempo de respuesta).
+    cur.execute("update handoff_events set answered_at = now(), answered_by = %s "
+                "where tenant_id = %s and conversation_id = %s and answered_at is null",
+                (uid, tenant_id, conversation_id))
     opportunities._audit(cur, tenant_id, "human_reply", conversation_id, {"actor": uid, "chars": len(text)})
     return True
 

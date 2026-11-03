@@ -207,6 +207,12 @@ export const api = {
   deleteWebhook: (id: string) => authed<{ deleted: boolean }>(`/app/webhooks/${id}`, { method: "DELETE" }),
   testWebhook: (id: string) =>
     authed<{ ok: boolean; status_code: number | null; error: string | null }>(`/app/webhooks/${id}/test`, { method: "POST" }),
+  quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
+  createQuickReply: (title: string, body: string) =>
+    authed<QuickReply>("/app/quick-replies", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, body }),
+    }),
+  deleteQuickReply: (id: string) => authed<{ deleted: boolean }>(`/app/quick-replies/${id}`, { method: "DELETE" }),
   team: () => authed<Team>("/app/team"),
   invite: (email: string) =>
     authed<Team>("/app/team/invites", {
@@ -535,6 +541,8 @@ export interface Insights {
   series: { day: string; conversations: number; revenue: number }[];
   top_products: { name: string; qty: number; revenue: number }[];
   ai: { calls: number; cost: number | null; currency: string };
+  inbox: { handoffs: number; answered: number; waiting_now: number; by_reason: Record<string, number>;
+           first_response_minutes_p50: number | null; first_response_minutes_p90: number | null };
   satisfaction: {
     count: number; average: number | null; satisfied_rate: number | null; distribution: Record<string, number>;
     unhappy: { order_id: string; order_number: number; conversation_id: string | null; score: number;
@@ -550,6 +558,8 @@ export interface Webhooks {
   deliveries: { id: string; endpoint_id: string; event: string; status: "pending" | "sent" | "failed"; attempts: number;
     last_status_code: number | null; last_error: string | null; created_at: string; sent_at: string | null }[];
 }
+
+export interface QuickReply { id: string; title: string; body: string }
 
 export interface QuoteLine { item_id: string; qty: number; unit_price: number }
 
