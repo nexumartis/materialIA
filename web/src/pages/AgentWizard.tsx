@@ -312,7 +312,7 @@ function CatalogStep({ products, onImported, onError }: {
         Tu agente sólo ofrece lo que está acá, con precio y stock reales. Hoy tenés <b>{products ?? "…"}</b> productos.
       </p>
       <div className="inline">
-        <button className="btn sm ghost" type="button" onClick={downloadTemplate}>Descargar plantilla CSV</button>
+        <button className="btn sm ghost" type="button" onClick={() => void downloadTemplate()}>Descargar plantilla CSV</button>
         <label className={`btn sm primary${busy ? " disabled" : ""}`}>
           {busy ? "Importando…" : "Subir CSV"}
           <input type="file" accept=".csv,text/csv" hidden disabled={busy}
