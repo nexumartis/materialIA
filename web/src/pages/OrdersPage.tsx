@@ -43,6 +43,7 @@ function fieldText(f: DocField | undefined): string {
 const canConfirm = (o: Order) => o.status === "PENDING_PAYMENT" || o.status === "DEPOSIT_PAID" || o.status === "CANCELLED";
 
 export function OrdersPage() {
+  const [onlyDeposited, setOnlyDeposited] = useState(false);
   const [list, setList] = useState<Order[] | null>(null);
   const [docs, setDocs] = useState<PaymentDocument[]>([]);
   const [month, setMonth] = useState(currentMonth);
@@ -82,11 +83,17 @@ export function OrdersPage() {
   }
 
   const paidStates = ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"];
+  // Pedidos señados: lo que falta cobrar (el saldo). Sólo se acredita con pago verificado o transferencia cotejada.
+  const deposited = (list ?? []).filter((o) => o.status === "DEPOSIT_PAID");
+  const balanceDue = deposited.reduce((n, o) => n + (o.amount_due ?? 0), 0);
+  const shown = onlyDeposited ? deposited : list ?? [];
   const stats: Stat[] = list ? [
     { label: "Esperando el pago", value: list.filter((o) => o.status === "PENDING_PAYMENT").length },
     { label: "Pagados sin despachar", value: list.filter((o) => o.status === "PAID").length },
     { label: "Para revisar", value: list.filter((o) => o.attention_reason).length,
       tone: list.some((o) => o.attention_reason) ? "neg" : undefined },
+    ...(deposited.length ? [{ label: "Saldos por cobrar", value: `$${fmtAmount(balanceDue)}`,
+      hint: `${deposited.length} pedido${deposited.length === 1 ? "" : "s"} señado${deposited.length === 1 ? "" : "s"}` }] : []),
     { label: "Vendido (ARS)", value: `$${fmtAmount(list.filter((o) => paidStates.includes(o.status) && o.currency === "ARS")
         .reduce((n, o) => n + o.total, 0))}`, hint: "pedidos pagados del listado" },
   ] : [];
@@ -114,6 +121,14 @@ export function OrdersPage() {
       ) : (
         <>
           <Stats label="Resumen de pedidos" items={stats} />
+          {deposited.length > 0 && (
+            <div className="results-range" role="group" aria-label="Filtro de pedidos" style={{ margin: "8px 0" }}>
+              <button type="button" className="chip" aria-pressed={!onlyDeposited} onClick={() => setOnlyDeposited(false)}>Todos</button>
+              <button type="button" className="chip" aria-pressed={onlyDeposited} onClick={() => setOnlyDeposited(true)}>
+                Señados, falta el saldo ({deposited.length})
+              </button>
+            </div>
+          )}
           <div className="tablewrap">
             <table className="orders stack">
               <thead>
@@ -125,7 +140,7 @@ export function OrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((o) => (
+                {shown.map((o) => (
                   <Fragment key={o.id}>
                     <tr className={confirming === o.id ? "selected" : ""} data-order={o.number}>
                       <td className="pedido">
