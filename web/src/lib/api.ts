@@ -213,6 +213,8 @@ export const api = {
     }),
   redactConversation: (id: string) =>
     authed<{ changed: number; conversation: InboxConversation }>(`/app/inbox/${id}/redact`, { method: "POST" }),
+  appointments: () => authed<Appointment[]>("/app/appointments"),
+  cancelAppointment: (id: string) => authed<{ cancelled: boolean }>(`/app/appointments/${id}/cancel`, { method: "POST" }),
   quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
   createQuickReply: (title: string, body: string) =>
     authed<QuickReply>("/app/quick-replies", {
@@ -422,7 +424,13 @@ export interface Policies {
   human_only_categories?: string[];
   /** Temas que siempre atiende una persona. Guardados como lista; mientras se edita, texto «palabras => mensaje». */
   handoff_topics?: { keywords: string[]; reply: string | null }[] | string;
+  /** Turnos: guardado normalizado; mientras se edita, textos que interpreta el servidor. */
+  booking?: { services: { name: string; minutes: number }[] | string; hours: Record<string, string[][]> | string;
+              capacity: number } | null;
 }
+
+export interface Appointment { id: string; conversation_id: string | null; service: string; starts_at: string;
+  ends_at: string; label: string }
 
 export interface AiUsage {
   days: number;
