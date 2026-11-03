@@ -493,6 +493,16 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                     Descargar constancia (PDF)
                   </button>
                 )}
+                {m.ui?.type === "receipt" && m.ui.receipt_id && source.rateOrder && conv && (() => {
+                  // La encuesta va en el chat, debajo del pago confirmado (también está en «Pedidos»).
+                  const o = orders.find((x) => x.receipt_id === m.ui!.receipt_id);
+                  return o && RATEABLE.includes(o.status) ? (
+                    <RateOrder order={o} onRate={async (score, comment) => {
+                      await source.rateOrder!(conv, o.id, score, comment);
+                      setOrders((list) => list.map((x) => (x.id === o.id ? { ...x, rating: score } : x)));
+                    }} />
+                  ) : null;
+                })()}
                 {i === lastBot && !sending && m.ui?.quick_replies && (
                   <div className="quick">
                     {m.ui.quick_replies.map((q) => (
