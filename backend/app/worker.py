@@ -20,7 +20,7 @@ import time
 
 from .agent import compaction
 from .documents import store as documents
-from .domain import catalog_sheet, customer_memory, evals, limits, orders, webhooks
+from .domain import catalog_sheet, customer_memory, evals, handoff, limits, orders, webhooks
 
 log = logging.getLogger("app.worker")
 
@@ -33,7 +33,8 @@ def run_once() -> dict[str, int]:
             "stale_previews": evals.cleanup_stale(),
             "catalog_sheets": catalog_sheet.sync_due(),
             "rate_limit_windows_cleaned": limits.cleanup(),
-            "webhooks_delivered": webhooks.deliver_due()}
+            "webhooks_delivered": webhooks.deliver_due(),
+            "handoff_summaries": handoff.summarize_due()}
 
 
 def main(argv: list[str]) -> None:

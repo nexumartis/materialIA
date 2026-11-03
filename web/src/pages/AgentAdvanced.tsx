@@ -19,6 +19,11 @@ const zonesText = (p: Policies) =>
   typeof p.delivery_zones === "string" ? p.delivery_zones
     : (p.delivery_zones ?? []).map((z) => (p.shipping_costs?.[z] != null ? `${z}: ${p.shipping_costs[z]}` : z)).join(", ");
 
+/** «reclamo, roto => mensaje», una línea por tema. */
+const topicsText = (p: Policies) =>
+  typeof p.handoff_topics === "string" ? p.handoff_topics
+    : (p.handoff_topics ?? []).map((t) => t.keywords.join(", ") + (t.reply ? ` => ${t.reply}` : "")).join("\n");
+
 /** Reglas que el CÓDIGO hace cumplir (no dependen de que el modelo las respete). */
 export function PoliciesSection({ policies, onChange }: { policies: Policies; onChange: (p: Policies) => void }) {
   return (
@@ -52,6 +57,16 @@ export function PoliciesSection({ policies, onChange }: { policies: Policies; on
           placeholder="Ej.: sanitarios, a medida"
           onChange={(e) => onChange({ ...policies, human_only_categories: parse(e.target.value) })}
         />
+      </label>
+      <label className="field">
+        <span>Temas que atiende siempre una persona (uno por línea)</span>
+        <textarea
+          rows={3}
+          value={topicsText(policies)}
+          placeholder={"reclamo, no funciona, roto => Lamento lo que pasó, lo vemos enseguida.\ncambio, devolución"}
+          onChange={(e) => onChange({ ...policies, handoff_topics: e.target.value })}
+        />
+        <small>Si el cliente nombra una de esas palabras, el agente le pasa la charla a tu equipo con tu mensaje (después de «=&gt;», opcional).</small>
       </label>
     </section>
   );

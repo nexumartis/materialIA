@@ -12,7 +12,7 @@ from typing import Any, Optional
 from ..db import tenant_tx
 from ..documents import store as documents
 from ..schemas import MAX_HUMAN_REPLY
-from . import opportunities, orders, team
+from . import handoff, opportunities, orders, team
 
 FILTERS = {
     "todas": "true",
@@ -66,7 +66,8 @@ def list_conversations(cur: Any, tenant_id: str, uid: str, filter_: str = "todas
 
 
 def _conversation(cur: Any, tenant_id: str, conversation_id: str, lock: bool = False) -> Optional[dict[str, Any]]:
-    cur.execute("select id, channel, created_at, needs_human_at, needs_human_reason, taken_by from conversations "
+    cur.execute("select id, channel, created_at, needs_human_at, needs_human_reason, taken_by, handoff_summary, "
+                "handoff_summary_at, last_customer_message_at from conversations "
                 "where tenant_id = %s and id = %s" + (" for update" if lock else ""), (tenant_id, conversation_id))
     return cur.fetchone()
 
@@ -87,6 +88,7 @@ def detail(cur: Any, tenant_id: str, uid: str, conversation_id: str) -> Optional
         "orders": orders._conversation_orders(cur, tenant_id, conversation_id, limit=20),
         "documents": documents._for_conversation(cur, tenant_id, conversation_id),
         "notes": team.notes(cur, tenant_id, conversation_id),
+        "handoff_summary": conv["handoff_summary"] if handoff.is_current(conv) else None,
     }
 
 

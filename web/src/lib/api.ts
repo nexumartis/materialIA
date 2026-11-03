@@ -408,6 +408,8 @@ export interface Policies {
   /** Costo de envío por zona, cargado por el negocio. */
   shipping_costs?: Record<string, number>;
   human_only_categories?: string[];
+  /** Temas que siempre atiende una persona. Guardados como lista; mientras se edita, texto «palabras => mensaje». */
+  handoff_topics?: { keywords: string[]; reply: string | null }[] | string;
 }
 
 export interface AiUsage {
@@ -595,7 +597,7 @@ export interface InboxItem {
   channel: string;
   needs_human: boolean;
   /** "asked": el cliente pidió una persona; "quote": a medida, sin precio o precio vencido. */
-  needs_human_reason: "asked" | "quote" | null;
+  needs_human_reason: "asked" | "quote" | "topic" | null;
   taken: boolean;
   taken_by_me: boolean;
   unanswered: boolean;
@@ -617,6 +619,9 @@ export interface InboxConversation {
   orders: Order[];
   documents: BuyerDocument[];
   notes: InternalNote[];
+  /** Resumen de la derivación vigente (lo arma el worker; null mientras tanto). */
+  handoff_summary: { quiere: string; datos: string[]; falta: string; carrito: string[]; carrito_total: number | null;
+                     by: "ia" | "reglas" } | null;
 }
 
 export interface TransferConfirm {
