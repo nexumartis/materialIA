@@ -205,7 +205,11 @@ export interface ChatSource {
   uploadDocument?: (ref: ConversationRef, orderId: string, file: File) => Promise<unknown>;
   receipt?: (ref: ConversationRef, receiptId: string) => Promise<Blob>;
   cancelOrder?: (ref: ConversationRef, orderId: string) => Promise<Order>;
+  /** Tienda pública: el comprador califica su pedido pagado (encuesta de satisfacción). */
+  rateOrder?: (ref: ConversationRef, orderId: string, score: number, comment: string) => Promise<unknown>;
 }
+
+const RATEABLE = ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"];
 
 const DOC_STATUS: Record<BuyerDocument["status"], string> = {
   received: "recibido, en lectura",
@@ -586,6 +590,12 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                           Constancia (PDF)
                         </button>
                       )}
+                      {source.rateOrder && conv && RATEABLE.includes(o.status) && (
+                        <RateOrder order={o} onRate={async (score, comment) => {
+                          await source.rateOrder!(conv, o.id, score, comment);
+                          setOrders((list) => list.map((x) => (x.id === o.id ? { ...x, rating: score } : x)));
+                        }} />
+                      )}
                       {source.cancelOrder && o.status === "PENDING_PAYMENT" && (
                         <button className="btn sm ghost" type="button" onClick={() => void cancel(o)}>Cancelar pedido</button>
                       )}
@@ -629,5 +639,53 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       </div>
       {detail && <ProductModal card={detail} onClose={() => setDetail(null)} onAction={send} />}
     </div>
+  );
+}
+
+/** Encuesta de satisfacción del pedido: 1 a 5 y, si quiere, un comentario. Se puede corregir. */
+function RateOrder({ order, onRate }: { order: Order; onRate: (score: number, comment: string) => Promise<void> }) {
+  const [score, setScore] = useState<number | null>(null);
+  const [comment, setComment] = useState("");
+  const [state, setState] = useState<"idle" | "saving" | "error">("idle");
+  const [editing, setEditing] = useState(false);
+
+  if (order.rating && !editing) {
+    return (
+      <span className="rate-done muted small">
+        Calificaste {order.rating}/5. ¡Gracias!{" "}
+        <button type="button" className="linkish" onClick={() => { setScore(order.rating ?? null); setEditing(true); }}>Cambiar</button>
+      </span>
+    );
+  }
+  async function send() {
+    if (score == null) return;
+    setState("saving");
+    try {
+      await onRate(score, comment.trim());
+      setState("idle");
+      setEditing(false);
+    } catch {
+      setState("error");
+    }
+  }
+  return (
+    <fieldset className="rate">
+      <legend className="small">¿Cómo te atendimos en el pedido #{order.number}?</legend>
+      <div className="rate-scale" role="radiogroup" aria-label="Calificación de 1 a 5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={score === n}
+            className={`chip${score === n ? " on" : ""}`} onClick={() => setScore(n)}>{n}</button>
+        ))}
+        <span className="muted small">1 = mal · 5 = excelente</span>
+      </div>
+      {score != null && (
+        <div className="rate-send">
+          <input type="text" maxLength={500} aria-label="Comentario (opcional)" placeholder="¿Algo para contarnos? (opcional)"
+            value={comment} onChange={(e) => setComment(e.target.value)} />
+          <button className="btn sm primary" type="button" disabled={state === "saving"} onClick={() => void send()}>Enviar</button>
+        </div>
+      )}
+      {state === "error" && <p className="state err small" role="alert">No pude guardar tu calificación. Probá de nuevo.</p>}
+    </fieldset>
   );
 }

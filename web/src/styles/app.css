@@ -722,3 +722,12 @@ tbody td.num { white-space:nowrap; }
 .wh-events { border:0; padding:0; margin:4px 0 0; display:flex; flex-wrap:wrap; gap:6px 16px; }
 .wh-secret { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px; }
 .wh-secret code { overflow-wrap:anywhere; background:var(--surface); padding:4px 6px; border-radius:4px; }
+
+/* Encuesta de satisfacción (tienda) */
+.rate { border:1px dashed var(--rule); border-radius:var(--radius-card); padding:8px 10px; margin:6px 0 0; width:100%; }
+.rate legend { padding:0 4px; }
+.rate-scale { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.rate-send { display:flex; gap:6px; margin-top:6px; }
+.rate-send input { flex:1; min-width:0; height:32px; }
+.csat-list { list-style:none; margin:6px 0 0; padding:0; display:grid; gap:8px; }
+.csat-list li { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; padding:8px 0; border-top:1px solid var(--rule); }

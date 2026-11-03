@@ -37,6 +37,7 @@ export function Store({ slug }: { slug: string }) {
         uploadDocument: (c, orderId, file) => api.uploadDocument(slug, c, orderId, file),
         receipt: (c, receiptId) => api.storeReceipt(slug, c, receiptId),
         cancelOrder: (c, orderId) => api.storeCancelOrder(slug, c, orderId),
+        rateOrder: (c, orderId, score, comment) => api.storeRateOrder(slug, c, orderId, score, comment),
       },
     [info, slug],
   );

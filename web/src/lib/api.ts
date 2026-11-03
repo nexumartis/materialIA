@@ -325,6 +325,12 @@ export const api = {
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/orders/${orderId}/cancel`,
       { method: "POST", headers: buyerHeader(ref) },
     ),
+  storeRateOrder: (slug: string, ref: ConversationRef, orderId: string, score: number, comment: string) =>
+    request<{ order_id: string; score: number; comment: string | null }>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/orders/${orderId}/rating`,
+      { method: "POST", headers: { "content-type": "application/json", ...buyerHeader(ref) },
+        body: JSON.stringify({ score, comment }) },
+    ),
   storeReceipt: (slug: string, ref: ConversationRef, receiptId: string) =>
     request<Blob>(
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/receipts/${receiptId}/pdf`,
@@ -510,6 +516,8 @@ export interface Order {
   deposit?: number | null;
   /** Lo que falta cobrar ahora: la seña, el saldo o el total (0 si no espera pago). */
   amount_due?: number;
+  /** Calificación del comprador (1 a 5), si ya calificó. */
+  rating?: number | null;
 }
 
 export interface Insights {
@@ -525,6 +533,11 @@ export interface Insights {
   series: { day: string; conversations: number; revenue: number }[];
   top_products: { name: string; qty: number; revenue: number }[];
   ai: { calls: number; cost: number | null; currency: string };
+  satisfaction: {
+    count: number; average: number | null; satisfied_rate: number | null; distribution: Record<string, number>;
+    unhappy: { order_id: string; order_number: number; conversation_id: string | null; score: number;
+               comment: string | null; total: number; at: string }[];
+  };
 }
 
 export interface WebhookEndpoint { id: string; url: string; events: string[]; active: boolean; created_at: string;
