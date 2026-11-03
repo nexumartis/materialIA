@@ -20,7 +20,8 @@ const AUTHOR: Record<InboxConversation["messages"][number]["author"], string> = 
   persona: "Vos (equipo)",
 };
 
-const REASON: Record<"asked" | "quote", string> = { asked: "Pidió una persona", quote: "Necesita cotización" };
+const REASON: Record<"asked" | "quote" | "topic", string> = {
+  asked: "Pidió una persona", quote: "Necesita cotización", topic: "Tema para el equipo" };
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", {
@@ -189,6 +190,18 @@ export function Inbox() {
                   ? "La atendés vos: el asistente no responde en esta conversación hasta que se la devuelvas."
                   : "La atiende el asistente virtual. Si respondés, tomás el control."}
               </p>
+              {conv.needs_human && (conv.handoff_summary ? (
+                <section className="handoff-card" aria-label="Resumen de la derivación">
+                  <p><b>Quiere:</b> {conv.handoff_summary.quiere}</p>
+                  {conv.handoff_summary.datos.length > 0 && <p><b>Dio:</b> {conv.handoff_summary.datos.join(" · ")}</p>}
+                  {conv.handoff_summary.carrito.length > 0 && (
+                    <p><b>Carrito:</b> {conv.handoff_summary.carrito.join(", ")}
+                      {conv.handoff_summary.carrito_total != null && <> · ${fmtAmount(conv.handoff_summary.carrito_total)}</>}</p>
+                  )}
+                  <p><b>Falta:</b> {conv.handoff_summary.falta}</p>
+                  <small className="muted">{conv.handoff_summary.by === "ia" ? "Resumen hecho con IA: revisá la charla ante la duda." : "Resumen automático."}</small>
+                </section>
+              ) : <p className="muted small">Preparando el resumen de la derivación…</p>)}
               <div className="chatlog inbox-log" ref={logRef}>
                 {conv.messages.map((m, i) => (
                   <div key={i} className={`msg ${m.author === "cliente" ? "bot" : "me"}`}>

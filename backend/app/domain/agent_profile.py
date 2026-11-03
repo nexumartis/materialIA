@@ -108,7 +108,9 @@ TOGGLEABLE_TOOLS = {
 #   min_order_total        compra mínima para cerrar un pedido (pesos)
 #   delivery_zones         zonas a las que se envía (vacío = no se informa por zona)
 #   human_only_categories  categorías que sólo vende una persona (no entran al carrito)
-POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories")
+#   handoff_topics         temas que siempre atiende una persona: [{keywords: [...], reply: str|None}]
+POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories", "handoff_topics")
+MAX_TOPICS = 10
 
 
 def slugify(text: str) -> str:
@@ -254,6 +256,42 @@ def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
     cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
     if cats:
         out["human_only_categories"] = cats
+    topics = _topics(raw.get("handoff_topics"))
+    if topics:
+        out["handoff_topics"] = topics
+    return out
+
+
+def _topics(raw: Any) -> list[dict[str, Any]]:
+    """Temas que deriva siempre a una persona. Texto: una línea por tema, «palabras => mensaje»
+    («reclamo, roto, no funciona => Lamento lo que pasó; te contacta alguien del equipo»). El mensaje
+    es opcional. También acepta la lista ya guardada."""
+    if raw in (None, "", []):
+        return []
+    items: list[tuple[Any, Any]] = []
+    if isinstance(raw, str):
+        for line in raw.splitlines():
+            if line.strip():
+                words, _, reply = line.partition("=>")
+                items.append((words, reply))
+    elif isinstance(raw, list):
+        items = [(t.get("keywords"), t.get("reply")) for t in raw if isinstance(t, dict)]
+    else:
+        raise ValueError("Temas de derivación inválidos.")
+    out = []
+    for words, reply in items:
+        kws = [w.strip().lower() for w in (words if isinstance(words, list) else str(words or "").split(","))
+               if str(w).strip()]
+        if not kws:
+            continue
+        if len(kws) > 10 or any(len(k) > 40 for k in kws):
+            raise ValueError("Cada tema admite hasta 10 palabras de hasta 40 letras.")
+        reply = str(reply or "").strip()
+        if len(reply) > 300:
+            raise ValueError("El mensaje de cada tema tiene como máximo 300 caracteres.")
+        out.append({"keywords": kws, "reply": reply or None})
+    if len(out) > MAX_TOPICS:
+        raise ValueError(f"Podés cargar hasta {MAX_TOPICS} temas.")
     return out
 
 

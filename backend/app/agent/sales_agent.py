@@ -439,6 +439,7 @@ class _Turn:
         self.payment: Optional[dict[str, Any]] = None
         self.requires_human = False
         self.asked_for_person = False     # derivó porque el cliente pidió una persona (no por cotización)
+        self.by_topic = False             # derivó por un tema configurado por el negocio
         self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
         self.offer: Optional[dict[str, Any]] = None   # propuesta de agregar del turno anterior
@@ -1298,11 +1299,13 @@ class _Turn:
                     else f" Tu pedido #{o['number']} está {o['status_label']}.")
         return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
-    def handoff(self, again: bool = False) -> str:
+    def handoff(self, again: bool = False, topic: Optional[dict[str, Any]] = None) -> str:
         """Pide una persona: queda en la bandeja del panel («derivadas») y en oportunidades. El equipo
         puede responder en este mismo chat; no hay aviso por otro medio: no se promete canal ni plazo."""
         self.requires_human = True
-        self.asked_for_person = True
+        # Repetir la derivación no cambia su motivo (queda el original en la conversación).
+        self.asked_for_person = topic is None and not again
+        self.by_topic = topic is not None
         self.state["handoff"] = True
         hours = (f" Horario de atención: {self.profile['hours'].rstrip('. ')}." if self.profile.get("hours")
                  else "")
@@ -1313,13 +1316,18 @@ class _Turn:
                     + hours + " Si querés, seguí contándome qué necesitás y te ayudo con productos, precios y stock.")
         if not self.dry_run:
             req = dict(opportunities.get_conversation_requirements(self.tenant, self.conv))
-            req["atencion"] = "pidió hablar con una persona"
+            req["atencion"] = f"tema: {topic['match']}" if topic else "pidió hablar con una persona"
             cart = orders.get_cart(self.tenant, self.conv)
             opp = opportunities.upsert_opportunity(self.tenant, OpportunityInput(
                 conversation_id=self.conv, stage="para_cotizar", origin="venta_chat", requirements=req,
                 requires_human_quote=True, estimated_amount=cart["total"] if cart and cart["items"] else None))
-            opportunities.log_activity(self.tenant, opp.id, "derivacion", "el cliente pidió hablar con una persona")
-        self.tool("derivar_persona", "registrada en oportunidades")
+            opportunities.log_activity(self.tenant, opp.id, "derivacion",
+                                       f"tema configurado: «{topic['match']}»" if topic else "el cliente pidió hablar con una persona")
+        self.tool("derivar_persona", f"tema «{topic['match']}»" if topic else "registrada en oportunidades")
+        if topic:
+            # Mensaje del negocio para este tema (o uno neutro); nunca promete plazos ni canales.
+            return ((topic.get("reply") or "Eso lo atiende una persona del equipo del negocio.")
+                    + " Ya le dejé tu consulta en su bandeja: pueden responderte en este mismo chat." + hours)
         return ("Listo, le dejé al equipo del negocio tu pedido de hablar con una persona: lo ven en su bandeja y "
                 "pueden responderte en este mismo chat." + hours + " No puedo avisarte por otro medio ni darte un "
                 "plazo. Mientras tanto, si querés, te sigo ayudando con productos, precios y stock.")
@@ -1353,9 +1361,24 @@ def _confirmation_reply(turn: _Turn, text: str) -> Optional[str]:
     return None
 
 
+def _topic(profile: dict[str, Any], text: str) -> Optional[dict[str, Any]]:
+    """Tema que el negocio quiere que atienda siempre una persona (reclamos, cambios…): palabra o
+    frase completa en el mensaje normalizado."""
+    for t in (profile.get("policies") or {}).get("handoff_topics") or []:
+        for k in t["keywords"]:
+            # Bordes por «no es letra ni número» (no \b): una palabra con signos («¿garantía?») también vale.
+            if re.search(rf"(?<!\w){re.escape(normalize(k).strip('¿?¡!.,;: '))}(?!\w)", text):
+                return {**t, "match": k}
+    return None
+
+
 def _human_reply(turn: _Turn, text: str, handoff: bool) -> Optional[str]:
     """Pedido de una persona y su seguimiento ("dale, ¿cómo me avisan?"). Determinista también con
     LLM: lo que se afirma de la derivación (registro, canal, plazo) no lo redacta el modelo."""
+    topic = _topic(turn.profile, text)
+    if topic:
+        # Ya derivado: no vuelve a registrar ni a repetir el mensaje entero.
+        return turn.handoff(again=True) if handoff else turn.handoff(topic=topic)
     if _RE_HUMAN.search(text):
         return turn.handoff()
     if handoff and (_RE_NOTIFY.search(text) or (_RE_YES.match(text) and len(text.split()) <= 6)):
@@ -1460,7 +1483,8 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
         state.pop("offer", None)          # "dale" después de derivar no es una compra
     ui = _ui(turn)
     # Aparece en «derivadas» de la bandeja: 'asked' si pidió una persona; si no, por cotización.
-    why = None if turn.dry_run or not turn.requires_human else ("asked" if turn.asked_for_person else "quote")
+    why = (None if turn.dry_run or not turn.requires_human
+           else "asked" if turn.asked_for_person else "topic" if turn.by_topic else "quote")
     if not _finish_turn(tenant_id, conv, state, reply, ui, turn.profile.get("version"), why):
         return _human_hold(tenant_id, conv)
     return SalesReply(
