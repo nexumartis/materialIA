@@ -418,6 +418,8 @@ def _finish_turn(tenant_id: str, conversation_id: str, state: dict[str, Any], re
         if handoff and row and row["needs_human_at"] is None:
             webhooks.enqueue(cur, tenant_id, "conversation.needs_human",
                              {"conversation_id": conversation_id, "reason": handoff})
+            cur.execute("insert into handoff_events (tenant_id, conversation_id, reason) values (%s, %s, %s)",
+                        (tenant_id, conversation_id, handoff))
         cur.execute(
             "update conversations set agent_state = %(state)s::jsonb, "
             "needs_human_at = case when %(why)s::text is null then needs_human_at else coalesce(needs_human_at, now()) end, "

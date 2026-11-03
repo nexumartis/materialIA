@@ -82,6 +82,7 @@ function Body({ data }: { data: Insights }) {
           </table>
         </section>
       )}
+      <InboxMetrics data={data} />
       <Satisfaction data={data} />
       {data.ai.calls > 0 && (
         <p className="muted small">
@@ -194,6 +195,31 @@ function Satisfaction({ data }: { data: Insights }) {
           ) : <p className="muted small">Nadie quedó insatisfecho en este período.</p>}
         </>
       )}
+    </section>
+  );
+}
+
+const REASON_LABEL: Record<string, string> = {
+  asked: "pidió una persona", quote: "cotización", topic: "tema para el equipo", member_removed: "cambio de equipo" };
+const mins = (m: number | null) => (m == null ? "—" : m < 60 ? `${Math.round(m)} min` : `${(m / 60).toFixed(1)} h`);
+
+/** Cómo responde el equipo cuando el agente deriva. */
+function InboxMetrics({ data }: { data: Insights }) {
+  const m = data.inbox;
+  if (m.handoffs === 0) return null;
+  return (
+    <section className="results-card" aria-labelledby="inbox-title">
+      <h2 id="inbox-title">Tu equipo en la bandeja</h2>
+      <p>
+        <b>{m.handoffs}</b> derivacion{m.handoffs === 1 ? "" : "es"} · respondidas {m.answered} ·{" "}
+        primera respuesta en <b>{mins(m.first_response_minutes_p50)}</b> (mitad de los casos), {mins(m.first_response_minutes_p90)} en el 90%
+      </p>
+      {m.waiting_now > 0 && (
+        <p><a href="#/conversaciones"><b>{m.waiting_now}</b> esperando respuesta ahora</a></p>
+      )}
+      <p className="muted small">
+        Motivos: {Object.entries(m.by_reason).map(([r, n]) => `${REASON_LABEL[r] ?? r} ${n}`).join(" · ")}
+      </p>
     </section>
   );
 }

@@ -103,4 +103,30 @@ def summary(cur: Any, tenant_id: str, days: int = 30) -> dict[str, Any]:
         "top_products": top,
         "ai": {"calls": ai["calls"], "cost": ai["cost"], "currency": ai["currency"]},
         "satisfaction": ratings.summary(cur, tenant_id, days),
+        "inbox": inbox_metrics(cur, tenant_id, days),
     }
+
+
+def inbox_metrics(cur: Any, tenant_id: str, days: int) -> dict[str, Any]:
+    """Derivaciones del período: cuántas, por qué, cuántas respondió el equipo y en cuánto tiempo
+    (mediana y percentil 90, en minutos), y cuántas siguen sin respuesta ahora."""
+    cur.execute(
+        "select count(*) as total, count(answered_at) as answered, "
+        "percentile_cont(0.5) within group (order by extract(epoch from answered_at - created_at)) "
+        "  filter (where answered_at is not null) as p50, "
+        "percentile_cont(0.9) within group (order by extract(epoch from answered_at - created_at)) "
+        "  filter (where answered_at is not null) as p90 "
+        "from handoff_events where tenant_id = %s and created_at >= now() - make_interval(days => %s)",
+        (tenant_id, days))
+    r = cur.fetchone()
+    cur.execute("select reason, count(*) as n from handoff_events where tenant_id = %s "
+                "and created_at >= now() - make_interval(days => %s) group by reason order by n desc", (tenant_id, days))
+    by_reason = {x["reason"]: x["n"] for x in cur.fetchall()}
+    # «Esperando ahora» = lo que la bandeja muestra como derivado y sin nadie que lo tome (el estado
+    # actual de la conversación, no eventos viejos que se cerraron sin respuesta escrita).
+    cur.execute("select count(*) as n from conversations where tenant_id = %s and channel <> 'eval' "
+                "and needs_human_at is not null and taken_by is null", (tenant_id,))
+    waiting = cur.fetchone()["n"]
+    minutes = lambda s: round(float(s) / 60, 1) if s is not None else None
+    return {"handoffs": r["total"], "answered": r["answered"], "waiting_now": waiting, "by_reason": by_reason,
+            "first_response_minutes_p50": minutes(r["p50"]), "first_response_minutes_p90": minutes(r["p90"])}

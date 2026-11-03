@@ -74,6 +74,9 @@ def remove(cur: Any, tenant_id: str, uid: str, member_id: str) -> bool:
     for r in cur.fetchall():
         webhooks.enqueue(cur, tenant_id, "conversation.needs_human",
                          {"conversation_id": str(r["id"]), "reason": "member_removed"})
+        cur.execute("insert into handoff_events (tenant_id, conversation_id, reason) select %s, %s, 'member_removed' "
+                    "where not exists (select 1 from handoff_events where tenant_id = %s and conversation_id = %s "
+                    "and answered_at is null)", (tenant_id, r["id"], tenant_id, r["id"]))
     opportunities._audit(cur, tenant_id, "team_member_removed", member_id, {"actor": uid})
     return True
 
