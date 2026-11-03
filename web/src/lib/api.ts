@@ -207,6 +207,12 @@ export const api = {
   deleteWebhook: (id: string) => authed<{ deleted: boolean }>(`/app/webhooks/${id}`, { method: "DELETE" }),
   testWebhook: (id: string) =>
     authed<{ ok: boolean; status_code: number | null; error: string | null }>(`/app/webhooks/${id}/test`, { method: "POST" }),
+  blockConversation: (id: string, blocked: boolean) =>
+    authed<InboxConversation>(`/app/inbox/${id}/block`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ blocked }),
+    }),
+  redactConversation: (id: string) =>
+    authed<{ changed: number; conversation: InboxConversation }>(`/app/inbox/${id}/redact`, { method: "POST" }),
   quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
   createQuickReply: (title: string, body: string) =>
     authed<QuickReply>("/app/quick-replies", {
@@ -630,6 +636,8 @@ export interface InboxConversation {
   documents: BuyerDocument[];
   notes: InternalNote[];
   /** Resumen de la derivación vigente (lo arma el worker; null mientras tanto). */
+  blocked: boolean;
+  redacted_at: string | null;
   handoff_summary: { quiere: string; datos: string[]; falta: string; carrito: string[]; carrito_total: number | null;
                      by: "ia" | "reglas" } | null;
 }

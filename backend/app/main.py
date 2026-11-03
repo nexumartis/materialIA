@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -798,6 +798,34 @@ def app_team_remove(member_id: UUID, uid: str = Depends(owner_uid)) -> dict:
         return team.members(cur, tenant)
 
 
+def _member_conv(uid: str, conversation_id: UUID) -> tuple[str, str]:
+    with user_tx(uid) as (cur, tenant):
+        cur.execute("select 1 from conversations where tenant_id = %s and id = %s", (tenant, str(conversation_id)))
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+    return tenant, str(conversation_id)
+
+
+@app.post("/app/inbox/{conversation_id}/block")
+def app_inbox_block(conversation_id: UUID, body: dict = Body(default={}), uid: str = Depends(current_uid)) -> dict:
+    """Bloquea (o desbloquea con {"blocked": false}) un contacto: el agente deja de responderle."""
+    tenant, conv = _member_conv(uid, conversation_id)
+    with tenant_tx(tenant) as cur:
+        privacy.set_blocked(cur, tenant, uid, conv, bool(body.get("blocked", True)))
+    with user_tx(uid) as (cur, tenant):
+        return inbox.detail(cur, tenant, uid, conv)
+
+
+@app.post("/app/inbox/{conversation_id}/redact")
+def app_inbox_redact(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+    """Oculta DNI, CUIT, CBU/CVU y tarjetas de la conversación. No se puede deshacer."""
+    tenant, conv = _member_conv(uid, conversation_id)
+    with tenant_tx(tenant) as cur:
+        changed = privacy.redact_conversation(cur, tenant, uid, conv)
+    with user_tx(uid) as (cur, tenant):
+        return {"changed": changed, "conversation": inbox.detail(cur, tenant, uid, conv)}
+
+
 # --- Panel: comprobantes, transferencias y registro mensual --------------------------
 # El dueño revisa los archivos y acredita sólo lo que cotejó en su banco (confirm_transfer).
 @app.get("/app/payment-documents")
@@ -929,6 +957,9 @@ def public_chat(slug: str, req: ChatRequest, request: Request,
         customer = customer_memory.identify(tenant, "web", buyer_key)
         if customer:
             customer_memory.link_conversation(tenant, conv, customer)
+    if privacy.is_blocked(tenant, conv):
+        # Contacto bloqueado por el negocio: no se guarda ni se gasta IA.
+        raise HTTPException(status_code=403, detail="El negocio pausó esta conversación.")
     res = sales_agent.handle_sales_message(tenant, req.message, conv)
     # El token se entrega sólo al crear la conversación.
     return {"reply": res.reply, "conversation_id": res.conversation_id, "conversation_token": new_token,
