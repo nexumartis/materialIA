@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, limits, opportunities, orders
+from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -410,11 +410,14 @@ def _finish_turn(tenant_id: str, conversation_id: str, state: dict[str, Any], re
     respuesta. Si una persona tomó la conversación mientras el agente pensaba, no se guarda nada
     (el agente no habla encima de una persona). `handoff`: 'asked' | 'quote' | None."""
     with tenant_tx(tenant_id) as cur:
-        cur.execute("select taken_by from conversations where tenant_id = %s and id = %s for update",
+        cur.execute("select taken_by, needs_human_at from conversations where tenant_id = %s and id = %s for update",
                     (tenant_id, conversation_id))
         row = cur.fetchone()
         if row and row["taken_by"]:
             return False
+        if handoff and row and row["needs_human_at"] is None:
+            webhooks.enqueue(cur, tenant_id, "conversation.needs_human",
+                             {"conversation_id": conversation_id, "reason": handoff})
         cur.execute(
             "update conversations set agent_state = %(state)s::jsonb, "
             "needs_human_at = case when %(why)s::text is null then needs_human_at else coalesce(needs_human_at, now()) end, "

@@ -719,3 +719,6 @@ tbody td.num { white-space:nowrap; }
 .results-table { min-width:0; table-layout:auto; }
 .results-table td:first-child { overflow-wrap:anywhere; }
 @media (max-width:520px) { .funnel li { grid-template-columns:96px minmax(0,1fr) 84px; } .results-table th, .results-table td { padding:6px 2px; } }
+.wh-events { border:0; padding:0; margin:4px 0 0; display:flex; flex-wrap:wrap; gap:6px 16px; }
+.wh-secret { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px; }
+.wh-secret code { overflow-wrap:anywhere; background:var(--surface); padding:4px 6px; border-radius:4px; }

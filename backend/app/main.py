@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, insights, limits, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -685,6 +685,47 @@ def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = De
         opportunities._add_message(cur, tenant, conv, "outbound", text,
                                    {"type": "quote", "order_id": order["id"], "author_id": uid})
         return orders._view(cur, orders._fetch(cur, tenant, order["id"]))
+
+
+# --- Panel: webhooks (sólo el dueño) ----------------------------------------------------
+@app.get("/app/webhooks")
+def app_webhooks(uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {"events": list(webhooks.EVENTS), "endpoints": webhooks.list_endpoints(cur, tenant),
+                "deliveries": webhooks.deliveries(cur, tenant)}
+
+
+@app.post("/app/webhooks")
+def app_webhook_create(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    """Devuelve el secreto UNA sola vez: el panel lo muestra para copiarlo."""
+    tenant = _team_tx(uid)
+    events = body.get("events")
+    try:
+        with tenant_tx(tenant) as cur:
+            return webhooks.create(cur, tenant, uid, str(body.get("url") or ""),
+                                   [str(e) for e in events] if isinstance(events, list) else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/app/webhooks/{endpoint_id}")
+def app_webhook_delete(endpoint_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        if not webhooks.delete(cur, tenant, uid, str(endpoint_id)):
+            raise HTTPException(status_code=404, detail="Endpoint no encontrado.")
+    return {"deleted": True}
+
+
+@app.post("/app/webhooks/{endpoint_id}/test")
+def app_webhook_test(endpoint_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    limits.guard_user(uid, scope="webhook-test")
+    tenant = _team_tx(uid)
+    try:
+        return webhooks.send_test(tenant, str(endpoint_id))
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Endpoint no encontrado.")
 
 
 # --- Panel: equipo (sólo el dueño) ----------------------------------------------------

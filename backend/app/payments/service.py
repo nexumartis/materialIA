@@ -15,7 +15,7 @@ from psycopg.errors import UniqueViolation
 
 from ..db import system_tx, tenant_tx
 from ..documents import store
-from ..domain import inventory, opportunities, orders, receipts
+from ..domain import inventory, opportunities, orders, receipts, webhooks
 from ..domain.inventory import OutOfStock
 from ..schemas import OpportunityInput
 from .providers import PaymentProviderError, ProviderPayment, get_provider
@@ -308,6 +308,7 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
         cur.execute("update payments set charge = 'deposit' where tenant_id = %s and id = %s", (tenant_id, payment_id))
         opportunities._audit(cur, tenant_id, "order_deposit_paid", order_id,
                              {"amount": payment.amount, "provider": provider_name})
+        webhooks.enqueue_order(cur, tenant_id, "order.deposit_paid", order_id)
         if order["conversation_id"]:
             _message(cur, tenant_id, order["conversation_id"],
                      f"¡Recibimos la seña del pedido #{order['number']}! Ya quedó señado; "
@@ -349,6 +350,7 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
                  {"type": "receipt", "receipt_id": receipt_id})
     became_paid = orders._view(cur, orders._fetch(cur, tenant_id, order_id))
     became_paid["conversation_id"] = str(order["conversation_id"]) if order["conversation_id"] else None
+    webhooks.enqueue_order(cur, tenant_id, "order.paid", order_id)
     return "pedido pagado", became_paid
 
 
