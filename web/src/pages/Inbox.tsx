@@ -171,6 +171,18 @@ export function Inbox() {
               <div className="inbox-head">
                 <button className="btn sm inbox-back" type="button" onClick={() => setSelected(null)}>← Volver</button>
                 <span className="muted small">Empezó el {when(conv.created_at)}</span>
+                <span className="inbox-privacy">
+                  <button className="btn sm ghost" type="button" disabled={busy}
+                    onClick={() => window.confirm("¿Ocultar DNI, CUIT, CBU/CVU y tarjetas de esta conversación? No se puede deshacer.")
+                      && void act(conv.id, () => api.redactConversation(conv.id).then((r) => r.conversation), "No pude ocultar los datos.")}>
+                    Ocultar datos sensibles
+                  </button>
+                  <button className="btn sm ghost" type="button" disabled={busy}
+                    onClick={() => (conv.blocked || window.confirm("¿Bloquear este contacto? El asistente deja de responderle."))
+                      && void act(conv.id, () => api.blockConversation(conv.id, !conv.blocked), "No pude cambiar el bloqueo.")}>
+                    {conv.blocked ? "Desbloquear" : "Bloquear contacto"}
+                  </button>
+                </span>
                 <span className="inbox-actions">
                   {conv.taken && !conv.taken_by_me ? (
                     <span className="pill pos">La atiende otra persona</span>
@@ -187,6 +199,8 @@ export function Inbox() {
                   )}
                 </span>
               </div>
+              {conv.blocked && <p className="state err small" role="status">Contacto bloqueado: el asistente no le responde y el chat le avisa que está pausado.</p>}
+              {conv.redacted_at && <p className="muted small">Datos sensibles ocultados el {when(conv.redacted_at)}.</p>}
               <p className="note" role="status">
                 {conv.taken
                   ? "La atendés vos: el asistente no responde en esta conversación hasta que se la devuelvas."
