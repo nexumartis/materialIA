@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from ..config import settings
 from ..db import system_tx, tenant_tx
-from . import agent_profile, inventory
+from . import agent_profile, inventory, webhooks
 from .inventory import OutOfStock
 
 log = logging.getLogger(__name__)
@@ -362,6 +362,7 @@ def _cancel_pending(cur: Any, tenant_id: str, order: dict[str, Any], reason: str
         "where tenant_id = %s and id = %s",
         (reason, tenant_id, order_id),
     )
+    webhooks.enqueue_order(cur, tenant_id, "order.cancelled", order_id, reason=reason)
 
 
 def cancel_pending(cur: Any, tenant_id: str, order_id: str, reason: str,

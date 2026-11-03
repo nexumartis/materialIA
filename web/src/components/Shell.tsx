@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  BarChart3, Bot, Code2, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
+  BarChart3, Bot, Code2, PlugZap, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -8,7 +8,7 @@ import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -26,6 +26,7 @@ const TITLES: Record<Section, string> = {
   venta: "Demo del agente",
   equipo: "Equipo",
   resultados: "Resultados",
+  integraciones: "Integraciones",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -48,6 +49,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
   { title: "Herramientas", items: [
     { section: "venta", href: "#/venta", label: "Demo del agente", icon: MessageCircle },
     { section: "equipo", href: "#/equipo", label: "Equipo", icon: Users, ownerOnly: true },
+    { section: "integraciones", href: "#/integraciones", label: "Integraciones", icon: PlugZap, ownerOnly: true },
   ] },
 ];
 

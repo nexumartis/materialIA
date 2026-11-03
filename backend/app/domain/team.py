@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from . import opportunities
+from . import opportunities, webhooks
 
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
 MAX_NOTE = 2000
@@ -70,7 +70,10 @@ def remove(cur: Any, tenant_id: str, uid: str, member_id: str) -> bool:
     cur.execute("update conversations set taken_by = null, taken_at = null, "
                 "needs_human_at = coalesce(needs_human_at, now()), "
                 "needs_human_reason = coalesce(needs_human_reason, 'asked') "
-                "where tenant_id = %s and taken_by = %s", (tenant_id, member_id))
+                "where tenant_id = %s and taken_by = %s returning id", (tenant_id, member_id))
+    for r in cur.fetchall():
+        webhooks.enqueue(cur, tenant_id, "conversation.needs_human",
+                         {"conversation_id": str(r["id"]), "reason": "member_removed"})
     opportunities._audit(cur, tenant_id, "team_member_removed", member_id, {"actor": uid})
     return True
 
