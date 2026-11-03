@@ -68,3 +68,19 @@ def test_cannot_rate_order_of_another_conversation(accounts, raw_conn):
     r = client.post(f"/public/{shop['slug']}/conversations/{conv2}/orders/{order['id']}/rating",
                     json={"score": 1}, headers={HDR: token2})
     assert r.status_code == 404
+
+
+def test_rating_sends_webhook(accounts, raw_conn, monkeypatch):
+    from app.domain import safe_http, webhooks
+    monkeypatch.setattr(safe_http.socket, "getaddrinfo", lambda host, *_: [(0, 0, 0, "", ("93.184.216.34", 0))])
+    client = TestClient(app)
+    shop = _shop(client, accounts, raw_conn, "Tienda Encuesta Webhook")
+    client.post("/app/webhooks", headers=bearer(shop["uid"]),
+                json={"url": "https://hooks.example/r", "events": ["order.rated"]})
+    conv, token, order, pref = _paid_order(client, shop)
+    headers, body = SimulatedProvider().pay(pref, "approved")
+    service.receive_notification("simulated", headers, {}, body)
+    client.post(f"/public/{shop['slug']}/conversations/{conv}/orders/{order['id']}/rating",
+                json={"score": 4}, headers={HDR: token})
+    d = client.get("/app/webhooks", headers=bearer(shop["uid"])).json()["deliveries"]
+    assert [x["event"] for x in d] == ["order.rated"]

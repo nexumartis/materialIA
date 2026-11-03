@@ -45,14 +45,14 @@ def test_mapped_ipv6_and_rebinding_are_blocked(monkeypatch):
     def resolver(host, *_):
         calls.append(host)
         return [(0, 0, 0, "", ("::ffff:127.0.0.1", 0, 0, 0))]
-    monkeypatch.setattr(agent_suggest.socket, "getaddrinfo", resolver)
+    monkeypatch.setattr(agent_suggest.safe_http.socket, "getaddrinfo", resolver)
     with pytest.raises(agent_suggest.SuggestError, match="pública"):
         agent_suggest.fetch_site_text("https://rebind.example")
 
 
 def test_connection_goes_to_the_vetted_ip(monkeypatch):
     seen = {}
-    monkeypatch.setattr(agent_suggest.socket, "getaddrinfo", lambda host, *_: [(0, 0, 0, "", ("93.184.216.34", 0))])
+    monkeypatch.setattr(agent_suggest.safe_http.socket, "getaddrinfo", lambda host, *_: [(0, 0, 0, "", ("93.184.216.34", 0))])
 
     def handler(request):
         seen["url"], seen["host"] = str(request.url), request.headers["host"]

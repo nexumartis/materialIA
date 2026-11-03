@@ -11,16 +11,14 @@ campos fijos, que además pasa por la validación del perfil.
 from __future__ import annotations
 
 import html
-import ipaddress
 import re
-import socket
 from typing import Any, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 
 from ..agent import llm_tasks
-from . import agent_profile
+from . import agent_profile, safe_http
 
 MAX_BYTES = 1_500_000
 MAX_TEXT = 12_000          # lo que se le pasa a la IA
@@ -29,27 +27,6 @@ TIMEOUT_S = 15.0
 
 class SuggestError(ValueError):
     """No se pudo leer la web o el PDF. Mensaje para el dueño."""
-
-
-def _vetted_ip(host: Optional[str]) -> str:
-    """IP pública a la que se conecta (TODAS las del nombre tienen que ser públicas)."""
-    if not host:
-        raise SuggestError("Ese link no apunta a una página pública.")
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except OSError:
-        raise SuggestError("No encontré esa página. Revisá el link.") from None
-    ips = []
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:   # ::ffff:127.0.0.1
-            ip = ip.ipv4_mapped
-        if not ip.is_global or ip.is_multicast:
-            raise SuggestError("Ese link no apunta a una página pública.")
-        ips.append(str(ip))
-    if not ips:
-        raise SuggestError("Ese link no apunta a una página pública.")
-    return ips[0]
 
 
 def fetch_site_text(url: str) -> str:
@@ -62,15 +39,15 @@ def fetch_site_text(url: str) -> str:
         with httpx.Client(timeout=TIMEOUT_S, follow_redirects=False,
                           headers={"User-Agent": "PresupuestoVivo/1.0 (lectura para armar el agente)"}) as client:
             for _ in range(6):
-                u = urlparse(current)
-                if u.scheme not in ("http", "https") or not u.hostname or u.username or u.password:
-                    raise SuggestError("Pegá el link de tu página web (por ejemplo https://minegocio.com.ar).")
-                ip = _vetted_ip(u.hostname)
-                netloc = (f"[{ip}]" if ":" in ip else ip) + (f":{u.port}" if u.port else "")
-                pinned = u._replace(netloc=netloc).geturl()
-                host_header = u.hostname + (f":{u.port}" if u.port else "")
-                with client.stream("GET", pinned, headers={"Host": host_header},
-                                   extensions={"sni_hostname": u.hostname}) as r:
+                try:
+                    target, host, sni = safe_http.pinned(current, ("http", "https"))
+                except safe_http.UnsafeURL as exc:
+                    if exc.reason == "scheme":
+                        raise SuggestError("Pegá el link de tu página web (por ejemplo https://minegocio.com.ar).") from None
+                    raise SuggestError("Ese link no apunta a una página pública.") from None
+                except LookupError:
+                    raise SuggestError("No encontré esa página. Revisá el link.") from None
+                with client.stream("GET", target, headers=host, extensions=sni) as r:
                     if r.is_redirect:
                         current = urljoin(current, r.headers.get("location", ""))
                         continue

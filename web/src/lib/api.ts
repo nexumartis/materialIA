@@ -199,6 +199,14 @@ export const api = {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines, deposit }),
     }),
   insights: (days: number) => authed<Insights>(`/app/insights?days=${days}`),
+  webhooks: () => authed<Webhooks>("/app/webhooks"),
+  createWebhook: (url: string, events: string[]) =>
+    authed<WebhookEndpoint & { secret: string }>("/app/webhooks", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, events }),
+    }),
+  deleteWebhook: (id: string) => authed<{ deleted: boolean }>(`/app/webhooks/${id}`, { method: "DELETE" }),
+  testWebhook: (id: string) =>
+    authed<{ ok: boolean; status_code: number | null; error: string | null }>(`/app/webhooks/${id}/test`, { method: "POST" }),
   team: () => authed<Team>("/app/team"),
   invite: (email: string) =>
     authed<Team>("/app/team/invites", {
@@ -530,6 +538,15 @@ export interface Insights {
     unhappy: { order_id: string; order_number: number; conversation_id: string | null; score: number;
                comment: string | null; total: number; at: string }[];
   };
+}
+
+export interface WebhookEndpoint { id: string; url: string; events: string[]; active: boolean; created_at: string;
+  last_success_at: string | null; last_error: string | null }
+export interface Webhooks {
+  events: string[];
+  endpoints: WebhookEndpoint[];
+  deliveries: { id: string; endpoint_id: string; event: string; status: "pending" | "sent" | "failed"; attempts: number;
+    last_status_code: number | null; last_error: string | null; created_at: string; sent_at: string | null }[];
 }
 
 export interface QuoteLine { item_id: string; qty: number; unit_price: number }

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from . import opportunities
+from . import opportunities, webhooks
 
 RATEABLE = ("PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED")
 LOW = 2   # 1 o 2 = insatisfecho: aparece en la lista para contactar
@@ -36,6 +36,8 @@ def rate(cur: Any, tenant_id: str, conversation_id: str, order_id: str, score: A
         "on conflict (tenant_id, order_id) do update set score = excluded.score, comment = excluded.comment, "
         "updated_at = now()", (tenant_id, order_id, conversation_id, score, comment))
     opportunities._audit(cur, tenant_id, "order_rated", order_id, {"score": score})
+    webhooks.enqueue(cur, tenant_id, "order.rated", {"order_id": order_id, "conversation_id": conversation_id,
+                                                     "score": score, "comment": comment})
     return {"order_id": order_id, "score": score, "comment": comment}
 
 
