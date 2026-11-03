@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, webhooks
+from ..domain import agent_profile, ai_usage, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -1451,6 +1451,7 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
                          channel: str = "web_sandbox") -> SalesReply:
     """Un mensaje del cliente. Con LLM configurado (o un `planner` inyectado) el modelo elige las
     herramientas; si falla o su respuesta no pasa los controles, responde el planner por reglas."""
+    message = privacy.mask_cards(message)     # una tarjeta nunca se guarda ni llega a la IA
     from . import llm_sales
 
     conv = opportunities.ensure_conversation(tenant_id, conversation_id, channel)
