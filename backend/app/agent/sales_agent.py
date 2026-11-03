@@ -130,6 +130,12 @@ def _color_forms() -> dict[str, str]:
 
 
 _COLORS = _color_forms()
+# «lo de siempre», «repetí mi pedido», «lo mismo que la otra vez», «mi último pedido».
+_RE_REORDER = re.compile(r"\b(lo de siempre|(quiero|dame|mandame|pasame|haceme|armame)( de nuevo)? lo mismo"
+                         r"|repet\w*( el| mi| lo)? (pedido|compra|ultimo)|como la (otra|ultima) vez|otra vez lo mismo"
+                         r"|(repetir|volver a pedir|quiero|dame) (mi|el) (ultimo|anterior) pedido)\b")
+# «¿cómo va mi último pedido?» es seguimiento, no recompra.
+_RE_STATUS_Q = re.compile(r"\b(como va|estado|llego|llega|donde esta|seguimiento|cuando llega|ya salio)\b")
 
 
 def _detail(o: dict[str, Any]) -> str:
@@ -1301,6 +1307,37 @@ class _Turn:
                     else f" Tu pedido #{o['number']} está {o['status_label']}.")
         return f"¡Gracias a vos!{tail} Cualquier cosa, escribime por acá."
 
+    def reorder(self) -> Optional[str]:
+        """Arma el carrito con el último pedido pagado del cliente recordado, con el precio y el
+        stock de HOY (nunca los de entonces); lo que ya no se puede vender se avisa, no se agrega."""
+        customer = customer_memory.customer_of(self.tenant, self.conv)
+        last = orders.last_paid_items(self.tenant, customer) if customer else []
+        if not last:
+            return None      # sin compra pagada: responde el historial (o el resto del agente)
+        self.tool("recompra", f"{len(last)} ítem(s) del último pedido")
+        added, missing, cart = [], [], None
+        for it in last:
+            res = orders.add_item(self.tenant, self.conv, it["item_id"], it["qty"],
+                                  policies=(self.profile.get("policies") or {}) if self.dry_run else None)
+            if res.status == "insufficient_stock" and res.available:
+                res = orders.add_item(self.tenant, self.conv, it["item_id"], res.available,
+                                      policies=(self.profile.get("policies") or {}) if self.dry_run else None)
+                if res.status == "ok":
+                    missing.append(f"{it['name']} (había {it['qty']}, hoy hay {res.available})")
+            if res.status == "ok":
+                added.append(it["name"])
+                cart = res.cart
+            elif not (res.status == "insufficient_stock" and res.available):
+                why = {"insufficient_stock": "sin stock", "requires_human": "a pedido",
+                       "no_price": "sin precio vigente", "not_found": "ya no está en el catálogo"}.get(res.status, res.status)
+                missing.append(f"{it['name']} ({why})")
+        if not added:
+            return ("Tu último pedido era: " + ", ".join(f"{i['qty']} × {i['name']}" for i in last)
+                    + ". Hoy no puedo armarlo: " + "; ".join(missing) + ". ¿Buscamos alternativas?")
+        head = "Te armé el carrito con tu último pedido, con los precios de hoy."
+        warn = ("\nNo pude sumar todo: " + "; ".join(missing) + ".") if missing else ""
+        return f"{head}\n{self.cart_text(cart)}{warn}\n¿Lo comprás o querés cambiar algo?"
+
     def handoff(self, again: bool = False, topic: Optional[dict[str, Any]] = None) -> str:
         """Pide una persona: queda en la bandeja del panel («derivadas») y en oportunidades. El equipo
         puede responder en este mismo chat; no hay aviso por otro medio: no se promete canal ni plazo."""
@@ -1348,6 +1385,14 @@ class _Turn:
         opportunities.upsert_opportunity(self.tenant, OpportunityInput(
             conversation_id=self.conv, stage="para_cotizar", origin="venta_chat",
             requirements={"producto": o["name"], "sku": o["sku"]}, requires_human_quote=True))
+
+
+def _reorder_reply(turn: _Turn, text: str) -> Optional[str]:
+    """«Repetí mi pedido»: determinista también con IA (toca el carrito con datos reales)."""
+    if (not _RE_REORDER.search(text) or _RE_STATUS_Q.search(text)
+            or not agent_profile.tool_enabled(turn.profile, "preparar_compra")):
+        return None
+    return turn.reorder()
 
 
 def _confirmation_reply(turn: _Turn, text: str) -> Optional[str]:
@@ -1472,7 +1517,7 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     turn.no_cart = all(_RE_NO_CART.search(part) for part in _parts(text))
     turn.consent = _consent(message, text, turn.offer)
 
-    reply = _confirmation_reply(turn, text) or _human_reply(turn, text, handoff)
+    reply = _confirmation_reply(turn, text) or _human_reply(turn, text, handoff) or _reorder_reply(turn, text)
     if reply is None:
         planner = planner or llm_sales.default_planner()
         if planner is not None and limits.ai_allowed(tenant_id):

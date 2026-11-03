@@ -382,6 +382,19 @@ def cancel_pending(cur: Any, tenant_id: str, order_id: str, reason: str,
     return _view(cur, _fetch(cur, tenant_id, order_id))
 
 
+def last_paid_items(tenant_id: str, customer_id: str) -> list[dict[str, Any]]:
+    """Ítems del último pedido PAGADO del cliente (en cualquiera de sus conversaciones), para
+    «repetí mi pedido». Sólo ítems; el precio se toma de nuevo del catálogo al agregar."""
+    with tenant_tx(tenant_id) as cur:
+        cur.execute(
+            "select i.item_id, i.name, i.qty from orders o join order_items i on i.tenant_id = o.tenant_id "
+            "and i.order_id = o.id where o.id = (select o2.id from orders o2 join conversations c "
+            "on c.tenant_id = o2.tenant_id and c.id = o2.conversation_id where o2.tenant_id = %s "
+            "and c.customer_id = %s and o2.status = any(%s) and not o2.quote order by o2.paid_at desc nulls last limit 1) "
+            "order by i.name", (tenant_id, customer_id, ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"]))
+        return [{"item_id": str(r["item_id"]), "name": r["name"], "qty": r["qty"]} for r in cur.fetchall()]
+
+
 def create_quote(cur: Any, tenant_id: str, conversation_id: str, lines: list[dict[str, Any]],
                  deposit: Optional[float] = None) -> dict[str, Any]:
     """Pedido a medida que arma una PERSONA del negocio para productos a pedido (`custom_quote`):
