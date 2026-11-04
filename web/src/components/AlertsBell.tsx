@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell, CalendarDays, MessagesSquare, Receipt, ShoppingBag, ThumbsDown, type LucideIcon } from "lucide-react";
 import { api, type Alert } from "../lib/api";
 
@@ -24,6 +25,8 @@ export function AlertsBell({ enabled }: { enabled: boolean }) {
   const [seen, setSeen] = useState<Set<string>>(loadSeen);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
 
   const load = useCallback(() => { api.alerts().then(setItems, () => {}); }, []);
   useEffect(() => {
@@ -35,7 +38,7 @@ export function AlertsBell({ enabled }: { enabled: boolean }) {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", close);
@@ -46,6 +49,9 @@ export function AlertsBell({ enabled }: { enabled: boolean }) {
   const unseen = items.filter((a) => !seen.has(a.key)).length;
   function toggle() {
     if (!open) {
+      // El panel va en <body> (fuera de la barra lateral) para quedar sobre cualquier pantalla.
+      const r = box.current?.getBoundingClientRect();
+      if (r) setPos({ left: r.right + 8, bottom: Math.max(8, window.innerHeight - r.bottom) });
       const next = new Set([...seen, ...items.map((a) => a.key)]);
       setSeen(next);
       saveSeen(next);
@@ -58,8 +64,10 @@ export function AlertsBell({ enabled }: { enabled: boolean }) {
         <Bell size={16} strokeWidth={1.8} aria-hidden /> Avisos
         {unseen > 0 && <span className="nav-count" aria-label={`${unseen} nuevos`}>{unseen}</span>}
       </button>
-      {open && (
-        <div className="alerts-pop" role="dialog" aria-label="Avisos">
+      {open && createPortal(
+        <div className="alerts-pop" role="dialog" aria-label="Avisos" ref={pop}
+          style={pos && window.innerWidth > 900 ? { left: pos.left, bottom: pos.bottom } : undefined}>
+          <div className="alerts-head">Avisos</div>
           {items.length === 0 ? <p className="muted small">No hay nada pendiente. 🎉</p> : (
             <ul>
               {items.map((a) => {
@@ -75,7 +83,8 @@ export function AlertsBell({ enabled }: { enabled: boolean }) {
               })}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
