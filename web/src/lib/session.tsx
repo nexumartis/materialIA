@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { ApiError, api, setAuth, type Me } from "./api";
+import { ApiError, api, setAuth, type Me, type Modules } from "./api";
 
 export type SessionStatus =
   | "unconfigured" // faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
@@ -19,6 +19,8 @@ interface SessionValue {
   me: Me | null;
   signOut: () => Promise<void>;
   retry: () => void;
+  /** Tras guardar los módulos: el menú se actualiza sin recargar el negocio. */
+  setModules: (m: Modules) => void;
 }
 
 const Ctx = createContext<SessionValue | null>(null);
@@ -79,8 +81,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [userId, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const setModules = useCallback((m: Modules) => setMe((cur) => (cur ? { ...cur, modules: m } : cur)), []);
 
-  return <Ctx.Provider value={{ status, session, me, signOut, retry }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ status, session, me, signOut, retry, setModules }}>{children}</Ctx.Provider>;
 }
 
 export function useSession(): SessionValue {

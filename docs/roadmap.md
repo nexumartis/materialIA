@@ -137,6 +137,20 @@ con una línea (#65).
 7. Escalabilidad (auditoría 04/11): topes de IA por negocio, worker con tiempo por tarea, IA fuera de
    las transacciones, Mercado Pago por negocio, retención y observabilidad.
 
+**Entregas y logística: dónde termina lo nuestro (04/11/2026).** Somos el que vende; no operamos la
+logística del negocio.
+- **Sí (hecho, PRs #68 y siguiente):** el agente ofrece día y franja con cupo, primero donde ya hay una
+  entrega cerca (< 2 km); la entrega se agenda sola al pagarse; Agenda única (turnos + entregas);
+  hoja de ruta simple para quien reparte (salí / llegué / entregado, avisos al cliente); envío por
+  correo con número de seguimiento cargado a mano y avisado en el chat; zonas «por correo» y
+  «Todo el país»; **módulos** por negocio (turnos, reparto propio, correo, retiro, señas, campañas).
+- **Quién va lo decide una persona del negocio** (o el único repartidor, si hay uno). El agente nunca asigna.
+- **No vamos a hacer:** ruteo óptimo y gestión de flota, GPS en vivo, etiquetas y cotización
+  automática de correos con API propia por correo. Cada correo (Andreani, OCA, Correo Argentino) pide
+  contrato y credenciales por negocio: si un cliente lo necesita, integrar **un agregador** de envíos
+  (a evaluar: precio, cobertura, API pública) o recibir el estado por webhook/CSV. Para logística
+  avanzada, el negocio usa su herramienta y se conecta por **webhooks** (`order.paid`, `order.shipped`).
+
 **Con WhatsApp (etapa 3):** recordatorio de pago y carritos abandonados reales (las campañas ya
 existen, cambia el canal), avisos de envío y vuelta de stock, asistente del dueño por WhatsApp,
 Instagram, factura (etapa 8).

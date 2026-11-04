@@ -65,7 +65,14 @@ export interface Me {
   tenant_id: string;
   business_name: string;
   role: "owner" | "staff" | "driver";
+  /** Qué usa el negocio: ordena el panel (no borra datos). */
+  modules: Modules;
 }
+
+export type ModuleKey = "turnos" | "reparto" | "correo" | "retiro" | "senas" | "campanias";
+export type Modules = Record<ModuleKey, boolean>;
+export interface ModuleInfo { key: ModuleKey; label: string; hint: string }
+export type Carrier = "andreani" | "oca" | "correo_argentino" | "otro";
 
 export type TeamRole = "staff" | "driver";
 export interface TeamMember { user_id: string; email: string | null; role: "owner" | TeamRole; since: string }
@@ -132,6 +139,13 @@ export const api = {
   health: () => request<Health>("/health"),
 
   me: () => authed<Me>("/app/me"),
+  modules: () => authed<{ catalog: ModuleInfo[]; modules: Modules }>("/app/modules"),
+  saveModules: (body: Partial<Modules>) =>
+    authed<{ modules: Modules }>("/app/modules", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   opportunities: () => authed<Opportunity[]>("/app/opportunities"),
 
@@ -274,6 +288,12 @@ export const api = {
     authed<DeliveryJob>(`/app/deliveries/${id}`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     }),
+  suggestDelivery: (orderId: string) =>
+    authed<{ options: SlotOption[] }>(`/app/deliveries/suggest?order_id=${encodeURIComponent(orderId)}`),
+  saveSlots: (body: SlotsConfig) =>
+    authed<SlotsConfig>("/app/deliveries/slots", {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
   route: (date: string) => authed<RouteDay>(`/app/route?date=${encodeURIComponent(date)}`),
   routeStatus: (id: string, body: RouteStep) =>
     authed<DeliveryJob>(`/app/route/${id}/status`, {
@@ -313,6 +333,12 @@ export const api = {
   orderReceipt: (orderId: string) => authed<Blob>(`/app/orders/${orderId}/receipt.pdf`, {}, "blob"),
   advanceOrder: (id: string, status: string) =>
     authed<Order>(`/app/orders/${id}/status?status=${status}`, { method: "POST" }),
+  shipOrder: (id: string, body: { carrier: Carrier; carrier_name?: string; tracking_code: string }) =>
+    authed<Order>(`/app/orders/${id}/shipment`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   // Tienda pública de cada negocio (sin cuenta). El token del comprador va en un header,
   // nunca en la URL.
@@ -508,6 +534,9 @@ export interface Policies {
   /** Turnos: guardado normalizado; mientras se edita, textos que interpreta el servidor. */
   booking?: { services: { name: string; minutes: number }[] | string; hours: Record<string, string[][]> | string;
               capacity: number } | null;
+  /** Zonas (de delivery_zones) que se despachan por correo y su demora. */
+  courier_zones?: string[];
+  courier_eta?: string;
 }
 
 export interface Appointment { id: string; conversation_id: string | null; service: string; starts_at: string;
@@ -627,6 +656,15 @@ export interface Order {
   amount_due?: number;
   /** Calificación del comprador (1 a 5), si ya calificó. */
   rating?: number | null;
+  /** Despacho por correo: lo carga el negocio con el número de seguimiento. */
+  carrier?: Carrier | null;
+  carrier_name?: string | null;
+  tracking_code?: string | null;
+  tracking_url?: string | null;
+  shipped_at?: string | null;
+  /** Entrega con reparto propio: día (AAAA-MM-DD) y franja. */
+  delivery_date?: string | null;
+  delivery_window?: "am" | "pm" | "day" | string | null;
 }
 
 export interface Insights {
@@ -902,6 +940,8 @@ export interface DeliveryJob {
   delivery_note: string | null;
   contact: { name: string; phone: string };
   items: { name: string; qty: number }[];
+  /** «chat»: la franja la eligió el cliente al comprar; «panel»: la agendó alguien del negocio. */
+  source: "panel" | "chat";
 }
 export interface PendingDelivery {
   order_id: string;
@@ -921,7 +961,16 @@ export interface Deliveries {
   drivers: { user_id: string; email: string | null; role: string }[];
   pending: PendingDelivery[];
   jobs: DeliveryJob[];
+  /** Cómo reparte el negocio (lo que el agente ofrece al vender). */
+  slots: SlotsConfig;
+  /** Cupo usado ese día por franja (entregas activas + pedidos con franja esperando el pago). */
+  load: Partial<Record<DeliveryWindow, number>>;
 }
+export type DeliveryWindow = "am" | "pm" | "day";
+/** Días 0 = lunes … 6 = domingo. */
+export interface SlotsConfig { enabled: boolean; days: number[]; windows: DeliveryWindow[]; capacity: number;
+  horizon_days: number; lead_days: number }
+export interface SlotOption { date: string; window: DeliveryWindow; label: string; near_km: number | null; free: number }
 export interface RouteJob extends DeliveryJob { customer_messages: { text: string; at: string }[] }
 export interface RouteDay { date: string; jobs: RouteJob[] }
 export type RouteStep =

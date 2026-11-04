@@ -10,6 +10,7 @@ import {
   type Policies,
   type ProfileVersion,
 } from "../lib/api";
+import { useSession } from "../lib/session";
 
 const errText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 const list = (v?: string[]) => (v ?? []).join(", ");
@@ -18,6 +19,12 @@ const parse = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 const zonesText = (p: Policies) =>
   typeof p.delivery_zones === "string" ? p.delivery_zones
     : (p.delivery_zones ?? []).map((z) => (p.shipping_costs?.[z] != null ? `${z}: ${p.shipping_costs[z]}` : z)).join(", ");
+
+/** Nombres de zona de lo que hay cargado («CABA: 5000, Rosario» → CABA, Rosario). */
+const zoneNames = (p: Policies) =>
+  typeof p.delivery_zones === "string"
+    ? [...new Set(p.delivery_zones.split(",").map((z) => z.split(":")[0].trim()).filter(Boolean))]
+    : p.delivery_zones ?? [];
 
 /** «reclamo, roto => mensaje», una línea por tema. */
 const topicsText = (p: Policies) =>
@@ -33,6 +40,9 @@ const hoursText = (b: Policies["booking"]) =>
 
 /** Reglas que el CÓDIGO hace cumplir (no dependen de que el modelo las respete). */
 export function PoliciesSection({ policies, onChange }: { policies: Policies; onChange: (p: Policies) => void }) {
+  const { me } = useSession();
+  const zones = zoneNames(policies);
+  const courier = policies.courier_zones ?? [];
   return (
     <section className="setup-card">
       <h2 className="panel-title">Políticas del negocio</h2>
@@ -52,11 +62,41 @@ export function PoliciesSection({ policies, onChange }: { policies: Policies; on
           <input
             value={zonesText(policies)}
             placeholder="Ej.: CABA: 5000, GBA: 8000, Rosario"
-            onChange={(e) => onChange({ ...policies, delivery_zones: e.target.value, shipping_costs: undefined })}
+            onChange={(e) => {
+              const next = { ...policies, delivery_zones: e.target.value, shipping_costs: undefined };
+              // Una zona que ya no está no puede ir por correo (el servidor lo rechazaría).
+              const names = zoneNames(next);
+              onChange(policies.courier_zones ? { ...next, courier_zones: policies.courier_zones.filter((z) => names.includes(z)) } : next);
+            }}
           />
           <small>Con «zona: costo» el agente informa ese costo; sin costo, sólo dice si envía.</small>
         </label>
       </div>
+      {me?.modules?.correo !== false && (
+        <fieldset className="field">
+          <legend>Estas zonas van por correo</legend>
+          {zones.length === 0 ? (
+            <small>Primero cargá tus zonas de envío.</small>
+          ) : (
+            <div className="checks">
+              {zones.map((z) => (
+                <label className="check" key={z}>
+                  <input type="checkbox" checked={courier.includes(z)}
+                    onChange={(e) => onChange({ ...policies,
+                      courier_zones: e.target.checked ? [...courier, z] : courier.filter((x) => x !== z) })} />
+                  {z}
+                </label>
+              ))}
+            </div>
+          )}
+          <label className="field">
+            <span>Demora del correo</span>
+            <input value={policies.courier_eta ?? ""} maxLength={80} placeholder="3 a 5 días hábiles"
+              onChange={(e) => onChange({ ...policies, courier_eta: e.target.value })} />
+          </label>
+          <small>Tip: una zona «Todo el país» cubre cualquier dirección fuera de tus otras zonas.</small>
+        </fieldset>
+      )}
       <label className="field">
         <span>Dirección para retirar en el local</span>
         <input

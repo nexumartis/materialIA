@@ -15,7 +15,7 @@ from psycopg.errors import UniqueViolation
 
 from ..db import system_tx, tenant_tx
 from ..documents import store
-from ..domain import inventory, opportunities, orders, receipts, webhooks
+from ..domain import inventory, opportunities, orders, receipts, reparto, webhooks
 from ..domain.inventory import OutOfStock
 from ..schemas import OpportunityInput
 from .providers import PaymentProviderError, ProviderPayment, get_provider
@@ -351,6 +351,7 @@ def _apply(cur: Any, tenant_id: str, order: dict[str, Any], provider_name: str,
     became_paid = orders._view(cur, orders._fetch(cur, tenant_id, order_id))
     became_paid["conversation_id"] = str(order["conversation_id"]) if order["conversation_id"] else None
     webhooks.enqueue_order(cur, tenant_id, "order.paid", order_id)
+    reparto.from_paid_order(cur, tenant_id, order_id)      # franja elegida en el chat → entrega agendada
     return "pedido pagado", became_paid
 
 

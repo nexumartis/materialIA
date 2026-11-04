@@ -25,7 +25,8 @@ _PHONE = re.compile(r"(?:\+?54\s?9?\s?)?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,4}[\s-]?\d{
 def options(profile: dict[str, Any]) -> dict[str, Any]:
     p = profile.get("policies") or {}
     return {"pickup": (p.get("pickup_address") or "").strip() or None, "zones": p.get("delivery_zones") or [],
-            "costs": p.get("shipping_costs") or {}, "hours": (profile.get("hours") or "").strip() or None}
+            "costs": p.get("shipping_costs") or {}, "hours": (profile.get("hours") or "").strip() or None,
+            "courier_zones": p.get("courier_zones") or [], "courier_eta": p.get("courier_eta") or None}
 
 
 def enabled(profile: dict[str, Any]) -> bool:
@@ -53,7 +54,9 @@ def zone_for(address: dict[str, Any], zones: list[str]) -> Optional[str]:
     names = georef.names_for({"localidad": address["localidad"], "municipio": address["departamento"],
                               "departamento": address["departamento"], "provincia": address["provincia"]})
     norm = {normalize(z): z for z in zones}
-    return next((norm[n] for n in names if n in norm), None)
+    # «Todo el país» / «Resto del país»: cubre lo que no cae en otra zona (típico del envío por correo).
+    rest = next((z for n, z in norm.items() if n in ("todo el pais", "resto del pais", "interior", "argentina")), None)
+    return next((norm[n] for n in names if n in norm), rest)
 
 
 def parse_contact(text: str) -> Optional[dict[str, str]]:
@@ -89,5 +92,7 @@ def describe(order: dict[str, Any]) -> Optional[str]:
         place = a.get("texto") or ", ".join(x for x in (f"{a.get('calle', '')} {a.get('altura', '')}".strip(),
                                                          a.get("localidad")) if x)
         note = f" ({order['delivery_note']})" if order.get("delivery_note") else ""
-        return f"Envío a {place}{note}"
+        from .reparto import describe_slot
+        when = describe_slot(order)
+        return f"Envío a {place}{note}" + (f" · {when}" if when else "")
     return None

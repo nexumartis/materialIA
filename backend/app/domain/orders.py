@@ -50,10 +50,19 @@ FULFILLMENT_NEXT = {
 _ORDER_COLUMNS = ("id, number, tenant_id, conversation_id, status, currency, subtotal, shipping, "
                   "total, reserved_until, cancel_reason, attention_reason, paid_at, created_at, "
                   "updated_at, quote, deposit, deposit_paid_at, delivery_method, delivery_address, "
-                  "delivery_contact, delivery_note")
+                  "delivery_contact, delivery_note, delivery_date, delivery_window, carrier, tracking_code, shipped_at")
 
 
 # --- Lectura ------------------------------------------------------------------
+def _tracking(row: dict[str, Any]) -> dict[str, Any]:
+    from .shipping import CARRIERS, tracking_url
+    carrier = row.get("carrier")
+    return {"carrier": carrier, "carrier_name": (CARRIERS.get(carrier or "") or {}).get("name") or carrier,
+            "tracking_code": row.get("tracking_code"), "tracking_url": tracking_url(carrier, row.get("tracking_code")),
+            "shipped_at": row["shipped_at"].isoformat() if row.get("shipped_at") else None}
+
+
+
 def amount_due(row: dict[str, Any]) -> tuple[float, str]:
     """(monto a cobrar ahora, qué se cobra): la seña, el saldo o el total del pedido."""
     total, deposit = float(row["total"]), float(row["deposit"]) if row.get("deposit") is not None else None
@@ -106,6 +115,9 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "rating": rating["score"] if rating else None,     # calificación del comprador (1 a 5)
         "delivery_method": row.get("delivery_method"), "delivery_address": row.get("delivery_address"),
         "delivery_contact": row.get("delivery_contact"), "delivery_note": row.get("delivery_note"),
+        "delivery_date": row["delivery_date"].isoformat() if row.get("delivery_date") else None,
+        "delivery_window": row.get("delivery_window"),
+        **_tracking(row),
     }
 
 
