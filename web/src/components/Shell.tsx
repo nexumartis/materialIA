@@ -7,6 +7,7 @@ import type { Health } from "../lib/api";
 import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
+import { AlertsBell } from "./AlertsBell";
 
 export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "login" | "signup";
 
@@ -127,6 +128,7 @@ export function Shell({ health, active, children }: Props) {
             ))}
           </nav>
 
+          <AlertsBell enabled={status === "ready" && Boolean(me)} />
           <div className="sidebar-foot">
             <div className="foot-status">
               <span className={`modepill ${live ? "live" : "demo"}`}>

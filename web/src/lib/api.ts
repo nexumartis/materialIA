@@ -213,6 +213,7 @@ export const api = {
     }),
   redactConversation: (id: string) =>
     authed<{ changed: number; conversation: InboxConversation }>(`/app/inbox/${id}/redact`, { method: "POST" }),
+  alerts: () => authed<Alert[]>("/app/alerts"),
   appointments: () => authed<Appointment[]>("/app/appointments"),
   cancelAppointment: (id: string) => authed<{ cancelled: boolean }>(`/app/appointments/${id}/cancel`, { method: "POST" }),
   quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
@@ -574,6 +575,9 @@ export interface Webhooks {
 }
 
 export interface QuickReply { id: string; title: string; body: string }
+
+export interface Alert { kind: "handoff" | "order" | "receipt" | "appointment" | "rating"; text: string; href: string;
+  at: string; key: string }
 
 export interface QuoteLine { item_id: string; qty: number; unit_price: number }
 
