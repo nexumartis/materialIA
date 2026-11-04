@@ -37,7 +37,10 @@ def members(cur: Any, tenant_id: str) -> dict[str, Any]:
     return {"members": team, "invites": invites}
 
 
-def invite(cur: Any, tenant_id: str, uid: str, email: str) -> None:
+def invite(cur: Any, tenant_id: str, uid: str, email: str, role: str = "staff") -> None:
+    """`role`: «staff» (atiende el panel) o «driver» (reparto: sólo ve su hoja de ruta)."""
+    if role not in ("staff", "driver"):
+        raise ValueError("Rol inválido.")
     email = (email or "").strip().lower()
     if not _EMAIL.match(email):
         raise ValueError("Escribí un email válido.")
@@ -49,9 +52,9 @@ def invite(cur: Any, tenant_id: str, uid: str, email: str) -> None:
     row = cur.fetchone()
     if row and str(row["tenant_id"]) != tenant_id:
         raise ValueError("Ese email ya tiene una invitación pendiente de otro negocio.")
-    cur.execute("insert into team_invites (email, tenant_id, invited_by) values (%s, %s, %s) "
-                "on conflict (email) do nothing", (email, tenant_id, uid))
-    opportunities._audit(cur, tenant_id, "team_invited", None, {"actor": uid})
+    cur.execute("insert into team_invites (email, tenant_id, invited_by, role) values (%s, %s, %s, %s) "
+                "on conflict (email) do nothing", (email, tenant_id, uid, role))
+    opportunities._audit(cur, tenant_id, "team_invited", None, {"actor": uid, "role": role})
 
 
 def cancel_invite(cur: Any, tenant_id: str, email: str) -> bool:
@@ -63,7 +66,7 @@ def cancel_invite(cur: Any, tenant_id: str, email: str) -> bool:
 def remove(cur: Any, tenant_id: str, uid: str, member_id: str) -> bool:
     """Quita a un empleado. El dueño no se puede quitar. Lo que tenía tomado vuelve al agente
     con aviso de derivación, para que nadie quede sin atender."""
-    cur.execute("delete from memberships where tenant_id = %s and user_id = %s and role = 'staff'",
+    cur.execute("delete from memberships where tenant_id = %s and user_id = %s and role in ('staff', 'driver')",
                 (tenant_id, member_id))
     if not cur.rowcount:
         return False

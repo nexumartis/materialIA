@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2 } from "lucide-react";
+import { Truck, Volume2 } from "lucide-react";
 import {
   ApiError,
   api,
@@ -389,7 +389,9 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
 
   // Mientras un comprobante se lee en segundo plano, se relee la conversación cada pocos segundos.
   // Lo mismo mientras una persona del negocio atiende la conversación (sus respuestas llegan solas).
-  const reading = documents.some((d) => d.status === "received" || d.status === "processing") || attended;
+  // Y mientras un pedido está en camino: los avisos del repartidor llegan solos.
+  const reading = documents.some((d) => d.status === "received" || d.status === "processing") || attended
+    || orders.some((o) => o.status === "DISPATCHED" || o.status === "IN_TRANSIT");
   useEffect(() => {
     if (!conv || !reading) return;
     const t = window.setInterval(() => reload(conv), 4000);
@@ -543,13 +545,18 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role === "me" ? "me" : "bot"}`}>
                 {m.ui?.type === "human" && <span className="msg-author">Equipo de {source.title}</span>}
+                {m.ui?.type === "delivery" && (
+                  <span className="msg-author delivery-author">
+                    <Truck size={13} strokeWidth={1.8} aria-hidden /> Reparto{m.ui.by ? ` · ${m.ui.by}` : ""}
+                  </span>
+                )}
                 {m.role === "me" && myVoice[i] ? (
                   <div className="bubble me voice-note">
                     <audio controls src={myVoice[i]} aria-label="Tu audio" />
                     <span className="small">«{m.text}»</span>
                   </div>
                 ) : visibleText(m) && (
-                  <div className={`bubble ${m.role === "me" ? "me" : "bot"}${m.ui?.type === "human" ? " human" : ""}`}>
+                  <div className={`bubble ${m.role === "me" ? "me" : "bot"}${m.ui?.type === "human" || m.ui?.type === "delivery" ? " human" : ""}`}>
                     <Linkified text={m.ui?.payment ? visibleText(m).replace(m.ui.payment.url, "").trim() : visibleText(m)} />
                   </div>
                 )}

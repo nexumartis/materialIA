@@ -64,11 +64,12 @@ export interface Me {
   user_id: string;
   tenant_id: string;
   business_name: string;
-  role: "owner" | "staff";
+  role: "owner" | "staff" | "driver";
 }
 
-export interface TeamMember { user_id: string; email: string | null; role: "owner" | "staff"; since: string }
-export interface TeamInvite { email: string; role: "staff"; created_at: string }
+export type TeamRole = "staff" | "driver";
+export interface TeamMember { user_id: string; email: string | null; role: "owner" | TeamRole; since: string }
+export interface TeamInvite { email: string; role: TeamRole; created_at: string }
 export interface Team { members: TeamMember[]; invites: TeamInvite[] }
 export interface InternalNote { id: string; author_id: string | null; author: string; body: string; at: string }
 
@@ -258,11 +259,30 @@ export const api = {
     }),
   deleteQuickReply: (id: string) => authed<{ deleted: boolean }>(`/app/quick-replies/${id}`, { method: "DELETE" }),
   team: () => authed<Team>("/app/team"),
-  invite: (email: string) =>
+  invite: (email: string, role: TeamRole = "staff") =>
     authed<Team>("/app/team/invites", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, role }),
     }),
   cancelInvite: (email: string) => authed<Team>(`/app/team/invites/${encodeURIComponent(email)}`, { method: "DELETE" }),
+  // Reparto e instalación: el dueño/equipo agenda; cada repartidor ve sólo su hoja de ruta.
+  deliveries: (date: string) => authed<Deliveries>(`/app/deliveries?date=${encodeURIComponent(date)}`),
+  createDelivery: (body: { order_id: string; date: string; window: string; kind: string; assigned_to: string | null; note: string | null }) =>
+    authed<DeliveryJob>("/app/deliveries", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
+  patchDelivery: (id: string, body: { date?: string; window?: string; assigned_to?: string | null; note?: string | null } | { status: "cancelled" }) =>
+    authed<DeliveryJob>(`/app/deliveries/${id}`, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
+  route: (date: string) => authed<RouteDay>(`/app/route?date=${encodeURIComponent(date)}`),
+  routeStatus: (id: string, body: RouteStep) =>
+    authed<DeliveryJob>(`/app/route/${id}/status`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
+  routeMessage: (id: string, text: string) =>
+    authed<{ sent: boolean }>(`/app/route/${id}/message`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }),
+    }),
   removeMember: (id: string) => authed<Team>(`/app/team/members/${id}`, { method: "DELETE" }),
   inboxConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}`),
   takeConversation: (id: string) => authed<InboxConversation>(`/app/inbox/${id}/take`, { method: "POST" }),
@@ -826,6 +846,9 @@ export interface MessageUI {
   /** Mensaje de pago confirmado con su constancia. */
   type?: string;
   receipt_id?: string;
+  /** Aviso del reparto (type "delivery"): quién lo mandó y de qué entrega. */
+  by?: string | null;
+  job_id?: string;
 }
 
 export interface SalesResponse {
@@ -851,5 +874,60 @@ export interface SalesConversation {
   /** Una persona del negocio tomó la conversación: el agente no responde. */
   attended_by_human?: boolean;
 }
+
+export type DeliveryStatus = "scheduled" | "on_the_way" | "arrived" | "done" | "failed" | "cancelled";
+export interface DeliveryJob {
+  id: string;
+  order_id: string;
+  order_number: number;
+  kind: string;
+  kind_label: string;
+  date: string;
+  window: string;
+  window_label: string;
+  status: DeliveryStatus;
+  status_label: string;
+  assigned_to: string | null;
+  driver_email: string | null;
+  eta_minutes: number | null;
+  /** Nota interna para el repartidor. */
+  note: string | null;
+  failure_reason: string | null;
+  started_at: string | null;
+  arrived_at: string | null;
+  finished_at: string | null;
+  address: string;
+  maps_url: string | null;
+  /** Indicaciones que dejó el cliente (timbre, piso, horario). */
+  delivery_note: string | null;
+  contact: { name: string; phone: string };
+  items: { name: string; qty: number }[];
+}
+export interface PendingDelivery {
+  order_id: string;
+  order_number: number;
+  status: string;
+  status_label: string;
+  total: number;
+  address: string;
+  /** Nombre de quien recibe (sin teléfono hasta que se agenda). */
+  contact: string;
+  items: { name: string; qty: number }[];
+}
+export interface Deliveries {
+  date: string;
+  windows: { id: string; label: string }[];
+  kinds: { id: string; label: string }[];
+  drivers: { user_id: string; email: string | null; role: string }[];
+  pending: PendingDelivery[];
+  jobs: DeliveryJob[];
+}
+export interface RouteJob extends DeliveryJob { customer_messages: { text: string; at: string }[] }
+export interface RouteDay { date: string; jobs: RouteJob[] }
+export type RouteStep =
+  | { status: "on_the_way"; eta_minutes?: number }
+  | { status: "arrived" }
+  | { status: "done" }
+  | { status: "failed"; reason: string };
 
 export { ApiError };
