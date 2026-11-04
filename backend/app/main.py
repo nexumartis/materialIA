@@ -63,9 +63,22 @@ app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(__import__("pathlib").Path(__file__).parent / "static")),
           name="static")
 
+# Fuera de local/dev, una configuración insegura no arranca (pago simulado, CORS abierto, sandbox).
+if settings.production_like and settings.unsafe_for_production():
+    raise RuntimeError("Configuración insegura para producción: " + "; ".join(settings.unsafe_for_production()))
+
+
+@app.middleware("http")
+async def _no_sandbox_in_production(request: Request, call_next):
+    """Las rutas /sandbox (demo sin cuenta, checkout simulado) no existen en producción."""
+    if settings.production_like and request.url.path.startswith("/sandbox"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_list,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Error-Code"],   # código estructurado de error (p. ej. evals_failed)
@@ -442,6 +455,7 @@ def app_put_profile(body: dict = Body(...), uid: str = Depends(owner_uid)) -> di
         if require_evals:
             cases = evals.list_cases(cur, tenant)
             if cases:
+                limits.guard_user(uid, weight=len(cases))      # cada caso es una corrida del agente
                 result = evals.run(tenant, cases, {**agent_profile._get(cur, tenant), **changes})
                 if result["passed"] < result["total"]:
                     raise HTTPException(status_code=409, headers={"X-Error-Code": "evals_failed"}, detail=(
@@ -524,6 +538,7 @@ def app_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
 @app.put("/app/catalog/sheet")
 def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """Conecta (o reemplaza) la planilla y la sincroniza en el momento."""
+    limits.guard_user(uid, scope="panel-ext")
     with user_tx(uid) as (cur, tenant):
         try:
             catalog_sheet.connect(cur, tenant, uid, str(body.get("url") or ""))
@@ -534,6 +549,7 @@ def app_connect_catalog_sheet(body: dict = Body(...), uid: str = Depends(owner_u
 
 @app.post("/app/catalog/sheet/sync")
 def app_sync_catalog_sheet(uid: str = Depends(owner_uid)) -> dict:
+    limits.guard_user(uid, scope="panel-ext")
     with user_tx(uid) as (_, tenant):
         pass   # el negocio sale de la membresía; la lectura la hace el backend (red fuera de la transacción)
     sheet = catalog_sheet.sync(tenant)
@@ -656,6 +672,7 @@ def app_inbox_note(conversation_id: UUID, body: dict = Body(...), uid: str = Dep
 def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
     """El dueño cotiza productos «a pedido» con seña opcional; el link de pago (de la seña o del
     total) queda en la conversación. El pago se acredita sólo verificado, como cualquier pedido."""
+    limits.guard_user(uid, scope="panel-ext")
     conv = str(conversation_id)
     deposit = body.get("deposit")
     try:
@@ -1110,6 +1127,7 @@ def app_knowledge(uid: str = Depends(current_uid)) -> list[dict]:
 
 @app.post("/app/knowledge")
 def app_add_knowledge(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    limits.guard_user(uid, scope="panel-ai")
     text = str(body.get("text") or "")
     vectors = knowledge.embed(knowledge.chunk(text)) if text.strip() else None   # fuera de la transacción
     with user_tx(uid) as (cur, tenant):

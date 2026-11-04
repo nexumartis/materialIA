@@ -219,7 +219,7 @@ def test_sandbox_admin_mutations_are_closed_in_local_without_opt_in(client, link
 
 def test_sandbox_admin_opt_in_does_not_open_mutations_outside_local(client, linked, raw_conn, monkeypatch):
     from app.config import settings
-    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "app_env", "cloud-dev")   # fuera de local (en producción todo /sandbox da 404: test_production_guard)
     monkeypatch.setattr(settings, "sandbox_admin", True)
     conv = client.post("/sandbox/sales/chat?company=C", json={"message": "hola"})
     assert conv.status_code == 200

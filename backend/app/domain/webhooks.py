@@ -8,8 +8,9 @@ conectar sus sistemas (planilla, ERP, CRM, Zapier/Make).
   (idempotencia del lado del receptor). El secreto se muestra UNA vez al crear el endpoint.
 - **SSRF:** sólo https hacia IPs públicas, conectando a la IP verificada, sin seguir redirecciones,
   con tiempo corto y sin leer más de 4 KB de respuesta.
-- **Datos mínimos:** pedido (número, estado, montos, ítems), id de conversación, calificación. Nunca
-  tokens del comprador, teléfonos ni notas internas.
+- **Datos mínimos:** pedido (número, estado, montos, ítems), id de conversación, calificación y, sólo
+  en eventos de pedido con entrega, la dirección y el contacto (el sistema del negocio los necesita
+  para despachar). Nunca tokens del comprador, links de pago ni notas internas.
 """
 from __future__ import annotations
 
