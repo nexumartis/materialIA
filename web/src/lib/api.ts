@@ -534,6 +534,7 @@ export interface Order {
   payment: { provider: string; checkout_url: string | null; status: string } | null;
   /** Constancia de compra emitida (sólo pedidos pagados). */
   receipt_id: string | null;
+  paid_at?: string | null;
   /** Pedido a medida (productos a pedido) con seña opcional. */
   quote?: boolean;
   deposit?: number | null;

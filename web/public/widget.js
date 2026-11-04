@@ -1,6 +1,6 @@
 /* Presupuesto Vivo — chat para la web del comercio.
  * Uso: <script src="https://<panel>/widget.js" data-tienda="mi-tienda" async></script>
- * Opcionales: data-color="#ea6a2a" (botón), data-texto="¿Te ayudo?" (etiqueta).
+ * Opcionales: data-color="#2563eb" (botón), data-texto="¿Te ayudo?" (etiqueta).
  * Abre la tienda en un iframe del dominio del panel: la página del comercio nunca ve la conversación
  * ni el token del comprador (el navegador los aísla por origen). Sin dependencias ni cookies propias. */
 (function () {
@@ -10,7 +10,7 @@
   if (!/^[a-z0-9-]{3,48}$/.test(slug)) { console.warn("[Presupuesto Vivo] data-tienda inválido"); return; }
   window.__pvWidget = true;
   var base = new URL(s.src, location.href).origin;
-  var color = /^#[0-9a-fA-F]{6}$/.test(s.getAttribute("data-color") || "") ? s.getAttribute("data-color") : "#ea6a2a";
+  var color = /^#[0-9a-fA-F]{6}$/.test(s.getAttribute("data-color") || "") ? s.getAttribute("data-color") : "#2563eb";
   var label = (s.getAttribute("data-texto") || "¿Te ayudo?").slice(0, 40);
 
   var css = document.createElement("style");

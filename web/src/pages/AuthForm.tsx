@@ -46,7 +46,7 @@ export function AuthForm({
   }
 
   return (
-    <div className="sheet auth-sheet">
+    <div>
       <form className="auth" onSubmit={submit} noValidate={false}>
         <h1>{title}</h1>
         <p className="auth-lead">{lead}</p>

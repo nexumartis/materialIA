@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { UserPlus, Users } from "lucide-react";
-import { Badge, EmptyState, PageHeader } from "../components/ui";
+import { UserPlus } from "lucide-react";
+import { Badge, PageHeader } from "../components/ui";
 import { api, type QuickReply, type Team } from "../lib/api";
 
 const ROLE = { owner: "Dueño", staff: "Empleado" } as const;
@@ -42,67 +42,78 @@ export function TeamPage() {
       <PageHeader title="Equipo"
         description="Sumá a quienes atienden: ven la bandeja, los pedidos y las oportunidades. La plata, el catálogo y la configuración del agente siguen siendo sólo tuyos." />
 
-      <form className="team-invite" onSubmit={(e) => void invite(e)}>
-        <label htmlFor="invite-email">Invitar por email</label>
-        <div className="row">
-          <input id="invite-email" type="email" required autoComplete="off" placeholder="nombre@minegocio.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button className="btn primary" type="submit" disabled={busy || !email.trim()}>
-            <UserPlus size={15} strokeWidth={1.8} aria-hidden /> Invitar
-          </button>
-        </div>
-        <p className="muted small">
-          No mandamos emails: pasale el link{" "}
-          <a href="#/signup/equipo" onClick={(e) => { e.preventDefault(); void navigator.clipboard?.writeText(`${window.location.origin}/#/signup/equipo`); setCopied(true); }}>
-            {copied ? "¡copiado!" : "para sumarse al equipo"}
-          </a>{" "}
-          y que se registre con ese email.
-        </p>
-      </form>
-      {error && <p className="state err" role="alert">{error}</p>}
-
-      {!team ? (
-        !error && <div className="state">Cargando…</div>
-      ) : (
-        <>
-          <ul className="team-list" aria-label="Integrantes">
-            {team.members.map((m) => (
-              <li key={m.user_id}>
-                <span className="who">{m.email ?? "—"}</span>
-                <Badge tone={m.role === "owner" ? "neu" : "info"}>{ROLE[m.role]}</Badge>
-                {m.role === "staff" && (
-                  <button className="btn sm" type="button" disabled={busy}
-                    onClick={() => window.confirm(`¿Quitar el acceso de ${m.email ?? "esta persona"}?`)
-                      && void run(() => api.removeMember(m.user_id))}>
-                    Quitar acceso
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {team.invites.length > 0 ? (
-            <>
-              <h2 className="team-sub">Invitaciones pendientes</h2>
-              <ul className="team-list" aria-label="Invitaciones pendientes">
-                {team.invites.map((i) => (
-                  <li key={i.email}>
-                    <span className="who">{i.email}</span>
-                    <Badge tone="warn">Sin registrarse</Badge>
-                    <button className="btn sm" type="button" disabled={busy}
-                      onClick={() => void run(() => api.cancelInvite(i.email))}>Cancelar</button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : team.members.length === 1 && (
-            <EmptyState icon={Users} title="Todavía trabajás solo">
-              Invitá a quien te ayuda a atender y va a poder tomar conversaciones y dejar notas internas.
-            </EmptyState>
+      <div className="team-grid">
+        <section className="panel" aria-labelledby="people-title">
+          <header className="panel-head">
+            <h2 id="people-title">Personas {team && <span className="muted">{team.members.length}</span>}</h2>
+          </header>
+          <form className="inline-form" onSubmit={(e) => void invite(e)}>
+            <label className="sr" htmlFor="invite-email">Email de la persona a invitar</label>
+            <input id="invite-email" type="email" required autoComplete="off" placeholder="Email de quien te ayuda a atender"
+              value={email} onChange={(e) => setEmail(e.target.value)} />
+            <button className="btn primary" type="submit" disabled={busy || !email.trim()}>
+              <UserPlus size={15} strokeWidth={1.8} aria-hidden /> Invitar
+            </button>
+          </form>
+          <p className="muted small panel-note">
+            No mandamos emails: pasale el{" "}
+            <a className="link" href="#/signup/equipo" onClick={(e) => { e.preventDefault(); void navigator.clipboard?.writeText(`${window.location.origin}/#/signup/equipo`); setCopied(true); }}>
+              {copied ? "link copiado" : "link para sumarse"}
+            </a>{" "}y que se registre con ese email.
+          </p>
+          {error && <p className="state err" role="alert">{error}</p>}
+          {!team ? (!error && <div className="state">Cargando…</div>) : (
+            <ul className="people" aria-label="Integrantes">
+              {team.members.map((m) => (
+                <li key={m.user_id}>
+                  <Avatar text={m.email ?? "?"} />
+                  <span className="person">
+                    <b>{m.email ?? "—"}</b>
+                    <small className="muted">{ROLE[m.role]} · desde {since(m.since)}</small>
+                  </span>
+                  {m.role === "staff" ? (
+                    <button className="btn sm ghost" type="button" disabled={busy}
+                      onClick={() => window.confirm(`¿Quitar el acceso de ${m.email ?? "esta persona"}?`)
+                        && void run(() => api.removeMember(m.user_id))}>
+                      Quitar acceso
+                    </button>
+                  ) : <Badge tone="neu">Dueño</Badge>}
+                </li>
+              ))}
+              {team.invites.map((i) => (
+                <li key={i.email} className="pending">
+                  <Avatar text={i.email} pending />
+                  <span className="person">
+                    <b>{i.email}</b>
+                    <small className="muted">Invitado · todavía no se registró</small>
+                  </span>
+                  <button className="btn sm ghost" type="button" disabled={busy}
+                    onClick={() => void run(() => api.cancelInvite(i.email))}>Cancelar</button>
+                </li>
+              ))}
+              {team.members.length === 1 && team.invites.length === 0 && (
+                <li className="people-empty muted small">Todavía trabajás solo. Invitá a quien te ayuda a atender: va a poder tomar conversaciones y dejar notas internas.</li>
+              )}
+            </ul>
           )}
-        </>
-      )}
-      <QuickReplies />
+        </section>
+        <QuickReplies />
+      </div>
     </div>
+  );
+}
+
+const since = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+
+/** Inicial con un tono pálido propio y estable por persona (identidad, no dato). */
+function Avatar({ text, pending = false }: { text: string; pending?: boolean }) {
+  let h = 0;
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return (
+    <span className={`avatar${pending ? " pending" : ""}`} aria-hidden
+      style={pending ? undefined : { background: `hsl(${h} 70% 93%)`, color: `hsl(${h} 45% 32%)` }}>
+      {text.trim().charAt(0).toUpperCase()}
+    </span>
   );
 }
 
@@ -128,14 +139,14 @@ function QuickReplies() {
     }
   }
   return (
-    <section className="results-card" aria-labelledby="qr-title">
-      <h2 id="qr-title">Respuestas rápidas</h2>
-      <p className="muted small">Tu equipo las inserta con un clic en la bandeja. Sin precios: el precio sale del catálogo al momento.</p>
+    <section className="panel" aria-labelledby="qr-title">
+      <header className="panel-head"><h2 id="qr-title">Respuestas rápidas {items.length > 0 && <span className="muted">{items.length}</span>}</h2></header>
+      <p className="muted small panel-note">Tu equipo las inserta con un clic en la bandeja. Sin precios: el precio sale del catálogo al momento.</p>
       {items.length > 0 && (
-        <ul className="team-list">
+        <ul className="people">
           {items.map((q) => (
             <li key={q.id}>
-              <span className="who"><b>{q.title}</b><br /><small className="muted">{q.body}</small></span>
+              <span className="person"><b>{q.title}</b><small className="muted">{q.body}</small></span>
               <button className="btn sm ghost" type="button"
                 onClick={() => void api.deleteQuickReply(q.id).then(load, (err) => setError(err instanceof Error ? err.message : "No pude quitarla."))}>
                 Quitar
@@ -144,10 +155,8 @@ function QuickReplies() {
           ))}
         </ul>
       )}
-      <form className="team-invite" onSubmit={(e) => void add(e)}>
-        <div className="row">
-          <input aria-label="Título" placeholder="Título (ej.: Horarios)" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
+      <form className="qr-form" onSubmit={(e) => void add(e)}>
+        <input aria-label="Título" placeholder="Título (ej.: Horarios)" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea aria-label="Texto" rows={2} maxLength={1000} placeholder="Abrimos de lunes a viernes de 8 a 18 y sábados de 9 a 13."
           value={body} onChange={(e) => setBody(e.target.value)} />
         <div><button className="btn sm" type="submit" disabled={!title.trim() || !body.trim()}>Agregar</button></div>
