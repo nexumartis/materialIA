@@ -8,6 +8,7 @@ segura del canal, no por este parámetro.
 """
 from __future__ import annotations
 
+import json
 import logging
 from uuid import UUID
 
@@ -25,7 +26,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, campaigns, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -755,6 +756,26 @@ def app_quick_reply_delete(reply_id: UUID, uid: str = Depends(owner_uid)) -> dic
     return {"deleted": True}
 
 
+# --- Panel: chat en la web del negocio (sólo el dueño) --------------------------------------
+@app.get("/app/widget")
+def app_widget(uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        slug = agent_profile._ensure(cur, tenant, _business_name(cur, tenant))["public_slug"]
+        return widget.panel(cur, tenant, slug)
+
+
+@app.put("/app/widget")
+def app_widget_save(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            slug = agent_profile._ensure(cur, tenant, _business_name(cur, tenant))["public_slug"]
+            return widget.save(cur, tenant, uid, slug, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # --- Panel: campañas (sólo el dueño) ----------------------------------------------------
 # Audiencias de un catálogo cerrado, mensaje con datos reales y envío por el worker. En esta fase el
 # canal es «simulado»: no sale nada hacia los clientes.
@@ -1027,6 +1048,37 @@ def _store(slug: str) -> dict:
     if store is None:
         raise HTTPException(status_code=404, detail="Tienda no encontrada.")
     return store
+
+
+# Script y configuración del chat embebible: se cargan desde la web de CUALQUIER negocio, así que
+# van con CORS abierto. Sólo exponen lo público (colores, textos, link de la tienda).
+_ANY_ORIGIN = {"Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin"}
+_WIDGET_JS = (__import__("pathlib").Path(__file__).parent / "static" / "widget.js")
+
+
+@app.get("/widget.js")
+def widget_script() -> Response:
+    return Response(_WIDGET_JS.read_text(encoding="utf-8"), media_type="application/javascript",
+                    headers={**_ANY_ORIGIN, "Cache-Control": "public, max-age=300"})
+
+
+@app.get("/public/{slug}/widget")
+def public_widget(slug: str) -> JSONResponse:
+    store = _store(slug)
+    return JSONResponse(widget.public_config(store["tenant_id"], slug),
+                        headers={**_ANY_ORIGIN, "Cache-Control": "public, max-age=60"})
+
+
+@app.post("/public/{slug}/widget/seen")
+async def public_widget_seen(slug: str, request: Request) -> Response:
+    """El script avisa en qué sitio se cargó (sendBeacon, texto plano: sin preflight)."""
+    store = _store(slug)
+    try:
+        page = json.loads((await request.body())[:1000] or b"{}").get("page")
+    except (ValueError, AttributeError):
+        page = None
+    await run_in_threadpool(widget.seen, store["tenant_id"], page)
+    return Response(status_code=204, headers=_ANY_ORIGIN)
 
 
 @app.get("/public/{slug}")
