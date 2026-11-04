@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Health } from "./lib/api";
 import { useSession } from "./lib/session";
-import { Mark } from "./components/Mark";
 import { Shell, type Section } from "./components/Shell";
 import { Opportunities } from "./pages/Opportunities";
 import { Sales } from "./pages/Sales";
@@ -16,6 +15,7 @@ import { Results } from "./pages/Results";
 import { Integrations } from "./pages/Integrations";
 import { Appointments } from "./pages/Appointments";
 import { Home } from "./pages/Home";
+import { AuthLayout } from "./components/AuthLayout";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -88,19 +88,14 @@ function Backoffice({ hash }: { hash: string }) {
   // Con sesión, login/registro no tienen sentido: al panel.
   useEffect(() => {
     if (status === "ready" && (active === "login" || active === "signup")) {
-      window.location.hash = "#/oportunidades";
+      window.location.hash = "#/inicio";
     }
   }, [status, active]);
 
   // Sin sesión, login y registro se muestran solos (sin el menú del panel, que no se puede usar).
   if (status === "signed_out" && active !== "venta") {
     return (
-      <main className="auth-page">
-        <div className="auth-card">
-          <div className="auth-brand"><Mark /> <b>Presupuesto Vivo</b></div>
-          {active === "signup" ? <Signup /> : <Login />}
-        </div>
-      </main>
+      <AuthLayout>{active === "signup" ? <Signup /> : <Login />}</AuthLayout>
     );
   }
 

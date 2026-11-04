@@ -915,3 +915,39 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
 @media (max-width:520px) { .agenda-day li { flex-wrap:wrap; gap:4px 12px; padding:10px 0; } .agenda-day li .btn { margin-left:76px; } }
 /* Inicio: si la última tarjeta queda sola en su fila, ocupa el ancho (sin hueco). */
 @media (max-width:1100px) and (min-width:641px) { .home-kpis > :last-child:nth-child(odd) { grid-column:1 / -1; } }
+
+/* ---- Acceso (iniciar sesión / registrarse) ---- */
+.authx { min-height:100vh; display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.1fr); background:var(--surface); }
+.authx-form { display:flex; flex-direction:column; padding:32px 48px; }
+.authx-brand { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:14px; }
+.authx-inner { flex:1; display:flex; align-items:center; justify-content:center; padding:32px 0; }
+.authx-inner .auth { max-width:400px; gap:16px; }
+.authx-inner .auth h1 { font-size:34px; font-weight:650; letter-spacing:-0.03em; }
+.authx-inner .auth-lead { font-size:15px; margin:-8px 0 8px; }
+.authx-inner .field input { height:44px; font-size:15px; }
+.authx-inner .auth-submit { height:46px; font-size:15px; border-radius:12px; }
+.authx-legal { font-size:12px; margin:0; }
+.authx-side { background:var(--accent); color:#fff; padding:56px; display:flex; flex-direction:column; justify-content:center; gap:32px; }
+.authx-side h2 { margin:0; font-size:34px; line-height:1.12; letter-spacing:-0.03em; font-weight:650; max-width:16ch; }
+.authx-chat { background:#fff; color:var(--text); border-radius:20px; padding:20px; display:grid; gap:10px; max-width:440px;
+  box-shadow:0 24px 60px rgba(10,30,90,.28); }
+.authx-msg { max-width:85%; padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.4; display:flex; gap:8px; align-items:flex-start; }
+.authx-msg svg { flex:none; margin-top:2px; color:var(--muted); }
+.authx-msg.in { background:var(--ground); justify-self:end; border-bottom-right-radius:6px; }
+.authx-msg.out { background:var(--accent-soft); color:#12306f; border-bottom-left-radius:6px; display:block; }
+.authx-cart { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; font-size:14px; }
+.authx-cart span { flex:1; } .authx-cart b { font-variant-numeric:tabular-nums; }
+.authx-paid { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#15803d; background:#eaf7ef; padding:10px 14px; border-radius:12px; }
+.authx-points { list-style:none; margin:0; padding:0; display:grid; gap:12px; font-size:15px; max-width:440px; }
+.authx-points li { display:flex; gap:10px; align-items:flex-start; color:rgba(255,255,255,.92); }
+.authx-points svg { flex:none; margin-top:2px; }
+@media (max-width:900px) {
+  .authx { grid-template-columns:1fr; }
+  .authx-side { display:none; }
+  .authx-form { padding:20px 16px; }
+  .authx-inner { align-items:flex-start; padding-top:40px; }
+  .authx-inner .auth h1 { font-size:28px; }
+}
+.authx-inner > div { width:100%; max-width:400px; }
+.authx-inner .auth { width:100%; }
+.authx-side h2 { max-width:20ch; }
