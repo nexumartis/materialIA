@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -685,6 +685,15 @@ def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = De
         opportunities._add_message(cur, tenant, conv, "outbound", text,
                                    {"type": "quote", "order_id": order["id"], "author_id": uid})
         return orders._view(cur, orders._fetch(cur, tenant, order["id"]))
+
+
+# --- Panel: centro de avisos -----------------------------------------------------------
+@app.get("/app/alerts")
+def app_alerts(uid: str = Depends(current_uid)) -> list[dict]:
+    """Lo que necesita a alguien del equipo (derivaciones, cobros a revisar, comprobantes, turnos,
+    clientes insatisfechos), calculado del estado real."""
+    with user_tx(uid) as (cur, tenant):
+        return alerts.list_alerts(cur, tenant)
 
 
 # --- Panel: turnos ---------------------------------------------------------------------
