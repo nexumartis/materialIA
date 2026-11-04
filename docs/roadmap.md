@@ -41,14 +41,18 @@ integración.
    teléfono (ya preparada en `customer_identities`); ventana de 24 h y plantillas aprobadas;
    mensajes interactivos (listas, botones) ya modelados en `messages.payload`.
 4. **Integraciones sin "muchos cerebros"**:
-   - **Eventos salientes**: tabla *outbox* en Postgres + worker que entrega webhooks firmados con
+   - ~~**Eventos salientes**~~ **Hecho** (PR #47, migración 0021): webhooks firmados con outbox y reintentos.
+     Antes: tabla *outbox* en Postgres + worker que entrega webhooks firmados con
      reintentos. Con eso cualquier sistema (o Zapier/Make/n8n) se entera de pedidos, pagos y
      clientes sin integración a medida.
    - **Conectores entrantes** priorizados por demanda: stock/precios (Tiendanube, Mercado Libre,
      planilla), logística (tracking de Andreani/OCA/Correo u operador del negocio), cobros
      (Mercado Pago por negocio con su propia cuenta).
    - Una sola definición de pedido/cliente; cada conector traduce a ella.
-5. **Campañas de marketing** (después de WhatsApp): segmentos a partir de la memoria y las
+5. **Campañas de marketing** — **Base hecha** (04/11/2026, PR #64, migración 0028): audiencias
+   (carrito abandonado, pagos pendientes, compraron, consultaron y no compraron, inactivos), mensaje
+   con datos reales, baja pedida en la charla, tope de frecuencia y atribución. **El envío es
+   simulado** hasta que se habiliten los envíos a clientes (WhatsApp). Diseño original: segmentos a partir de la memoria y las
    compras (p. ej. "compró grifería hace 6 meses", "consultó y no compró"), plantillas aprobadas,
    programación por el worker, **consentimiento y bajas** obligatorios, límite de frecuencia y
    atribución de ventas a la campaña.
@@ -101,35 +105,43 @@ integración.
    validación contable. Mientras no exista WhatsApp, la factura puede entregarse por el chat web
    o descargarse desde el panel, como la constancia actual.
 
-## Backlog priorizado (competencia, 30/10/2026)
+## Backlog priorizado (actualizado 04/11/2026)
 
-Detalle y justificación en [research/2026-10-30-competencia](research/2026-10-30-competencia.md).
+Fuentes: [research/2026-10-30-competencia](research/2026-10-30-competencia.md) y el análisis de
+**notchatbot** del 04/11/2026 (CRM omnicanal argentino con IA para ecommerce: +100 marcas como
+Nespresso, Arredo, Cheeky o Kevingston; WhatsApp/IG/TikTok/ML/web; entiende fotos y audios;
+integra Tiendanube, Shopify, VTEX y WooCommerce; «Planes desde USD 300/mes» según su ficha en la
+tienda de apps de Tiendanube; instalación con llamada, sin prueba gratis).
+**Nuestra diferencia:** ellos mandan al checkout de la tienda; nosotros cerramos en el chat (carrito,
+envío/retiro, cobro verificado, seña, turnos) y funcionamos sin tienda online.
 
-**Ahora (sin WhatsApp):**
-1. ~~Google Sheets como catálogo vivo~~ (rama `feat/catalogo-google-sheets`, 30/10/2026; [spec](superpowers/specs/2026-10-30-catalogo-google-sheets-design.md), migración 0011).
-2. Variantes y atributos de producto.
-3. Envío por zona o código postal (+ Georef: localidad → partido o zona del GBA, 02/11/2026, rama `feat/georef`).
-4. Sustitutos y búsqueda mejorada.
-5. Avisos al dueño (derivaciones y clientes sin atender).
-6. ~~Roles de empleados, asignación y notas internas~~ (rama `feat/empleados-roles`, 02/11/2026; [spec](superpowers/specs/2026-11-02-equipo-roles-design.md), migración 0016).
-7. Alertas de stock bajo y movimientos de inventario.
-8. ~~Seña para productos a pedido~~ (rama `feat/sena`, 02/11/2026; [spec](superpowers/specs/2026-11-02-sena-design.md), migración 0017).
-9. Cancelar un pedido pendiente desde el chat.
-10. Configuración desde la web o los PDFs del negocio, siempre como propuesta a revisar.
-11. Fichas técnicas en PDF.
-12. Costo de IA por negocio.
-13. Kanban de oportunidades.
+**Hecho del backlog del 30/10:** Google Sheets (#29), variantes (#33), envío por zona + Georef
+(#31, #40), búsqueda y sustitutos (#34), movimientos de stock (#35), configuración desde la web
+(#36), roles (#37), seña (#39), costo de IA (#32), límites de IA (#41), avisos al dueño (#57),
+cancelar desde el chat. Además: webhooks (#47), encuesta de satisfacción (#46), resumen al derivar
+(#48), métricas de bandeja (#49), privacidad (#50), turnos (#54), recompra (#53), entrega antes de
+confirmar (#60), seguridad y RLS rápido (#61), campañas (#64) y chat instalable en cualquier web
+con una línea (#65).
 
-**Con WhatsApp (etapa 3):**
-- audios del cliente;
-- recordatorio de pago;
-- carritos abandonados;
-- avisos de envío y vuelta de stock;
-- asistente del dueño por WhatsApp;
-- búsqueda por foto;
-- factura (etapa 8).
+**Ahora (sin WhatsApp), en este orden:**
+1. **Fotos del cliente → producto del catálogo** en el chat web (sale del grupo «con WhatsApp»):
+   precio y stock siempre del catálogo; si la coincidencia es dudosa, deriva (`requires_human`).
+2. **Audios del cliente** en el chat web: transcripción y respuesta como texto; sin IA, se dice
+   explícitamente (`mode:"mock"`), nunca se finge.
+3. **Conector de catálogo Tiendanube** (stock y precio, sólo lectura) + app en su tienda de apps que
+   inyecta el script del chat. Después WooCommerce y Shopify.
+4. **Onboarding sin llamada:** «pegá tu web» propone FAQ, horario y políticas para aprobar (nunca
+   precios); prueba gratis y precio público por debajo de la competencia.
+5. **Encuesta NPS + tickets con plazo (SLA)** sobre la bandeja actual.
+6. Fichas técnicas en PDF y Kanban de oportunidades (pendientes del 30/10).
+7. Escalabilidad (auditoría 04/11): topes de IA por negocio, worker con tiempo por tarea, IA fuera de
+   las transacciones, Mercado Pago por negocio, retención y observabilidad.
 
-**Después:** campañas, cupones y reactivación (etapa 5).
+**Con WhatsApp (etapa 3):** recordatorio de pago y carritos abandonados reales (las campañas ya
+existen, cambia el canal), avisos de envío y vuelta de stock, asistente del dueño por WhatsApp,
+Instagram, factura (etapa 8).
+
+**Después:** cupones, MCP para consultar el negocio desde Claude/ChatGPT.
 
 **No por ahora:** canales secundarios (Messenger, Telegram, voz), publicidad paga, integraciones fuera del mercado objetivo, sucursales y multiempresa (hasta que un cliente lo pida) y app nativa.
 
