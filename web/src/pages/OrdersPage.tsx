@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Download, Eye, FileText, Landmark, Receipt, RefreshCw, ShoppingBag } from "lucide-react";
+import { Download, Eye, FileText, Landmark, Receipt, RefreshCw, ShoppingBag, Truck } from "lucide-react";
 import { Badge, EmptyState, PageHeader, Stats, type Stat } from "../components/ui";
-import { ApiError, api, type DocField, type Order, type PaymentDocument } from "../lib/api";
+import { ApiError, api, type Carrier, type DocField, type Order, type PaymentDocument } from "../lib/api";
+import { useSession } from "../lib/session";
 import { openBlob, saveBlob } from "../lib/download";
 import { fmtAmount, parseAmount } from "../lib/format";
 
@@ -40,6 +41,26 @@ function fieldText(f: DocField | undefined): string {
   return f.candidates.length ? `¿${f.candidates.join(" / ")}?` : "?";
 }
 
+const CARRIERS: { id: Carrier; label: string }[] = [
+  { id: "andreani", label: "Andreani" },
+  { id: "oca", label: "OCA" },
+  { id: "correo_argentino", label: "Correo Argentino" },
+  { id: "otro", label: "Otro" },
+];
+const carrierLabel = (o: Order) =>
+  o.carrier === "otro" ? o.carrier_name || "correo" : CARRIERS.find((c) => c.id === o.carrier)?.label ?? o.carrier_name ?? "correo";
+
+const WINDOW: Record<string, string> = { am: "de 8 a 13 h", pm: "de 13 a 18 h", day: "durante el día" };
+/** «jueves 6/11, de 8 a 13 h»: la fecha AAAA-MM-DD es un día local, sin hora. */
+function deliveryText(date: string, window?: string | null): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const day = new Date(y, m - 1, d).toLocaleDateString("es-AR", { weekday: "long" });
+  const w = window ? WINDOW[window] : undefined;
+  return `${day} ${d}/${m}${w ? `, ${w}` : ""}`;
+}
+
+const canShip = (o: Order) => o.delivery_method === "delivery" && (o.status === "PAID" || o.status === "PREPARING") && !o.tracking_code;
+
 const canConfirm = (o: Order) => o.status === "PENDING_PAYMENT" || o.status === "DEPOSIT_PAID" || o.status === "CANCELLED";
 
 export function OrdersPage() {
@@ -49,6 +70,9 @@ export function OrdersPage() {
   const [month, setMonth] = useState(currentMonth);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [dispatching, setDispatching] = useState<string | null>(null);
+  const { me } = useSession();
+  const correo = me?.modules?.correo !== false;
 
   const load = useCallback(() => {
     setError(null);
@@ -154,6 +178,16 @@ export function OrdersPage() {
                             {o.shipping ? ` · envío $${fmtAmount(o.shipping)}` : o.delivery_note ? ` · ${o.delivery_note}` : ""}
                           </small>
                         )}
+                        {o.delivery_date && (
+                          <small className="order-delivery">Entrega: {deliveryText(o.delivery_date, o.delivery_window)}</small>
+                        )}
+                        {o.tracking_code && (
+                          <small className="order-ship">
+                            Despachado por {carrierLabel(o)} · N° {o.tracking_url
+                              ? <a href={o.tracking_url} target="_blank" rel="noopener noreferrer">{o.tracking_code}<span className="sr"> (abre el seguimiento en otra pestaña)</span></a>
+                              : o.tracking_code}
+                          </small>
+                        )}
                       </td>
                       <td className="num" data-label="Total">${fmtAmount(o.total)} <span className="muted">{o.currency}</span>
                         {o.deposit != null && (
@@ -192,6 +226,11 @@ export function OrdersPage() {
                             Cancelar
                           </button>
                         )}
+                        {correo && canShip(o) && dispatching !== o.id && (
+                          <button className="btn sm" type="button" onClick={() => setDispatching(o.id)}>
+                            <Truck size={14} strokeWidth={1.8} aria-hidden /> Despachar por correo
+                          </button>
+                        )}
                         {canConfirm(o) && confirming !== o.id && (
                           <button className="btn sm" type="button" onClick={() => setConfirming(o.id)}>
                             <Landmark size={14} strokeWidth={1.8} aria-hidden /> Confirmar transferencia
@@ -199,6 +238,20 @@ export function OrdersPage() {
                         )}
                       </div></td>
                     </tr>
+                    {dispatching === o.id && (
+                      <tr className="expand">
+                        <td colSpan={4}>
+                          <ShipForm
+                            order={o}
+                            onCancel={() => setDispatching(null)}
+                            onDone={(updated) => {
+                              setDispatching(null);
+                              setList((l) => l?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    )}
                     {confirming === o.id && (
                       <tr className="expand">
                         <td colSpan={4}>
@@ -362,6 +415,69 @@ function TransferForm({ order, docs, onCancel, onDone }: {
       <div className="inline">
         <button className="btn primary sm" type="submit" disabled={busy || !reference.trim()}>
           {busy ? "Confirmando…" : "Confirmar transferencia"}
+        </button>
+        <button className="btn sm" type="button" onClick={onCancel}>Cancelar</button>
+      </div>
+    </form>
+  );
+}
+
+/** El negocio despacha por su cuenta y carga el seguimiento: el cliente recibe el aviso en el chat. */
+function ShipForm({ order, onCancel, onDone }: { order: Order; onCancel: () => void; onDone: (o: Order) => void }) {
+  const [carrier, setCarrier] = useState<Carrier>("andreani");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const clean = code.replace(/\s+/g, "");
+  const valid = /^[A-Za-z0-9-]{4,60}$/.test(clean) && (carrier !== "otro" || name.trim().length > 0);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !valid) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await api.shipOrder(order.id, {
+        carrier, tracking_code: clean, ...(carrier === "otro" ? { carrier_name: name.trim() } : {}),
+      }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No pude registrar el despacho.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="setup-card ship-form" onSubmit={(e) => void submit(e)} aria-label={`Despachar el pedido #${order.number} por correo`}>
+      <p className="muted">
+        Cargá el número que te dio el correo. El pedido #{order.number} pasa a despachado y el cliente recibe el
+        seguimiento en el chat.
+      </p>
+      <div className="ship-grid">
+        <label className="field">
+          Correo
+          <select value={carrier} onChange={(e) => setCarrier(e.target.value as Carrier)}>
+            {CARRIERS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </label>
+        {carrier === "otro" && (
+          <label className="field">
+            Nombre del correo
+            <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej.: Via Cargo" />
+          </label>
+        )}
+        <label className="field">
+          Número de seguimiento
+          <input required value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off"
+            placeholder="Ej.: 360002123456780" aria-describedby={`ship-hint-${order.id}`} />
+          <small id={`ship-hint-${order.id}`}>Letras, números o guiones (de 4 a 60).</small>
+        </label>
+      </div>
+      {error && <div className="state err" role="alert">{error}</div>}
+      <div className="inline">
+        <button className="btn primary sm" type="submit" disabled={busy || !valid}>
+          {busy ? "Guardando…" : "Marcar despachado"}
         </button>
         <button className="btn sm" type="button" onClick={onCancel}>Cancelar</button>
       </div>

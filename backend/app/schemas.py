@@ -80,6 +80,7 @@ class MeResponse(BaseModel):
     tenant_id: str
     business_name: str
     role: str = "owner"
+    modules: dict[str, bool] = {}
 
 
 # --- API chat -------------------------------------------------------------

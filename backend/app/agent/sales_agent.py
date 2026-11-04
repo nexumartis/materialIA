@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, booking, campaigns, reparto, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
+from ..domain import agent_profile, ai_usage, booking, campaigns, reparto, shipping, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -1255,8 +1255,11 @@ class _Turn:
                 return (f"A {addr['localidad'] or addr['departamento']} no figura que enviemos. Le paso tu consulta a una "
                         "persona del equipo para ver cómo te lo hacemos llegar.")
             cost = o["costs"].get(zone)
-            self.state["delivery"] = {"step": "contact", "address": addr, "zone": zone, "cost": cost}
+            courier = zone in o["courier_zones"]
+            self.state["delivery"] = {"step": "contact", "address": addr, "zone": zone, "cost": cost, "courier": courier}
             price = f"El envío a {zone} cuesta {_money(cost)}." if cost is not None else f"El costo del envío a {zone} te lo confirma el equipo."
+            if courier:
+                price += " Va por correo" + (f" ({o['courier_eta']})" if o["courier_eta"] else "") + " y te pasamos el número de seguimiento por acá."
             return f"Perfecto: {addr['texto']}. {price} ¿A nombre de quién y un teléfono para coordinar la entrega?"
         if step == "contact":
             contact = delivery.parse_contact(self.raw or text)     # el nombre tal como lo escribe
@@ -1269,7 +1272,8 @@ class _Turn:
                 with tenant_tx(self.tenant) as cur:
                     delivery.apply(cur, self.tenant, cid, "delivery", address=st["address"], contact=contact,
                                    cost=st.get("cost"), note=None if st.get("cost") is not None else "costo de envío a coordinar")
-                    options = reparto.suggest(cur, self.tenant, st["address"], exclude_order=cid)
+                    # Por correo no hay franja: la entrega la maneja el correo.
+                    options = [] if st.get("courier") else reparto.suggest(cur, self.tenant, st["address"], exclude_order=cid)
             self.tool("entrega", f"envío a {st['zone']}")
             if options:
                 return self.ask_slot(options)
@@ -1423,6 +1427,12 @@ class _Turn:
             why = (" porque venció la reserva sin pago" if o["cancel_reason"] == "reservation_expired"
                    else "")
             return f"El pedido #{o['number']} quedó cancelado{why}. ¿Querés que lo armemos de nuevo?"
+        sent = shipping.describe(o)
+        if sent:
+            return f"Tu pedido #{o['number']} está {o['status_label']}. {sent}."
+        slot = reparto.describe_slot(o)
+        if slot and o["status"] in ("PAID", "PREPARING", "DISPATCHED"):
+            return f"Tu pedido #{o['number']} está {o['status_label']}. Te lo llevamos {slot}."
         tracking = ("" if o["status"] in ("PAID", "PREPARING", "REFUNDED")
                     else " Todavía no tengo número de seguimiento cargado para este envío.")
         return f"Tu pedido #{o['number']} está {o['status_label']}.{tracking}"

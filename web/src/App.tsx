@@ -13,10 +13,9 @@ import { Inbox } from "./pages/Inbox";
 import { TeamPage } from "./pages/Team";
 import { Results } from "./pages/Results";
 import { Integrations } from "./pages/Integrations";
-import { Appointments } from "./pages/Appointments";
 import { Campaigns } from "./pages/Campaigns";
 import { WebChat } from "./pages/WebChat";
-import { Deliveries } from "./pages/Deliveries";
+import { Agenda } from "./pages/Agenda";
 import { RoutePage } from "./pages/Route";
 import { Home } from "./pages/Home";
 import { AuthLayout } from "./components/AuthLayout";
@@ -42,13 +41,13 @@ function sectionFor(hash: string): Section {
   if (hash === "#/pedidos") return "pedidos";
   if (hash === "#/campanias") return "campanias";
   if (hash === "#/web") return "web";
-  if (hash === "#/entregas") return "entregas";
+  // Entregas y Turnos se unificaron en Agenda: los links viejos siguen llevando ahí.
+  if (hash === "#/agenda" || hash === "#/entregas" || hash === "#/turnos") return "agenda";
   if (hash === "#/ruta") return "ruta";
   if (hash === "#/conversaciones" || hash.startsWith("#/conversaciones/")) return "conversaciones";
   if (hash === "#/equipo") return "equipo";
   if (hash === "#/resultados") return "resultados";
   if (hash === "#/integraciones") return "integraciones";
-  if (hash === "#/turnos") return "turnos";
   if (hash === "#/inicio" || hash === "" || hash === "#/") return "inicio";
   if (hash === "#/login") return "login";
   if (hash === "#/signup" || hash === "#/signup/equipo") return "signup";
@@ -104,6 +103,7 @@ function Backoffice({ hash }: { hash: string }) {
 
   useEffect(() => {
     if (driver && hash !== "#/ruta") window.location.replace("#/ruta");
+    else if (!driver && (hash === "#/entregas" || hash === "#/turnos")) window.location.replace("#/agenda");
   }, [driver, hash]);
 
   // Sin sesión, login y registro se muestran solos (sin el menú del panel, que no se puede usar).
@@ -170,13 +170,12 @@ function Panel({ active, health }: { active: Section; health: Health | null }) {
   if (active === "pedidos") return <OrdersPage />;
   if (active === "campanias") return <Campaigns />;
   if (active === "web") return <WebChat />;
-  if (active === "entregas") return <Deliveries />;
+  if (active === "agenda") return <Agenda />;
   if (active === "ruta") return <RoutePage />;
   if (active === "conversaciones") return <Inbox />;
   if (active === "equipo") return <TeamPage />;
   if (active === "resultados") return <Results />;
   if (active === "integraciones") return <Integrations />;
-  if (active === "turnos") return <Appointments />;
   if (active === "inicio") return me?.role === "staff" ? <Inbox /> : <Home />;
   return <Opportunities />;
 }

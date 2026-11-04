@@ -275,12 +275,14 @@ def _km(a: dict[str, Any], b: dict[str, Any]) -> Optional[float]:
 
 
 def suggest(cur: Any, tenant_id: str, address: Optional[dict[str, Any]], exclude_order: Optional[str] = None,
-            now: Optional[datetime] = None) -> list[dict[str, Any]]:
+            now: Optional[datetime] = None, any_config: bool = False, limit: int = OFFER) -> list[dict[str, Any]]:
     """Las mejores franjas para ofrecer: con cupo, y primero las que ya tienen una entrega a menos de
     `NEAR_KM` (el repartidor ya pasa por ahí); después, la más temprana. Nunca ofrece una llena."""
     cfg = slots_config(cur, tenant_id)
-    if not cfg["enabled"]:
+    if not cfg["enabled"] and not any_config:      # el panel sugiere aunque el agente no ofrezca franjas
         return []
+    if any_config:
+        limit = 4
     start = (now or datetime.now(AR)).date() + timedelta(days=cfg["lead_days"])
     end = start + timedelta(days=cfg["horizon_days"])
     # Lo ya ocupado: entregas activas + pedidos esperando el pago que reservaron franja.
@@ -309,7 +311,7 @@ def suggest(cur: Any, tenant_id: str, address: Optional[dict[str, Any]], exclude
                             "near_km": round(near, 1) if near is not None and near <= NEAR_KM else None,
                             "free": cfg["capacity"] - len(there), "_rank": (near is None or near > NEAR_KM, i)})
     options.sort(key=lambda o: o["_rank"])
-    best = options[:OFFER]
+    best = options[:limit]
     for o in best:
         o.pop("_rank")
     return best

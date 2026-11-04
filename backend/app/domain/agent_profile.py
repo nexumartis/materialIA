@@ -111,8 +111,10 @@ TOGGLEABLE_TOOLS = {
 #   handoff_topics         temas que siempre atiende una persona: [{keywords: [...], reply: str|None}]
 #   booking                turnos: servicios, días y horarios, cupo (ver domain/booking.py)
 #   pickup_address         dirección para retirar en el local (si está, el agente ofrece retiro)
+#   courier_zones          zonas de `delivery_zones` que se despachan por correo (no reparto propio)
+#   courier_eta            demora que informa el agente para el correo («3 a 5 días hábiles»)
 POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories", "handoff_topics",
-               "booking", "pickup_address")
+               "booking", "pickup_address", "courier_zones", "courier_eta")
 MAX_TOPICS = 10
 
 
@@ -256,6 +258,17 @@ def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
         out["delivery_zones"] = zones
     if costs:
         out["shipping_costs"] = costs
+    courier = [z for z in (str(x).strip() for x in _words(raw.get("courier_zones"))) if z]
+    unknown = [z for z in courier if z not in zones]
+    if unknown:
+        raise ValueError(f"«{unknown[0]}» no está entre las zonas de envío.")
+    if courier:
+        out["courier_zones"] = courier
+    eta = " ".join(str(raw.get("courier_eta") or "").split())
+    if len(eta) > 80:
+        raise ValueError("La demora del correo tiene como máximo 80 caracteres.")
+    if eta:
+        out["courier_eta"] = eta
     cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
     if cats:
         out["human_only_categories"] = cats

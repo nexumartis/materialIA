@@ -3,7 +3,7 @@ import { Check, MapPin, MessageCircle, Phone, Truck } from "lucide-react";
 import { Badge, EmptyState } from "../components/ui";
 import { api, type RouteDay, type RouteJob, type RouteStep } from "../lib/api";
 import { dayLabel, itemsText, localDay, shiftDay } from "../lib/format";
-import { DELIVERY_TONE } from "./Deliveries";
+import { DELIVERY_TONE } from "../components/agenda/shared";
 
 const REFRESH_MS = 30_000;
 const ACTIVE = new Set(["scheduled", "on_the_way", "arrived"]);

@@ -26,7 +26,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, campaigns, reparto, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, modules, reparto, shipping, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -356,7 +356,41 @@ def me(uid: str = Depends(current_uid)) -> MeResponse:
         cur.execute("select name from tenants where id = %s", (tenant,))
         row = cur.fetchone()
         role = team.role(cur)
-    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"], role=role)
+    with tenant_tx(tenant) as cur:
+        mods = modules.get(cur, tenant)
+    return MeResponse(user_id=uid, tenant_id=tenant, business_name=row["name"], role=role, modules=mods)
+
+
+@app.get("/app/modules")
+def app_modules(uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {"catalog": modules.catalog(), "modules": modules.get(cur, tenant)}
+
+
+@app.put("/app/modules")
+def app_modules_save(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    """Qué usa el negocio (turnos, reparto propio, correo, retiro, señas, campañas): ordena el panel."""
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return {"modules": modules.save(cur, tenant, uid, body)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/orders/{order_id}/shipment")
+def app_order_ship(order_id: UUID, body: dict = Body(...), uid: str = Depends(staff_uid)) -> dict:
+    """Despachado por correo: correo + número de seguimiento → aviso al cliente y pedido «despachado»."""
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            view = shipping.ship(cur, tenant, uid, str(order_id), body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if view is None:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    return view
 
 
 @app.get("/app/opportunities", response_model=list[OpportunitySummary])
@@ -805,6 +839,18 @@ def app_deliveries(date: str | None = None, uid: str = Depends(staff_uid)) -> di
     tenant = _team_tx(uid)
     with tenant_tx(tenant) as cur:
         return reparto.board(cur, tenant, _day(date))
+
+
+@app.get("/app/deliveries/suggest")
+def app_delivery_suggest(order_id: UUID, uid: str = Depends(staff_uid)) -> dict:
+    """Franjas sugeridas para agendar un pedido a mano (las mismas que ofrecería el agente)."""
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        cur.execute("select delivery_address from orders where tenant_id = %s and id = %s", (tenant, str(order_id)))
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+        return {"options": reparto.suggest(cur, tenant, row["delivery_address"], exclude_order=str(order_id), any_config=True)}
 
 
 @app.put("/app/deliveries/slots")

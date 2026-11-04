@@ -62,7 +62,8 @@ def test_me_returns_own_business(accounts):
     uid, tid = accounts("Vidriería Té")
     r = TestClient(app).get("/app/me", headers=bearer(make_token(uid)))
     assert r.status_code == 200
-    assert r.json() == {"user_id": uid, "tenant_id": tid, "business_name": "Vidriería Té", "role": "owner"}
+    me = r.json()
+    assert {k: me[k] for k in ("user_id", "tenant_id", "business_name", "role")} == {"user_id": uid, "tenant_id": tid, "business_name": "Vidriería Té", "role": "owner"}
 
 
 def test_jwks_unreachable_is_503_not_401(monkeypatch):

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bot } from "lucide-react";
 import { ApiError, api, type AgentProfile } from "../lib/api";
+import { ModulesPicker } from "../components/ModulesPicker";
 import { AiUsageSection, EvalsSection, KnowledgeSection, PoliciesSection, ToolsSection, VersionsSection } from "./AgentAdvanced";
 
 const TONES: { key: AgentProfile["tone"]; label: string }[] = [
@@ -63,6 +64,14 @@ export function AgentSetup() {
         <div className="right">
           <a className="btn" href="#/asistente"><Bot size={15} strokeWidth={1.8} aria-hidden /> Volver a Mi agente</a>
         </div>
+      </div>
+
+      <div className="setup" style={{ marginBottom: 16 }}>
+        <section className="setup-card" aria-labelledby="modules-title">
+          <h2 className="panel-title" id="modules-title">Módulos</h2>
+          <p className="panel-sub">Lo que usa tu negocio. El panel y el agente muestran sólo eso; apagar uno no borra nada.</p>
+          <ModulesPicker />
+        </section>
       </div>
 
       <form

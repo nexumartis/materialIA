@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  AppWindow, BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessagesSquare, Package, Route, ShoppingBag, SlidersHorizontal, Target, Truck, Users,
+  AppWindow, BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessagesSquare, Package, Route, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
-import type { Health } from "../lib/api";
+import type { Health, Modules } from "../lib/api";
 import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { AlertsBell } from "./AlertsBell";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "campanias" | "web" | "entregas" | "ruta" | "inicio" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "agenda" | "campanias" | "web" | "ruta" | "inicio" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -27,10 +27,9 @@ const TITLES: Record<Section, string> = {
   equipo: "Equipo",
   resultados: "Resultados",
   integraciones: "Integraciones",
-  turnos: "Turnos",
+  agenda: "Agenda",
   campanias: "Campañas",
   web: "Chat en tu web",
-  entregas: "Entregas",
   ruta: "Mi hoja de ruta",
   inicio: "Inicio",
   login: "Iniciar sesión",
@@ -38,7 +37,9 @@ const TITLES: Record<Section, string> = {
 };
 
 /** Navegación agrupada como en un SaaS: Ventas, Tu agente y Herramientas. */
-interface NavItem { section: Section | null; href: string; label: string; icon: LucideIcon; also?: Section[]; external?: boolean; ownerOnly?: boolean }
+interface NavItem { section: Section | null; href: string; label: string; icon: LucideIcon; also?: Section[]; external?: boolean; ownerOnly?: boolean;
+  /** Se muestra sólo si el negocio usa alguno de estos módulos. */
+  needs?: (keyof Modules)[] }
 const NAV: { title: string; items: NavItem[] }[] = [
   { title: "Ventas", items: [
     { section: "inicio", href: "#/inicio", label: "Inicio", icon: LayoutDashboard, ownerOnly: true },
@@ -46,9 +47,8 @@ const NAV: { title: string; items: NavItem[] }[] = [
     { section: "conversaciones", href: "#/conversaciones", label: "Conversaciones", icon: MessagesSquare },
     { section: "oportunidades", href: "#/oportunidades", label: "Oportunidades", icon: Target },
     { section: "pedidos", href: "#/pedidos", label: "Pedidos", icon: ShoppingBag },
-    { section: "entregas", href: "#/entregas", label: "Entregas", icon: Truck },
-    { section: "campanias", href: "#/campanias", label: "Campañas", icon: Megaphone, ownerOnly: true },
-    { section: "turnos", href: "#/turnos", label: "Turnos", icon: CalendarDays },
+    { section: "agenda", href: "#/agenda", label: "Agenda", icon: CalendarDays, needs: ["turnos", "reparto"] },
+    { section: "campanias", href: "#/campanias", label: "Campañas", icon: Megaphone, ownerOnly: true, needs: ["campanias"] },
   ] },
   { title: "Tu agente", items: [
     // «Mi agente» abre el asistente paso a paso; el formulario completo queda como ajustes.
@@ -58,7 +58,6 @@ const NAV: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Herramientas", items: [
     { section: "web", href: "#/web", label: "Chat en tu web", icon: AppWindow, ownerOnly: true },
-    { section: "ruta", href: "#/ruta", label: "Mi hoja de ruta", icon: Route },
     { section: "equipo", href: "#/equipo", label: "Equipo", icon: Users, ownerOnly: true },
     { section: "integraciones", href: "#/integraciones", label: "Integraciones", icon: PlugZap, ownerOnly: true },
   ] },
@@ -121,7 +120,8 @@ export function Shell({ health, active, children }: Props) {
             {nav.map((group) => (
               <div className="nav-group" key={group.title}>
                 <span className="nav-title" aria-hidden>{group.title}</span>
-                {group.items.filter((i) => !i.ownerOnly || me?.role === "owner" || !me).map(({ section, href, label, icon: Icon }) => {
+                {group.items.filter((i) => (!i.ownerOnly || me?.role === "owner" || !me)
+                  && (!i.needs || !me?.modules || i.needs.some((k) => me.modules[k]))).map(({ section, href, label, icon: Icon }) => {
                   const current = section === active;
                   return (
                     <a key={href} className={current ? "active" : ""} href={href}

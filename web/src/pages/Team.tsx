@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Badge, PageHeader } from "../components/ui";
 import { api, type QuickReply, type Team, type TeamRole } from "../lib/api";
+import { useSession } from "../lib/session";
 
 const ROLE = { owner: "Dueño", staff: "Empleado", driver: "Reparto" } as const;
 const ROLE_CHOICES: { id: TeamRole; label: string; hint: string }[] = [
@@ -11,6 +12,9 @@ const ROLE_CHOICES: { id: TeamRole; label: string; hint: string }[] = [
 
 /** Equipo del negocio: el dueño invita por email y quita accesos. No se envían emails. */
 export function TeamPage() {
+  const { me } = useSession();
+  // Sin reparto propio no hay a quién invitar como repartidor.
+  const choices = ROLE_CHOICES.filter((c) => c.id !== "driver" || me?.modules?.reparto !== false);
   const [team, setTeam] = useState<Team | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<TeamRole>("staff");
@@ -54,7 +58,7 @@ export function TeamPage() {
           </header>
           <fieldset className="role-choice">
             <legend className="sr">Qué va a hacer</legend>
-            {ROLE_CHOICES.map((c) => (
+            {choices.map((c) => (
               <label key={c.id} className={role === c.id ? "on" : ""}>
                 <input type="radio" name="invite-role" value={c.id} checked={role === c.id} onChange={() => setRole(c.id)} />
                 <span><b>{c.label}</b><small className="muted">{c.hint}</small></span>

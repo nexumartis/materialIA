@@ -4,6 +4,7 @@ import { ApiError, api, type AgentProfile, type Health, type ImportResult, type 
 import { SheetSync } from "../components/SheetSync";
 import { downloadTemplate } from "./Catalog";
 import { EvalsSection, PoliciesSection } from "./AgentAdvanced";
+import { ModulesPicker, STARTER_MODULES } from "../components/ModulesPicker";
 
 const TONES: { key: AgentProfile["tone"]; label: string; sample: string }[] = [
   { key: "cercano", label: "Cercano", sample: "¡Hola! ¿Qué estás buscando? Te ayudo." },
@@ -11,7 +12,7 @@ const TONES: { key: AgentProfile["tone"]; label: string; sample: string }[] = [
   { key: "formal", label: "Formal", sample: "Buenos días, ¿en qué puedo ayudarle?" },
 ];
 
-const STEPS = ["Negocio", "Rubro", "Catálogo", "Cómo habla", "Políticas", "Cobro", "Probar", "Publicar"] as const;
+const STEPS = ["Negocio", "Módulos", "Rubro", "Catálogo", "Cómo habla", "Políticas", "Cobro", "Probar", "Publicar"] as const;
 const MAX_PREVIEW = 12;   // igual que MAX_PREVIEW_MESSAGES del backend
 const SLUG = /^[a-z0-9-]{3,48}$/;
 
@@ -97,8 +98,9 @@ export function AgentWizard({ health }: { health: Health | null }) {
     return [
       saw(0) && SLUG.test(draft.public_slug),
       saw(1),
+      saw(2),
       (products ?? 0) > 0,
-      saw(3) && !!draft.seller_name && !!draft.greeting,
+      saw(4) && !!draft.seller_name && !!draft.greeting,
       !!draft.shipping || !!draft.hours,
       !!draft.payment_methods,
       tested,
@@ -121,7 +123,7 @@ export function AgentWizard({ health }: { health: Health | null }) {
       <div className="titlebar">
         <div>
           <h1>Mi agente</h1>
-          <p className="finding">Ocho pasos para dejar tu vendedor virtual listo. Podés salir y volver: se guarda tu avance en este navegador.</p>
+          <p className="finding">Nueve pasos para dejar tu vendedor virtual listo. Podés salir y volver: se guarda tu avance en este navegador.</p>
         </div>
         <div className="right">
           <a className="btn" href="#/agente"><SlidersHorizontal size={15} strokeWidth={1.8} aria-hidden /> Ajustes avanzados</a>
@@ -163,15 +165,25 @@ export function AgentWizard({ health }: { health: Health | null }) {
         )}
 
         {step === 1 && (
+          <>
+            <h2 className="panel-title">2. ¿Qué usás en tu negocio?</h2>
+            <p className="muted">Marcá lo que hacés hoy: el panel te muestra sólo eso. Lo podés cambiar cuando quieras en
+              Ajustes del agente, y si no sabés todavía, seguí de largo.</p>
+            <ModulesPicker savedNote="Guardado. Seguí con el próximo paso."
+              initial={(saved) => (profile.version <= 1 && Object.values(saved).every(Boolean) ? STARTER_MODULES : saved)} />
+          </>
+        )}
+
+        {step === 2 && (
           <RubroStep templates={templates} current={draft.business_type}
             onApplied={(t) => setDraft({ ...draft, ...t })} onError={setError} />
         )}
 
-        {step === 2 && <CatalogStep products={products} onImported={(n) => setProducts(n)} onError={setError} />}
+        {step === 3 && <CatalogStep products={products} onImported={(n) => setProducts(n)} onError={setError} />}
 
-        {step === 3 && (
+        {step === 4 && (
           <>
-            <h2 className="panel-title">4. Cómo habla</h2>
+            <h2 className="panel-title">5. Cómo habla</h2>
             <div className="grid2">
               <label className="field">
                 <span>Nombre del vendedor</span>
@@ -192,9 +204,9 @@ export function AgentWizard({ health }: { health: Health | null }) {
           </>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <>
-            <h2 className="panel-title">5. Políticas</h2>
+            <h2 className="panel-title">6. Políticas</h2>
             <p className="muted">Lo que el agente responde sobre envíos y horarios. Las reglas de abajo las hace cumplir el sistema, no el modelo.</p>
             <div className="grid2">
               <label className="field">
@@ -210,9 +222,9 @@ export function AgentWizard({ health }: { health: Health | null }) {
           </>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <>
-            <h2 className="panel-title">6. Cobro</h2>
+            <h2 className="panel-title">7. Cobro</h2>
             <label className="field">
               <span>Medios de pago que aceptás</span>
               <input value={draft.payment_methods} onChange={(e) => set("payment_methods", e.target.value)}
@@ -231,9 +243,9 @@ export function AgentWizard({ health }: { health: Health | null }) {
           </>
         )}
 
-        {step === 6 && <PreviewStep draft={draft} onTested={() => setTested(true)} />}
+        {step === 7 && <PreviewStep draft={draft} onTested={() => setTested(true)} />}
 
-        {step === 7 && (
+        {step === 8 && (
           <PublishStep draft={draft} profile={profile} done={done}
             onPublished={(p) => { setProfile(p); setDraft(draftOf(p)); setPublishedFor(p.updated_at); setNotice(null); }}
             onGo={go} />
@@ -272,7 +284,7 @@ function RubroStep({ templates, current, onApplied, onError }: {
   }
   return (
     <>
-      <h2 className="panel-title">2. Rubro</h2>
+      <h2 className="panel-title">3. Rubro</h2>
       <p className="muted">Elegí el más parecido: precarga cómo habla y preguntas frecuentes de ejemplo en tu borrador. Después lo ajustás.</p>
       <div className="wizard-options">
         {templates.map((t) => (
@@ -307,7 +319,7 @@ function CatalogStep({ products, onImported, onError }: {
   }
   return (
     <>
-      <h2 className="panel-title">3. Catálogo</h2>
+      <h2 className="panel-title">4. Catálogo</h2>
       <p className="muted">
         Tu agente sólo ofrece lo que está acá, con precio y stock reales. Hoy tenés <b>{products ?? "…"}</b> productos.
       </p>
@@ -383,7 +395,7 @@ function PreviewStep({ draft, onTested }: { draft: Draft; onTested: () => void }
   const full = turns.length >= MAX_PREVIEW;
   return (
     <>
-      <h2 className="panel-title">7. Probar</h2>
+      <h2 className="panel-title">8. Probar</h2>
       <p className="muted">Escribile como si fueras un cliente. Usa lo que configuraste, aunque todavía no lo publicaste. No crea pedidos ni aparta stock.</p>
       <div className="chatlog wizard-preview" aria-label="Vista previa">
         {turns.length === 0 && <div className="bubble bot">{draft.greeting || "Escribí un mensaje para empezar."}</div>}
@@ -428,7 +440,7 @@ function PublishStep({ draft, profile, done, onPublished, onGo }: {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [blocked, setBlocked] = useState(false);
   const storeUrl = `${window.location.origin}${window.location.pathname}#/tienda/${profile.public_slug}`;
-  const missing = STEPS.slice(0, 6).map((s, i) => ({ s, i })).filter(({ i }) => !done[i]);
+  const missing = STEPS.slice(0, 7).map((s, i) => ({ s, i })).filter(({ i }) => !done[i]);
 
   async function publish(requireEvals: boolean) {
     setBusy(true);
@@ -447,7 +459,7 @@ function PublishStep({ draft, profile, done, onPublished, onGo }: {
 
   return (
     <>
-      <h2 className="panel-title">8. Publicar</h2>
+      <h2 className="panel-title">9. Publicar</h2>
       {missing.length > 0 ? (
         <div className="wizard-notes">
           <p className="muted">Te falta:</p>
