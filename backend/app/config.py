@@ -88,6 +88,29 @@ class Settings(BaseSettings):
     # Embeddings para la base de conocimiento (vacío = sólo búsqueda de texto).
     embedding_model: str | None = None
 
+    # Orígenes permitidos para CORS, separados por coma. Vacío = cualquiera (sólo fuera de producción).
+    cors_origins: str = ""
+
+    @property
+    def production_like(self) -> bool:
+        return self.app_env in ("production", "prod", "staging")
+
+    def unsafe_for_production(self) -> list[str]:
+        """Configuraciones que en producción serían un agujero: el servidor se niega a arrancar."""
+        problems = []
+        if self.payment_provider == "simulated":
+            problems.append("PAYMENT_PROVIDER=simulated (el checkout simulado marca pedidos como pagados)")
+        if not self.cors_origins.strip() or "*" in self.cors_origins:
+            problems.append("CORS abierto a cualquier origen (definí CORS_ORIGINS)")
+        if self.sandbox_admin:
+            problems.append("SANDBOX_ADMIN activo")
+        return problems
+
+    @property
+    def cors_list(self) -> list[str]:
+        items = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return items or (["*"] if not self.production_like else [])
+
     @property
     def sandbox_admin_enabled(self) -> bool:
         """Mutaciones administrativas del sandbox sin cuenta (importar catálogo, avanzar pedidos,
