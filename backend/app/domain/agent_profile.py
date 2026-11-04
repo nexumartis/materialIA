@@ -110,8 +110,9 @@ TOGGLEABLE_TOOLS = {
 #   human_only_categories  categorías que sólo vende una persona (no entran al carrito)
 #   handoff_topics         temas que siempre atiende una persona: [{keywords: [...], reply: str|None}]
 #   booking                turnos: servicios, días y horarios, cupo (ver domain/booking.py)
+#   pickup_address         dirección para retirar en el local (si está, el agente ofrece retiro)
 POLICY_KEYS = ("min_order_total", "delivery_zones", "shipping_costs", "human_only_categories", "handoff_topics",
-               "booking")
+               "booking", "pickup_address")
 MAX_TOPICS = 10
 
 
@@ -258,6 +259,11 @@ def validate_policies(raw: dict[str, Any]) -> dict[str, Any]:
     cats = [c.lower() for c in _words(raw.get("human_only_categories"))]
     if cats:
         out["human_only_categories"] = cats
+    pickup = str(raw.get("pickup_address") or "").strip()
+    if len(pickup) > 200:
+        raise ValueError("La dirección de retiro tiene como máximo 200 caracteres.")
+    if pickup:
+        out["pickup_address"] = pickup
     from . import booking
     cfg = booking.validate(raw.get("booking"))
     if cfg:

@@ -131,7 +131,11 @@ def enqueue_order(cur: Any, tenant_id: str, event: str, order_id: str, **extra: 
             "currency": view["currency"], "deposit": view.get("deposit"), "amount_due": view.get("amount_due"),
             "conversation_id": str(row["conversation_id"]) if row["conversation_id"] else None,
             "items": [{"sku": i["sku"], "name": i["name"], "qty": i["qty"], "unit_price": i["unit_price"]}
-                      for i in view["items"]], **extra}
+                      for i in view["items"]],
+            # Entrega: el sistema del negocio la necesita para despachar (dirección y contacto del pedido).
+            "delivery": {"method": view.get("delivery_method"), "address": view.get("delivery_address"),
+                         "contact": view.get("delivery_contact"), "shipping": view.get("shipping"),
+                         "note": view.get("delivery_note")} if view.get("delivery_method") else None, **extra}
     return enqueue(cur, tenant_id, event, data)
 
 

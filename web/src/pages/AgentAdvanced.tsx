@@ -58,6 +58,16 @@ export function PoliciesSection({ policies, onChange }: { policies: Policies; on
         </label>
       </div>
       <label className="field">
+        <span>Dirección para retirar en el local</span>
+        <input
+          value={policies.pickup_address ?? ""}
+          maxLength={200}
+          placeholder="Ej.: Av. Belgrano 1234, Avellaneda"
+          onChange={(e) => onChange({ ...policies, pickup_address: e.target.value })}
+        />
+        <small>Antes de confirmar, el agente pregunta «¿envío o retiro?»: envío según tus zonas; retiro en esta dirección.</small>
+      </label>
+      <label className="field">
         <span>Categorías que vende sólo una persona (separadas por coma)</span>
         <input
           value={list(policies.human_only_categories)}

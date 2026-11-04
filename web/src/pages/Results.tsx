@@ -56,11 +56,14 @@ function Body({ data }: { data: Insights }) {
     <>
       <Stats label="Resumen del período" items={items} />
       {(s.off_hours_orders > 0 || data.off_hours_conversations > 0) && (
-        <p className="results-callout">
-          <b>Fuera de horario</b> (noches y fines de semana): {data.off_hours_conversations} conversaciones
-          {s.off_hours_orders > 0 && <> y {s.off_hours_orders} venta{s.off_hours_orders === 1 ? "" : "s"} por {money(s.off_hours_revenue)}</>}
-          {" "}que atendió tu agente mientras no estabas.
-        </p>
+        <section className="panel offhours" aria-labelledby="offhours-title">
+          <h2 id="offhours-title">Mientras no estabas <span className="muted">noches y fines de semana</span></h2>
+          <dl>
+            <div><dt>Conversaciones atendidas</dt><dd>{data.off_hours_conversations}</dd></div>
+            <div><dt>Ventas cobradas</dt><dd>{s.off_hours_orders}</dd></div>
+            <div><dt>Plata que entró</dt><dd>{money(s.off_hours_revenue)}</dd></div>
+          </dl>
+        </section>
       )}
       {data.deposits.orders > 0 && (
         <p className="muted small">Además, {data.deposits.orders} pedido{data.deposits.orders === 1 ? "" : "s"} señado{data.deposits.orders === 1 ? "" : "s"} por {money(data.deposits.amount)} esperando el saldo.</p>

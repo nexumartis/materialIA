@@ -49,7 +49,8 @@ FULFILLMENT_NEXT = {
 
 _ORDER_COLUMNS = ("id, number, tenant_id, conversation_id, status, currency, subtotal, shipping, "
                   "total, reserved_until, cancel_reason, attention_reason, paid_at, created_at, "
-                  "updated_at, quote, deposit, deposit_paid_at")
+                  "updated_at, quote, deposit, deposit_paid_at, delivery_method, delivery_address, "
+                  "delivery_contact, delivery_note")
 
 
 # --- Lectura ------------------------------------------------------------------
@@ -103,6 +104,8 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "deposit_paid_at": row["deposit_paid_at"].isoformat() if row.get("deposit_paid_at") else None,
         "amount_due": amount_due(row)[0] if row["status"] in AWAITING_PAYMENT else 0.0,
         "rating": rating["score"] if rating else None,     # calificación del comprador (1 a 5)
+        "delivery_method": row.get("delivery_method"), "delivery_address": row.get("delivery_address"),
+        "delivery_contact": row.get("delivery_contact"), "delivery_note": row.get("delivery_note"),
     }
 
 

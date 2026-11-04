@@ -423,6 +423,7 @@ export interface Policies {
   /** Costo de envío por zona, cargado por el negocio. */
   shipping_costs?: Record<string, number>;
   human_only_categories?: string[];
+  pickup_address?: string;
   /** Temas que siempre atiende una persona. Guardados como lista; mientras se edita, texto «palabras => mensaje». */
   handoff_topics?: { keywords: string[]; reply: string | null }[] | string;
   /** Turnos: guardado normalizado; mientras se edita, textos que interpreta el servidor. */
@@ -535,6 +536,11 @@ export interface Order {
   /** Constancia de compra emitida (sólo pedidos pagados). */
   receipt_id: string | null;
   paid_at?: string | null;
+  shipping?: number;
+  delivery_method?: "pickup" | "delivery" | null;
+  delivery_address?: { calle: string; altura: number; localidad: string; texto?: string } | null;
+  delivery_contact?: { name: string; phone: string } | null;
+  delivery_note?: string | null;
   /** Pedido a medida (productos a pedido) con seña opcional. */
   quote?: boolean;
   deposit?: number | null;

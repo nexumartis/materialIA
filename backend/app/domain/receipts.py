@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from . import orders
+from . import delivery, orders
 
 LEGEND = "Constancia comercial de compra — no es factura fiscal"
 ORIGINS = {
@@ -48,6 +48,7 @@ def _snapshot(cur: Any, tenant_id: str, order: dict[str, Any], payment: dict[str
                     "amount": float(payment["amount"]), "currency": payment["currency"]},
         # Pedido con seña: se cobró en dos pagos verificados; la constancia muestra los dos.
         "payments": _all_payments(cur, tenant_id, str(order["id"])) if order.get("deposit") is not None else None,
+        "delivery": delivery.describe(order),
     }
 
 
@@ -165,6 +166,8 @@ def render_pdf(receipt: dict[str, Any]) -> bytes:
     c.setFont(bold, 12)
     c.drawRightString(right, y + 26, _amount(receipt["total"], receipt["currency"]))
 
+    if receipt.get("delivery"):
+        line(f"Entrega: {receipt['delivery']}"[:110], 9, step=18)
     pays = receipt.get("payments") or [{**receipt["payment"], "concept": None}]
     line("Pagos verificados" if len(pays) > 1 else "Pago verificado", 11, bold)
     for i, pay in enumerate(pays):
