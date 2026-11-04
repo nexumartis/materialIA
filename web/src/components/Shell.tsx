@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  AppWindow, BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessageCircle, MessagesSquare, Package, Route, ShoppingBag, SlidersHorizontal, Target, Truck, Users,
+  AppWindow, BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessagesSquare, Package, Route, ShoppingBag, SlidersHorizontal, Target, Truck, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -58,7 +58,6 @@ const NAV: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Herramientas", items: [
     { section: "web", href: "#/web", label: "Chat en tu web", icon: AppWindow, ownerOnly: true },
-    { section: "venta", href: "#/venta", label: "Demo del agente", icon: MessageCircle },
     { section: "ruta", href: "#/ruta", label: "Mi hoja de ruta", icon: Route },
     { section: "equipo", href: "#/equipo", label: "Equipo", icon: Users, ownerOnly: true },
     { section: "integraciones", href: "#/integraciones", label: "Integraciones", icon: PlugZap, ownerOnly: true },
