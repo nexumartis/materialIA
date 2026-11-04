@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
-from . import buyer_session
+from . import buyer_session, audio_routes
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
@@ -57,6 +57,7 @@ if settings.app_env != "local" and settings.supabase_url == Settings.model_field
         "las sesiones del proyecto remoto.", settings.app_env)
 
 app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
+app.include_router(audio_routes.router)
 
 # CORS abierto SÓLO para el sandbox local (la UI se abre como file:// => origin "null").
 # En producción restringir a los orígenes del panel autenticado.
@@ -184,6 +185,33 @@ def sales_chat(req: ChatRequest, request: Request, company: str = Query("C")) ->
         "requires_human": res.requires_human, "cart": res.cart, "orders": res.orders,
         "payment": res.payment, "products": res.products, "trace": res.trace, "ui": res.ui,
     }
+
+
+# Audio del chat de prueba del panel: mismos límites y proveedor que la tienda. Va antes de
+# /sandbox/sales/{conversation_id} para que «audio» no se lea como id.
+def _sandbox_audio(company: str) -> str:
+    tenant = _resolve_tenant(company)
+    if not audio_routes.audio.enabled(tenant):
+        raise HTTPException(status_code=404, detail="Audio no disponible.")
+    return tenant
+
+
+@app.get("/sandbox/sales/audio", response_model=audio_routes.AudioCapabilities)
+def sandbox_audio_caps(company: str = Query("C")):
+    return audio_routes.capabilities_for(_resolve_tenant(company))
+
+
+@app.post("/sandbox/sales/audio/transcriptions", response_model=audio_routes.Transcription)
+async def sandbox_audio_transcribe(request: Request, response: Response, company: str = Query("C")):
+    return await audio_routes.transcribe_request(request, response, _sandbox_audio(company), None)
+
+
+@app.post("/sandbox/sales/{conversation_id}/messages/{message_id}/audio", response_class=Response)
+async def sandbox_audio_speak(conversation_id: UUID, message_id: UUID, request: Request,
+                              company: str = Query("C")):
+    tenant, conv = _sandbox_audio(company), str(conversation_id)
+    await run_in_threadpool(_not_public, tenant, conv)
+    return await audio_routes.speak_request(request, tenant, conv, message_id)
 
 
 @app.get("/sandbox/sales/{conversation_id}")

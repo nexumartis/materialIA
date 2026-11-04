@@ -1165,3 +1165,15 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
   .wc-code .btn { align-self:flex-end; }
 }
 /* /Chat en tu web */
+
+/* ---- Audio del chat público (dictado y «Escuchar») ---- */
+.voice { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+.voice-row, .listen { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.listen { align-self:stretch; } /* el reproductor necesita ancho propio dentro de .msg */
+.voice-review { display:flex; flex-direction:column; gap:6px; border:1px dashed var(--rule); border-radius:var(--radius-card); padding:8px 10px; }
+.voice .note, .voice .state.err, .listen .state.err { margin:0; }
+.voice audio, .listen audio { height:36px; width:100%; max-width:360px; }
+.voice .btn, .listen .btn { display:inline-flex; align-items:center; gap:6px; }
+.voice-note { display:flex; flex-direction:column; gap:4px; min-width:240px; }
+.voice-note audio { height:36px; width:100%; }
+.rec-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--negative); margin-right:4px; }

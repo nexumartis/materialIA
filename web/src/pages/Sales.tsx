@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { Volume2 } from "lucide-react";
 import {
   ApiError,
   api,
+  type AudioCaps,
   type BuyerDocument,
   type ConversationRef,
   type Health,
@@ -13,17 +15,22 @@ import {
 } from "../lib/api";
 import { saveBlob } from "../lib/download";
 import { fmtAmount } from "../lib/format";
+import { VoiceInput } from "../components/VoiceInput";
 
 const money = (n: number) => `$${fmtAmount(n)}`;
 
+const MAX_MESSAGE = 2000;
+
 interface Msg {
+  /** UUID del servidor: sólo los mensajes releídos de la conversación lo tienen. */
+  id?: string;
   role: "me" | "bot";
   text: string;
   ui?: MessageUI | null;
 }
 
 const GREETING =
-  "¡Hola! Soy el vendedor virtual de Sanitarios Demo C. Preguntame por canillas, duchas o repuestos y te armo el pedido.";
+  "¡Hola! Soy Caro, la asistente virtual de Sanitarios Demo C. Preguntame por canillas, duchas o repuestos y te armo el pedido.";
 
 const SUGGESTIONS = [
   "Hola, ¿tenés canillas negras para cocina?",
@@ -207,6 +214,12 @@ export interface ChatSource {
   cancelOrder?: (ref: ConversationRef, orderId: string) => Promise<Order>;
   /** Tienda pública: el comprador califica su pedido pagado (encuesta de satisfacción). */
   rateOrder?: (ref: ConversationRef, orderId: string, score: number, comment: string) => Promise<unknown>;
+  /** Tienda pública: dictar el mensaje y escuchar respuestas (si el backend lo habilita). */
+  audio?: {
+    caps: () => Promise<AudioCaps>;
+    transcribe: (wav: Blob, ref: ConversationRef | null, signal: AbortSignal) => Promise<{ text: string }>;
+    speak: (ref: ConversationRef, messageId: string) => Promise<Blob>;
+  };
 }
 
 const RATEABLE = ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"];
@@ -247,7 +260,7 @@ function saveRef(key: string | undefined, ref: ConversationRef | null) {
 }
 
 const toMsgs = (c: SalesConversation): Msg[] =>
-  c.messages.map((m) => ({ role: m.role === "user" ? "me" : "bot", text: m.content, ui: m.ui }));
+  c.messages.map((m) => ({ id: m.id, role: m.role === "user" ? "me" : "bot", text: m.content, ui: m.ui }));
 
 export const DEMO_SOURCE: ChatSource = {
   title: "Agente de ventas",
@@ -256,6 +269,7 @@ export const DEMO_SOURCE: ChatSource = {
   suggestions: SUGGESTIONS,
   chat: api.salesChat,
   conversation: api.salesConversation,
+  audio: { caps: api.salesAudio, transcribe: api.salesTranscribe, speak: api.salesMessageAudio },
 };
 
 export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null; source?: ChatSource }) {
@@ -271,6 +285,15 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   const [fileNote, setFileNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [attended, setAttended] = useState(false);
+  const [audioCaps, setAudioCaps] = useState<AudioCaps | null>(null);
+  // Audio de respuestas por id de mensaje. Sin autoplay: se muestra el reproductor y el comprador le da play.
+  const [voices, setVoices] = useState<Record<string, { url?: string; auto?: boolean; loading?: boolean; error?: string }>>({});
+  // Notas de voz del comprador, por posición en la conversación (sobrevive a la relectura del
+  // historial; por texto, dos notas iguales o un mensaje escrito igual compartirían el audio).
+  const [myVoice, setMyVoice] = useState<Record<number, string>>({});
+  const voiceUrls = useRef<string[]>([]);
+  const [voiceKey, setVoiceKey] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // Generación de la conversación: "Nueva conversación" y desmontar la incrementan, y toda
   // respuesta (o error) de una generación anterior se descarta. `reads` además invalida las
@@ -285,9 +308,21 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   useEffect(
     () => () => {
       gen.current++;
+      voiceUrls.current.forEach((u) => URL.revokeObjectURL(u));
     },
     [],
   );
+
+  useEffect(() => {
+    let alive = true;
+    source.audio
+      ?.caps()
+      .then((c) => alive && setAudioCaps(c.enabled ? c : null))
+      .catch(() => alive && setAudioCaps(null)); // sin capacidades no se muestra nada de audio
+    return () => {
+      alive = false;
+    };
+  }, [source]);
 
   function remember(ref: ConversationRef | null) {
     setConv(ref);
@@ -303,11 +338,16 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     setDocuments([]);
     setFileNote(null);
     setAttended(false);
+    voiceUrls.current.forEach((u) => URL.revokeObjectURL(u));
+    voiceUrls.current = [];
+    setVoices({});
+    setMyVoice({});
+    setVoiceKey((k) => k + 1); // descarta grabación/transcripción en curso
   }
 
   // Relee la conversación (al montar con una referencia guardada y al volver del checkout: el
   // aviso de pago lo escribe el backend). Una referencia inválida o revocada se olvida.
-  function reload(ref: ConversationRef) {
+  function reload(ref: ConversationRef, speak = false) {
     const g = gen.current;
     const r = ++reads.current;
     const current = () => g === gen.current && r === reads.current;
@@ -315,7 +355,12 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       .conversation(ref)
       .then((c) => {
         if (!current()) return;
-        setMessages(toMsgs(c));
+        const msgs = toMsgs(c);
+        setMessages(msgs);
+        // El comprador habló: Caro le contesta también con su voz.
+        const last = speak ? [...msgs].reverse().find((m) => m.role === "bot" && m.id) : undefined;
+        if (last?.id && audioCaps && last.text.trim() && last.text.length <= audioCaps.max_tts_characters)
+          void listen(last.id, ref, true);
         setCart(c.cart);
         setOrders(c.orders);
         setDocuments(c.documents ?? []);
@@ -387,9 +432,14 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     }
   }
 
-  async function send(text: string) {
+  async function send(text: string, voiceUrl?: string) {
     const msg = text.trim();
     if (!msg || sending) return;
+    if (voiceUrl) {
+      voiceUrls.current.push(voiceUrl);
+      const at = messages.length;
+      setMyVoice((v) => ({ ...v, [at]: voiceUrl }));
+    }
     const g = gen.current;
     reads.current++;
     setInput("");
@@ -398,13 +448,16 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     try {
       const j = await source.chat(msg, conv);
       if (g !== gen.current) return;
-      remember(j.conversation_id === conv?.id ? conv : { id: j.conversation_id, token: j.conversation_token ?? null });
+      const ref = j.conversation_id === conv?.id ? conv : { id: j.conversation_id, token: j.conversation_token ?? null };
+      remember(ref);
       // Con una persona atendiendo, el asistente no responde: no hay burbuja vacía.
       if (j.mode === "human") setAttended(true);
       else setMessages((m) => [...m, { role: "bot", text: j.reply, ui: j.ui }]);
       setCart(j.cart);
       setOrders(j.orders);
       setTrace(j.trace);
+      // «Escuchar» necesita el id persistido de la respuesta, que el chat no devuelve.
+      if (audioCaps) reload(ref, !!voiceUrl && j.mode !== "human");
     } catch (e) {
       if (g !== gen.current) return;
       if (conv && e instanceof ApiError && e.status === 404) {
@@ -422,6 +475,22 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       }
     } finally {
       if (g === gen.current) setSending(false);
+    }
+  }
+
+  async function listen(id: string, ref: ConversationRef | null = conv, auto = false) {
+    if (!ref || !source.audio) return;
+    const g = gen.current;
+    setVoices((v) => ({ ...v, [id]: { loading: true } }));
+    try {
+      const blob = await source.audio.speak(ref, id);
+      if (g !== gen.current) return;
+      const url = URL.createObjectURL(blob);
+      voiceUrls.current.push(url);
+      setVoices((v) => ({ ...v, [id]: { url, auto } }));
+    } catch (e) {
+      if (g !== gen.current) return;
+      setVoices((v) => ({ ...v, [id]: { error: e instanceof ApiError ? e.message : "No pude generar el audio." } }));
     }
   }
 
@@ -474,11 +543,31 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role === "me" ? "me" : "bot"}`}>
                 {m.ui?.type === "human" && <span className="msg-author">Equipo de {source.title}</span>}
-                {visibleText(m) && (
+                {m.role === "me" && myVoice[i] ? (
+                  <div className="bubble me voice-note">
+                    <audio controls src={myVoice[i]} aria-label="Tu audio" />
+                    <span className="small">«{m.text}»</span>
+                  </div>
+                ) : visibleText(m) && (
                   <div className={`bubble ${m.role === "me" ? "me" : "bot"}${m.ui?.type === "human" ? " human" : ""}`}>
                     <Linkified text={m.ui?.payment ? visibleText(m).replace(m.ui.payment.url, "").trim() : visibleText(m)} />
                   </div>
                 )}
+                {audioCaps && conv && m.role === "bot" && m.id && m.text.trim() && m.text.length <= audioCaps.max_tts_characters && (() => {
+                  const v = voices[m.id];
+                  return (
+                    <div className="listen">
+                      {v?.url ? (
+                        <audio controls autoPlay={v.auto} src={v.url} aria-label="Respuesta en audio" />
+                      ) : (
+                        <button className="btn sm ghost" type="button" disabled={v?.loading} onClick={() => void listen(m.id!)}>
+                          <Volume2 size={14} aria-hidden="true" /> {v?.loading ? "Preparando audio…" : "Escuchar"}
+                        </button>
+                      )}
+                      {v?.error && <span className="state err small" role="alert">{v.error}</span>}
+                    </div>
+                  );
+                })()}
                 {m.ui?.products && m.ui.products.length > 0 && (
                   <Cards cards={m.ui.products} onAction={send} onOpen={setDetail} disabled={sending} />
                 )}
@@ -520,6 +609,16 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             )}
           </div>
 
+          {audioCaps && source.audio && (
+            <VoiceInput
+              key={voiceKey}
+              caps={audioCaps}
+              transcribe={(wav, signal) => source.audio!.transcribe(wav, conv, signal)}
+              maxLength={MAX_MESSAGE}
+              disabled={sending}
+              onVoice={(text, url) => void send(text, url)}
+            />
+          )}
           <form
             className="composer"
             onSubmit={(e) => {
@@ -528,10 +627,11 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
             }}
           >
             <input
+              ref={inputRef}
               type="text"
               autoComplete="off"
               placeholder={source.customerView ? "Escribí tu consulta…" : "Escribí como cliente…"}
-              maxLength={2000}
+              maxLength={MAX_MESSAGE}
               aria-label="Mensaje"
               value={input}
               onChange={(e) => setInput(e.target.value)}

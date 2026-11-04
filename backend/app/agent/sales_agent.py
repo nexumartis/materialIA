@@ -760,7 +760,7 @@ class _Turn:
         return "\n".join(lines)
 
     def ask_which(self, items: list[dict[str, Any]], qty: Optional[int] = None) -> str:
-        text = self.show(items, f"Hay {len(items)} opciones que coinciden:")
+        text = self.show(items, f"¡Tengo {len(items)} que te pueden servir!")
         if qty and self.state.get("offer"):
             self.state["offer"]["qty"] = qty          # "tres de esa": al elegir, van las tres
         return text + "\n¿Cuál te agrego? Decime el número."
@@ -839,7 +839,9 @@ class _Turn:
             return (text_out + f"\nLa más conveniente con stock es la {best['name']} "
                     f"({best.get('brand') or 'sin marca'}) a {_money(best['price'])}."
                     + ("" if self.no_cart else " ¿Te la agrego?"))
-        listed = self.show(found, "Tengo estas opciones:")
+        one = len(found) == 1
+        listed = self.show(found, "¡Mirá, tengo esta que te puede servir!" if one
+                           else f"¡Tengo {len(found)} que te pueden servir!")
         if self.no_cart:
             return listed
         places = sorted({o["specs"].get("ambiente") for o in found} - {None})
@@ -849,7 +851,7 @@ class _Turn:
         sizes = sorted({str(o["specs"].get("talle")) for o in found if o["specs"].get("talle")})
         if not query.get("talle") and len(sizes) > 1:
             return listed + f"\n¿Qué talle buscás? Hay {', '.join(sizes)}."
-        return listed + "\n¿Querés que te agregue alguna?"
+        return listed + ("\n¿Te la agrego?" if one else "\n¿Querés que te agregue alguna?")
 
     def out_of_stock(self, items: list[dict[str, Any]]) -> str:
         """Escenario D: no promete disponibilidad; ofrece sustitutos REALES con stock."""

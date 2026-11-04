@@ -155,6 +155,19 @@ export const api = {
   salesConversation: (ref: ConversationRef) =>
     request<SalesConversation>(`/sandbox/sales/${encodeURIComponent(ref.id)}?company=C`),
 
+  // Audio del chat de prueba del panel (mismos límites que la tienda).
+  salesAudio: () => request<AudioCaps>(`/sandbox/sales/audio?company=C`),
+  salesTranscribe: (wav: Blob, _ref: ConversationRef | null, signal?: AbortSignal) =>
+    request<{ text: string; duration_seconds: number }>(`/sandbox/sales/audio/transcriptions?company=C`, {
+      method: "POST", headers: { "content-type": "audio/wav" }, body: wav, signal,
+    }),
+  salesMessageAudio: (ref: ConversationRef, messageId: string) =>
+    request<Blob>(
+      `/sandbox/sales/${encodeURIComponent(ref.id)}/messages/${encodeURIComponent(messageId)}/audio?company=C`,
+      { method: "POST" },
+      "blob",
+    ),
+
   // Panel: el negocio arma su agente.
   agentTemplates: () => authed<{ key: string; label: string }[]>("/app/agent-templates"),
   agentProfile: () => authed<AgentProfile>("/app/agent-profile"),
@@ -380,7 +393,31 @@ export const api = {
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}`,
       { headers: buyerHeader(ref) },
     ),
+
+  // Audio del chat público (lo habilita el backend por tienda). Sin reintentos: cada llamada
+  // al proveedor de voz puede consumir cuota aunque falle.
+  storeAudio: (slug: string) => request<AudioCaps>(`/public/${encodeURIComponent(slug)}/audio`),
+  storeTranscribe: (slug: string, wav: Blob, ref: ConversationRef | null, signal?: AbortSignal) =>
+    request<{ text: string; duration_seconds: number }>(
+      `/public/${encodeURIComponent(slug)}/audio/transcriptions${ref ? `?conversation_id=${encodeURIComponent(ref.id)}` : ""}`,
+      { method: "POST", headers: { "content-type": "audio/wav", ...buyerHeader(ref) }, body: wav, signal },
+    ),
+  storeMessageAudio: (slug: string, ref: ConversationRef, messageId: string) =>
+    request<Blob>(
+      `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/messages/${encodeURIComponent(messageId)}/audio`,
+      { method: "POST", headers: buyerHeader(ref) },
+      "blob",
+    ),
 };
+
+/** Capacidades de audio de una tienda pública (`GET /public/{slug}/audio`). */
+export interface AudioCaps {
+  enabled: boolean;
+  max_upload_bytes: number;
+  max_duration_seconds: number;
+  max_tts_characters: number;
+  max_transcript_characters: number;
+}
 
 /** Referencia del comprador a su conversación. En la tienda pública lleva el token que emitió el
  *  servidor al crearla: sin él, la UUID sola no abre la conversación. */
@@ -806,7 +843,7 @@ export interface SalesResponse {
 }
 
 export interface SalesConversation {
-  messages: { role: "user" | "assistant"; content: string; ui: MessageUI | null }[];
+  messages: { id?: string; role: "user" | "assistant"; content: string; ui: MessageUI | null }[];
   cart: Order | null;
   orders: Order[];
   /** Sólo tienda pública. */
