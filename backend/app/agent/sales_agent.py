@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, booking, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
+from ..domain import agent_profile, ai_usage, booking, campaigns, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -1538,6 +1538,23 @@ def _booking_reply(turn: _Turn, text: str) -> Optional[str]:
     return None
 
 
+# «No me manden más promos», «dame de baja»: la baja de campañas aplica al toque y se confirma.
+_OPT_NOUN = r"(mensajes|promos?|promociones|ofertas|publicidad|novedades|campanas|recordatorios)"
+_RE_OPT_OUT = re.compile(
+    r"\bno (me )?(manden|mandes|envien|envies|escriban|escribas) mas " + _OPT_NOUN + r"\b|"
+    r"\bno quiero (recibir )?(mas )?" + _OPT_NOUN + r"\b|\bbasta de " + _OPT_NOUN + r"\b|"
+    r"\b(dame|darme|me doy) de baja( de (la lista|(las |los )?" + _OPT_NOUN + r"))?[\s.!]*$|"
+    r"\bdesuscrib\w*|\bunsubscribe\b")
+
+
+def _opt_out_reply(turn: _Turn, text: str) -> Optional[str]:
+    if turn.dry_run or not _RE_OPT_OUT.search(text):
+        return None
+    campaigns.opt_out(turn.ctx.tenant_id, turn.ctx.conversation_id)
+    return ("Listo, no te vamos a mandar más promociones ni recordatorios. "
+            "Si necesitás algo, escribime acá cuando quieras.")
+
+
 def _reorder_reply(turn: _Turn, text: str) -> Optional[str]:
     """«Repetí mi pedido»: determinista también con IA (toca el carrito con datos reales)."""
     if (not _RE_REORDER.search(text) or _RE_STATUS_Q.search(text)
@@ -1672,7 +1689,7 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     turn.no_cart = all(_RE_NO_CART.search(part) for part in _parts(text))
     turn.consent = _consent(message, text, turn.offer)
 
-    reply = (_confirmation_reply(turn, text) or _human_reply(turn, text, handoff)
+    reply = (_opt_out_reply(turn, text) or _confirmation_reply(turn, text) or _human_reply(turn, text, handoff)
              or (turn.delivery_step(text) if turn.delivery_state else None) or _reorder_reply(turn, text)
              or _booking_reply(turn, text))
     if reply is None:

@@ -14,6 +14,7 @@ import { TeamPage } from "./pages/Team";
 import { Results } from "./pages/Results";
 import { Integrations } from "./pages/Integrations";
 import { Appointments } from "./pages/Appointments";
+import { Campaigns } from "./pages/Campaigns";
 import { Home } from "./pages/Home";
 import { AuthLayout } from "./components/AuthLayout";
 import { Login } from "./pages/Login";
@@ -36,6 +37,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/asistente") return "asistente";
   if (hash === "#/catalogo") return "catalogo";
   if (hash === "#/pedidos") return "pedidos";
+  if (hash === "#/campanias") return "campanias";
   if (hash === "#/conversaciones" || hash.startsWith("#/conversaciones/")) return "conversaciones";
   if (hash === "#/equipo") return "equipo";
   if (hash === "#/resultados") return "resultados";
@@ -146,13 +148,14 @@ function Panel({ active, health }: { active: Section; health: Health | null }) {
       </Notice>
     );
   }
-  if (me?.role === "staff" && (active === "agente" || active === "asistente" || active === "equipo" || active === "resultados" || active === "integraciones")) {
+  if (me?.role === "staff" && (active === "agente" || active === "asistente" || active === "equipo" || active === "resultados" || active === "integraciones" || active === "campanias")) {
     return <Notice title="Sólo para el dueño" pill="Equipo">Esta sección la maneja el dueño del negocio.</Notice>;
   }
   if (active === "agente") return <AgentSetup />;
   if (active === "asistente") return <AgentWizard health={health} />;
   if (active === "catalogo") return <Catalog />;
   if (active === "pedidos") return <OrdersPage />;
+  if (active === "campanias") return <Campaigns />;
   if (active === "conversaciones") return <Inbox />;
   if (active === "equipo") return <TeamPage />;
   if (active === "resultados") return <Results />;
