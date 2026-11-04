@@ -216,6 +216,22 @@ export const api = {
   alerts: () => authed<Alert[]>("/app/alerts"),
   appointments: () => authed<Appointment[]>("/app/appointments"),
   cancelAppointment: (id: string) => authed<{ cancelled: boolean }>(`/app/appointments/${id}/cancel`, { method: "POST" }),
+  // Campañas (dueño): mensajes a clientes según lo que hicieron. En esta fase el canal es simulado.
+  campaigns: () => authed<Campaigns>("/app/campaigns"),
+  campaign: (id: string) => authed<CampaignDetail>(`/app/campaigns/${id}`),
+  previewCampaign: (audience: CampaignAudience, message: string) =>
+    authed<CampaignPreview>("/app/campaigns/preview", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ audience, message }),
+    }),
+  createCampaign: (body: { name: string; audience: CampaignAudience; message: string; scheduled_at: string | null }) =>
+    authed<CampaignSummary>("/app/campaigns", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }),
+  launchCampaign: (id: string, scheduledAt: string | null) =>
+    authed<CampaignSummary>(`/app/campaigns/${id}/launch`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scheduled_at: scheduledAt }),
+    }),
+  cancelCampaign: (id: string) => authed<CampaignSummary>(`/app/campaigns/${id}/cancel`, { method: "POST" }),
   quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
   createQuickReply: (title: string, body: string) =>
     authed<QuickReply>("/app/quick-replies", {
@@ -582,6 +598,54 @@ export interface Webhooks {
 }
 
 export interface QuickReply { id: string; title: string; body: string }
+
+// --- Campañas -------------------------------------------------------------------------
+export type CampaignAudienceKind = "abandoned_cart" | "payment_pending" | "bought" | "not_bought" | "inactive";
+export type CampaignParamValue = number | string | null;
+/** Audiencia que ofrece el backend; los parámetros arman el formulario. */
+export interface Audience {
+  kind: CampaignAudienceKind | string;
+  label: string;
+  description: string;
+  params: { name: string; label: string; type: "days" | "amount" | "text"; default: number | string | null }[];
+}
+export interface CampaignAudience { kind: string; params: Record<string, CampaignParamValue> }
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled";
+export interface CampaignStats { recipients: number; sent: number; skipped: number; failed: number; converted: number; revenue: number }
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  audience: CampaignAudience;
+  audience_label: string;
+  status: CampaignStatus;
+  status_label: string;
+  channel: string;
+  scheduled_at: string | null;
+  created_at: string;
+  sent_at: string | null;
+  stats: CampaignStats;
+}
+export interface CampaignRecipient {
+  name: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  reason: string | null;
+  detail: string;
+  sent_at: string | null;
+  converted: boolean;
+  message: string;
+}
+export interface CampaignDetail extends CampaignSummary { message: string; recipients: CampaignRecipient[] }
+export interface Campaigns {
+  /** `real_sending: false`: se registra qué se mandaría, no sale nada. */
+  channel: { name: string; real_sending: boolean; note: string };
+  audiences: Audience[];
+  campaigns: CampaignSummary[];
+}
+export interface CampaignPreview {
+  count: number;
+  excluded: { opted_out: number; recently_contacted: number };
+  sample: { name: string; detail: string; message: string }[];
+}
 
 export interface Alert { kind: "handoff" | "order" | "receipt" | "appointment" | "rating"; text: string; href: string;
   at: string; key: string }

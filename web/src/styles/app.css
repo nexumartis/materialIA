@@ -998,3 +998,64 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
 @media (max-width:900px) { .alerts-pop { left:16px; right:16px; width:auto; bottom:110px; } }
 .order-delivery { display:block; color:var(--muted); }
 .sidebar > * { flex-shrink:0; }
+
+/* Campañas ------------------------------------------------------------------------------ */
+/* Aviso neutro (sin barra de color): el canal es simulado en esta fase. */
+.camp-note { margin:0 0 16px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-control);
+  background:var(--ground); color:var(--muted); font-size:var(--fs-small); }
+.camp-list { margin-top:4px; }
+.camp-list td:first-child { overflow-wrap:break-word; min-width:8em; }
+.camp-row { cursor:pointer; }
+.camp-row:hover td { background:var(--ground); }
+.camp-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.camp-back { align-self:flex-start; margin:0 0 8px -6px; }
+.camp-sub .pill { margin-left:0; }
+.camp-message { margin:16px 0; }
+.camp-message .bubble, .camp-rec-msg .bubble { max-width:560px; animation:none; }
+.camp-rec-msg summary { color:var(--accent-ink); cursor:pointer; margin-top:2px; }
+.camp-rec-msg .bubble { margin-top:6px; font-size:13px; }
+.camp-yes { color:var(--positive); vertical-align:middle; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* Nueva campaña: pasos numerados dentro de una sola tarjeta. */
+.camp-new { margin-bottom:16px; overflow:visible; }
+.camp-new-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.camp-new-head h2 { margin:0; }
+.camp-step { border:0; border-top:1px solid var(--rule); margin:14px 0 0; padding:14px 0 0; min-width:0; }
+.camp-step legend { display:flex; align-items:center; gap:8px; padding:0; margin-bottom:10px; font-weight:600; font-size:14px; }
+.camp-n { width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; flex:none;
+  border:1px solid var(--control); font-size:12px; font-weight:600; color:var(--muted); }
+.camp-options { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; }
+.camp-option { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--control);
+  border-radius:var(--radius-control); background:var(--surface); cursor:pointer; transition:border-color .15s var(--ease), background .15s var(--ease); }
+.camp-option:hover { border-color:#d3d6dc; }
+.camp-option.on { border-color:var(--accent); background:var(--accent-soft); }
+.camp-option input { margin:3px 0 0; accent-color:var(--accent); flex:none; }
+.camp-option:has(input:focus-visible) { box-shadow:0 0 0 3px var(--accent-ring); }
+.camp-option > span { display:grid; gap:2px; min-width:0; }
+.camp-params { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; align-items:start; }
+.camp-name { grid-column:span 2; }
+.camp-affix { display:flex; align-items:center; gap:6px; color:var(--muted); }
+.camp-affix input { flex:1; min-width:0; width:100%; }
+.camp-compose { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+.camp-compose .suggest { margin-top:8px; }
+.camp-token { font-family:var(--mono); font-size:12px; }
+.camp-preview { border:1px solid var(--border); border-radius:var(--radius-control); background:var(--ground); padding:12px; min-height:120px; }
+.camp-preview .state.err { margin:0; }
+.camp-count { margin:0 0 4px; font-size:15px; }
+.camp-sample { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:10px; }
+.camp-sample li { display:grid; gap:4px; }
+.camp-sample .bubble { max-width:100%; background:var(--surface); animation:none; font-size:13px; }
+.camp-when { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 20px; }
+.camp-when > label.small { display:flex; align-items:center; gap:6px; height:var(--control-h); }
+.camp-when input[type="radio"] { accent-color:var(--accent); }
+.camp-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:14px; }
+.camp-actions .btn { gap:6px; }
+@media (max-width:760px) { .camp-compose { grid-template-columns:1fr; } }
+@media (max-width:520px) {
+  .camp-hide-sm { display:none; }
+  .camp-name { grid-column:auto; }
+  .camp-params { grid-template-columns:1fr; }
+  .camp-options { grid-template-columns:1fr; }
+}
+/* /Campañas */

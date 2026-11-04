@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     mp_api_base: str = "https://api.mercadopago.com"
     # URL pública del backend: links del checkout simulado y notification_url del proveedor.
     public_base_url: str = "http://127.0.0.1:8077"
+    # URL pública del panel/tienda: links que van en los mensajes de campañas.
+    public_web_url: str = "http://localhost:5173"
+    # Canales de campañas habilitados. En esta fase sólo «simulado» (no se envía nada a clientes).
+    campaign_channels: str = "simulado"
     # Firma de los avisos del proveedor SIMULADO (no protege nada real; sólo recorre el camino).
     sim_webhook_secret: str = "sim-local-no-es-secreto"
     reservation_minutes: int = 30

@@ -25,7 +25,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -753,6 +753,74 @@ def app_quick_reply_delete(reply_id: UUID, uid: str = Depends(owner_uid)) -> dic
         if not quick_replies.delete(cur, tenant, str(reply_id)):
             raise HTTPException(status_code=404, detail="Respuesta rápida no encontrada.")
     return {"deleted": True}
+
+
+# --- Panel: campañas (sólo el dueño) ----------------------------------------------------
+# Audiencias de un catálogo cerrado, mensaje con datos reales y envío por el worker. En esta fase el
+# canal es «simulado»: no sale nada hacia los clientes.
+@app.get("/app/campaigns")
+def app_campaigns(uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {"channel": campaigns.channel_info(), "audiences": campaigns.catalog(),
+                "campaigns": campaigns.list_campaigns(cur, tenant)}
+
+
+@app.post("/app/campaigns/preview")
+def app_campaign_preview(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    limits.guard_user(uid, scope="panel-campaign-preview")
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return campaigns.preview(cur, tenant, body.get("audience"), body.get("message"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/campaigns")
+def app_campaign_create(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return campaigns.create(cur, tenant, uid, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/app/campaigns/{campaign_id}")
+def app_campaign_get(campaign_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        view = campaigns.get(cur, tenant, str(campaign_id))
+    if view is None:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada.")
+    return view
+
+
+@app.post("/app/campaigns/{campaign_id}/launch")
+def app_campaign_launch(campaign_id: UUID, body: dict = Body(default={}), uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            view = campaigns.launch(cur, tenant, uid, str(campaign_id), (body or {}).get("scheduled_at"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if view is None:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada.")
+    return view
+
+
+@app.post("/app/campaigns/{campaign_id}/cancel")
+def app_campaign_cancel(campaign_id: UUID, uid: str = Depends(owner_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            view = campaigns.cancel(cur, tenant, uid, str(campaign_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if view is None:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada.")
+    return view
 
 
 # --- Panel: webhooks (sólo el dueño) ----------------------------------------------------
