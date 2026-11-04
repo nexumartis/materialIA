@@ -12,7 +12,7 @@ Rediseño del 29/10/2026 a partir de la referencia `CRM_DESIGN.png`: dashboard S
 | Bordes | `--border` / `--rule` | `#e9ebef` / `#eef0f3` |
 | Texto principal / secundario | `--text` / `--muted` | `#202124` / `#6b7280` |
 | Acción primaria (botón) | `--primary` | `#1b1c1f` |
-| Acento (activo, selección, foco, interruptores) | `--accent` | `#ea6a2a` |
+| Acento (activo, selección, foco, interruptores) | `--accent` | `#2563eb` (azul eléctrico, desde 04/11/2026; antes naranja `#ea6a2a`) |
 | Texto en naranja | `--accent-ink` | `#b03f0e` |
 | Fila seleccionada | `--accent-soft` | `#fff4ee` |
 
@@ -20,7 +20,7 @@ Rediseño del 29/10/2026 a partir de la referencia `CRM_DESIGN.png`: dashboard S
 - **Tipografía:** Inter. Título 20px, sección 15px, texto 13px, etiquetas 11–12px, métricas 24px.
 - **Medidas:** espaciado en múltiplos de 4. Controles de 34px (`.btn.sm` 30px), filas de tabla de 40px, radios de 10 (hoja), 8 (card), 6 (control) y 5 (badge).
 
-**Accesibilidad.** El gris secundario (`#8A8F98`) y los textos de los badges de la referencia se oscurecieron apenas para cumplir WCAG AA (4,5:1). El naranja `#ea6a2a` se usa sólo en indicadores, nunca como texto ni como fondo de un botón con texto blanco.
+**Accesibilidad.** El gris secundario (`#8A8F98`) y los textos de los badges de la referencia se oscurecieron apenas para cumplir WCAG AA (4,5:1). El acento azul `#2563eb` cumple 5,2:1 sobre blanco; para texto se usa `--accent-ink` (`#1d4ed8`, 6,7:1).
 
 ## Componentes
 

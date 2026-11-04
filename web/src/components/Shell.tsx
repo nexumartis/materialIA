@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  BarChart3, Bot, CalendarDays, Code2, PlugZap, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
+  BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -8,7 +8,7 @@ import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { Mark } from "./Mark";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "inicio" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -28,6 +28,7 @@ const TITLES: Record<Section, string> = {
   resultados: "Resultados",
   integraciones: "Integraciones",
   turnos: "Turnos",
+  inicio: "Inicio",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
 };
@@ -36,6 +37,7 @@ const TITLES: Record<Section, string> = {
 interface NavItem { section: Section | null; href: string; label: string; icon: LucideIcon; also?: Section[]; external?: boolean; ownerOnly?: boolean }
 const NAV: { title: string; items: NavItem[] }[] = [
   { title: "Ventas", items: [
+    { section: "inicio", href: "#/inicio", label: "Inicio", icon: LayoutDashboard, ownerOnly: true },
     { section: "resultados", href: "#/resultados", label: "Resultados", icon: BarChart3, ownerOnly: true },
     { section: "conversaciones", href: "#/conversaciones", label: "Conversaciones", icon: MessagesSquare },
     { section: "oportunidades", href: "#/oportunidades", label: "Oportunidades", icon: Target },
@@ -94,13 +96,13 @@ export function Shell({ health, active, children }: Props) {
 
       <div className="app">
         <aside className="sidebar">
-          <div className="brand">
-            <Mark />
-            <div>
-              <b title={me?.business_name}>{status === "ready" && me ? me.business_name : "Presupuesto Vivo"}</b>
-              <span>{status === "ready" && me ? (me.role === "staff" ? "Equipo · Presupuesto Vivo" : "Presupuesto Vivo") : "Agente de ventas"}</span>
+          <div className="brand brand-product"><Mark /> <b>Presupuesto Vivo</b></div>
+          {status === "ready" && me && (
+            <div className="store-card" title={me.business_name}>
+              <span className="store-avatar" aria-hidden>{me.business_name.trim().charAt(0).toUpperCase()}</span>
+              <span className="store-name">{me.business_name}</span>
             </div>
-          </div>
+          )}
 
           <nav className="nav" aria-label="Secciones">
             {NAV.map((group) => (
@@ -137,9 +139,20 @@ export function Shell({ health, active, children }: Props) {
               {active === "venta" && <span className="foot-note">Datos sintéticos de demostración.</span>}
             </div>
             {status === "ready" && me ? (
-              <button className="nav-action" type="button" onClick={() => void signOut()}>
-                <LogOut size={16} strokeWidth={1.8} aria-hidden /> Cerrar sesión
-              </button>
+              <div className="user-card">
+                <div className="user-row">
+                  <span className="store-avatar" aria-hidden>{me.business_name.trim().charAt(0).toUpperCase()}</span>
+                  <span><b>{me.role === "staff" ? "Equipo" : "Dueño"}</b><small className="muted">{me.business_name}</small></span>
+                </div>
+                {me.role !== "staff" && (
+                  <a className="nav-action" href="#/agente" onClick={() => setOpen(false)}>
+                    <Settings size={16} strokeWidth={1.8} aria-hidden /> Configuración
+                  </a>
+                )}
+                <button className="nav-action" type="button" onClick={() => void signOut()}>
+                  <LogOut size={16} strokeWidth={1.8} aria-hidden /> Cerrar sesión
+                </button>
+              </div>
             ) : status !== "unconfigured" ? (
               <a className="nav-action" href="#/login" onClick={() => setOpen(false)}>
                 <LogIn size={16} strokeWidth={1.8} aria-hidden /> Iniciar sesión

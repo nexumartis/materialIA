@@ -15,6 +15,7 @@ import { TeamPage } from "./pages/Team";
 import { Results } from "./pages/Results";
 import { Integrations } from "./pages/Integrations";
 import { Appointments } from "./pages/Appointments";
+import { Home } from "./pages/Home";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
 
@@ -40,6 +41,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/resultados") return "resultados";
   if (hash === "#/integraciones") return "integraciones";
   if (hash === "#/turnos") return "turnos";
+  if (hash === "#/inicio" || hash === "" || hash === "#/") return "inicio";
   if (hash === "#/login") return "login";
   if (hash === "#/signup" || hash === "#/signup/equipo") return "signup";
   return "oportunidades";
@@ -161,6 +163,7 @@ function Panel({ active, health }: { active: Section; health: Health | null }) {
   if (active === "resultados") return <Results />;
   if (active === "integraciones") return <Integrations />;
   if (active === "turnos") return <Appointments />;
+  if (active === "inicio") return me?.role === "staff" ? <Inbox /> : <Home />;
   return <Opportunities />;
 }
 

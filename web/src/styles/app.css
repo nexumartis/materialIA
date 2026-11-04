@@ -6,7 +6,7 @@
 
 :root {
   /* Superficies */
-  --chrome:  #f7f8fa;   /* fondo de la app */
+  --chrome:  #f3f4f7;   /* fondo de la app (un poco más profundo: las tarjetas blancas resaltan) */
   --ground:  #f8f9fb;   /* encabezados de tabla, hover */
   --surface: #ffffff;   /* sidebar, hoja, cards */
   --raised:  #f4f5f7;
@@ -21,10 +21,12 @@
   --faint: #6b7280;
 
   /* Marca y estado */
-  --accent:      #ea6a2a;               /* indicadores, foco, selección (no texto) */
-  --accent-ink:  #b03f0e;               /* texto o enlaces en naranja */
-  --accent-soft: #fff4ee;               /* filas seleccionadas */
-  --accent-ring: rgba(234,106,42,.18);
+  --dot-off:     #e7e8ec;               /* puntos vacíos de los gráficos */
+  --dot-violet:  #8b3fe0;
+  --accent:      #2563eb;               /* azul eléctrico: indicadores, foco, selección (5,2:1 sobre blanco) */
+  --accent-ink:  #1d4ed8;               /* texto o enlaces en el acento (6,7:1) */
+  --accent-soft: #eef3ff;               /* filas seleccionadas */
+  --accent-ring: rgba(37,99,235,.18);
   --primary:     #1b1c1f;               /* botón primario */
   --positive: #1f7340;
   --negative: #b03a3a;
@@ -38,14 +40,15 @@
   --pill-live-bg:#eaf7ef; --pill-live-ink:#1f7340;
 
   /* Forma y medida (múltiplos de 4) */
-  --radius-sheet:10px; --radius-card:8px; --radius-control:6px; --radius-chip:5px;
+  --radius-sheet:20px; --radius-card:16px; --radius-control:10px; --radius-chip:999px;
   --sidebar:236px; --gap:24px; --pad:24px;
-  --control-h:34px; --row-h:40px;
+  --control-h:38px; --row-h:46px;
   --shadow-float:0 6px 24px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
 
   --font:Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --fs-title:20px; --fs-section:15px; --fs-kpi:24px; --fs-body:13px; --fs-small:12px; --fs-label:11px;
+  --fs-title:28px; --fs-section:16px; --fs-kpi:32px; --fs-body:14px; --fs-small:12.5px; --fs-label:11px;
+  --shadow-card:0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.04);
 
   --ease:cubic-bezier(.2,.6,.2,1);
 }
@@ -765,3 +768,102 @@ tbody td.num { white-space:nowrap; }
 .intg-steps { margin:0; padding-left:20px; display:grid; gap:4px; }
 @keyframes intg-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .intg-card, .intg-detail { transition:none; animation:none; } }
+
+/* ---- Inicio (dashboard del dueño) ---- */
+.home { display:grid; gap:16px; }
+.home-head h1 { font-size:30px; letter-spacing:-.02em; margin:0; font-weight:650; }
+.home-head p { margin:4px 0 0; display:flex; align-items:center; gap:6px; font-size:13px; }
+.home-kpis { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; }
+.kpi-card, .revenue-card, .recent-card { background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:18px 20px; box-shadow:0 1px 2px rgba(16,24,40,.04); min-width:0; }
+.kpi-top { display:flex; align-items:center; gap:10px; }
+.kpi-top h2 { flex:1; margin:0; font-size:15px; font-weight:600; }
+.kpi-icon { width:32px; height:32px; border-radius:9px; display:grid; place-items:center; }
+.kpi-icon.violet { background:#f2eafd; color:var(--dot-violet); }
+.kpi-icon.orange { background:var(--accent-soft); color:var(--accent-ink); }
+.kpi-icon.amber { background:#fff7e0; color:#a16207; }
+.kpi-link { color:var(--muted); display:grid; place-items:center; width:32px; height:32px; border-radius:8px; }
+.kpi-link:hover, .kpi-link:focus-visible { background:var(--rule); color:var(--text); }
+.kpi-body { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-top:14px; }
+.kpi-n { font-size:40px; font-weight:650; letter-spacing:-.03em; line-height:1.05; font-variant-numeric:tabular-nums; }
+.delta { display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; }
+.delta.up { color:#15803d; } .delta.down { color:#b42318; }
+.dotbars { width:46%; max-width:160px; height:auto; }
+.revenue-card .rev-head { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.revenue-card h2, .recent-card h2 { margin:0; font-size:16px; font-weight:600; }
+.rev-n { font-size:44px; font-weight:650; letter-spacing:-.03em; margin:6px 0 2px; font-variant-numeric:tabular-nums; }
+.rev-n .small { font-size:13px; font-weight:400; letter-spacing:0; }
+.rev-side { display:grid; justify-items:end; gap:10px; align-content:start; }
+.pill-soft { background:var(--accent-soft); color:var(--accent-ink); border-radius:999px; padding:6px 12px; font-size:12px; }
+.legend { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:var(--muted); }
+.legend li { display:inline-flex; align-items:center; gap:6px; }
+.legend i { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.dotmatrix { margin-top:10px; }
+.dotmatrix svg { width:100%; height:auto; display:block; }
+.dotmatrix .hit { fill:transparent; }
+.dotmatrix g:focus { outline:none; } .dotmatrix g:focus .hit { fill:var(--accent-ring); }
+.dotmatrix .today { stroke:var(--text); stroke-width:1.2; }
+.dotmatrix .today-dot { fill:var(--text); }
+.dotmatrix .tick { font-size:9px; fill:var(--muted); } .dotmatrix .today-label { fill:var(--text); font-weight:600; }
+.dotmatrix-readout { font-size:13px; min-height:20px; }
+.recent-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.recent-scroll { overflow-x:auto; }
+.recent-table { width:100%; border-collapse:collapse; font-size:14px; min-width:520px; }
+.recent-table th { text-align:left; font-weight:500; color:var(--muted); font-size:12px; padding:8px 10px; border-bottom:1px solid var(--rule); }
+.recent-table td { padding:12px 10px; border-bottom:1px solid var(--rule); }
+.recent-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.status-dot { display:inline-flex; align-items:center; gap:6px; font-size:13px; }
+.status-dot::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--muted); }
+.status-dot.s-ok::before { background:#16a34a; } .status-dot.s-wait::before { background:var(--accent); } .status-dot.s-bad::before { background:#b42318; }
+
+/* Menú: tarjeta del negocio arriba y del usuario abajo */
+.brand-product { display:flex; align-items:center; gap:8px; font-size:16px; padding:4px 8px 10px; }
+.store-card { display:flex; align-items:center; gap:10px; margin:0 8px 10px; padding:10px; border-radius:12px;
+  background:var(--rule); }
+.store-name { font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.store-avatar { width:28px; height:28px; flex:none; border-radius:8px; background:var(--accent); color:#fff;
+  display:grid; place-items:center; font-weight:700; font-size:13px; }
+.user-card { border:1px solid var(--border); border-radius:12px; padding:8px; display:grid; gap:2px; }
+.user-row { display:flex; align-items:center; gap:10px; padding:4px 6px 8px; border-bottom:1px solid var(--rule); margin-bottom:4px; }
+.user-row span:last-child { display:grid; min-width:0; }
+.user-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+@media (max-width:1100px) { .home-kpis { grid-template-columns:1fr 1fr; } }
+@media (max-width:640px) {
+  .home-kpis { grid-template-columns:1fr; }
+  .home-head h1 { font-size:24px; }
+  .kpi-n { font-size:34px; } .rev-n { font-size:34px; }
+  .rev-side { justify-items:start; }
+}
+.dotmatrix-ticks { position:relative; display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px; height:18px; }
+.dotmatrix-ticks b { position:absolute; transform:translateX(-50%); color:var(--text); font-weight:600; }
+.delta .muted { white-space:nowrap; font-weight:400; }
+.kpi-body > div:first-child { min-width:0; }
+
+/* ===== Estética 04/11/2026 (referencia «dashboard suave»): aplica a TODO el panel =====
+   Tarjetas blancas muy redondeadas sobre lienzo gris, títulos grandes, números protagonistas,
+   sombras mínimas, controles y filas más aireados. Sólo estilos: ninguna pantalla cambia su lógica. */
+.sheet { border-radius:var(--radius-sheet); box-shadow:var(--shadow-card); }
+.titlebar h1 { font-weight:650; letter-spacing:-0.025em; line-height:1.15; }
+.titlebar .finding { font-size:var(--fs-body); }
+.kpis { border-radius:var(--radius-card); box-shadow:var(--shadow-card); background:var(--surface); }
+.kpi { padding:16px 20px; }
+.kpi .n { font-weight:650; letter-spacing:-0.03em; }
+.setup-card, .results-card, .tablewrap, .team-list, .quote-form, .inbox-notes, .handoff-card {
+  border-radius:var(--radius-card); }
+.results-card, .setup-card { box-shadow:var(--shadow-card); }
+.btn { border-radius:var(--radius-control); font-weight:500; }
+.btn.sm { border-radius:8px; }
+input, select, textarea { border-radius:var(--radius-control); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); }
+.chip, .pill { border-radius:var(--radius-chip); }
+table thead th { background:var(--ground); font-weight:500; color:var(--muted); }
+table tbody tr { transition:background .12s var(--ease); }
+table tbody tr:hover { background:var(--ground); }
+.nav a, .nav button, .nav-action { border-radius:10px; }
+.nav a.active { background:var(--surface); box-shadow:0 1px 2px rgba(16,24,40,.06), 0 0 0 1px var(--border); }
+.nav-title { letter-spacing:.06em; }
+.sidebar { border-radius:var(--radius-sheet); }
+.kpi-card, .revenue-card, .recent-card { border-radius:var(--radius-sheet); box-shadow:var(--shadow-card); }
+.empty-box, .state { border-radius:var(--radius-card); }
+@media (prefers-reduced-motion: reduce) { table tbody tr { transition:none; } }
