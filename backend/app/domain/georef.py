@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import time
 
+from typing import Any, Optional
+
 import httpx
 
 from ..config import settings
@@ -98,3 +100,32 @@ def match_zone(text: str, zones: list[str]) -> tuple[str | None, list[dict[str, 
     if len(hits) == 1 and None not in hits:
         return hits.pop(), found
     return None, found
+
+
+def address(street: str, place: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """Dirección normalizada (calle, altura, localidad, partido, provincia) o None. Con lugar prueba
+    como localidad, como partido y, si no, sin filtro («zona sur» o un lugar mal escrito no traban)."""
+    if not settings.georef_url or not street:
+        return None
+    for key in (["localidad", "departamento", None] if place else [None]):
+        params = {"direccion": street, "max": 1, "campos": "calle.nombre,altura.valor,localidad_censal.nombre,"
+                  "departamento.nombre,provincia.nombre,nomenclatura"}
+        if key:
+            params[key] = place
+        try:
+            r = httpx.get(f"{settings.georef_url.rstrip('/')}/direcciones", params=params, timeout=TIMEOUT_S)
+            r.raise_for_status()
+            found = r.json().get("direcciones") or []
+        except (httpx.HTTPError, ValueError):
+            log.info("georef no respondió para una dirección")
+            return None
+        if found and (found[0].get("altura") or {}).get("valor"):
+            d = found[0]
+            out = {"calle": d["calle"]["nombre"], "altura": d["altura"]["valor"],
+                   "localidad": (d.get("localidad_censal") or {}).get("nombre") or "",
+                   "departamento": (d.get("departamento") or {}).get("nombre") or "",
+                   "provincia": (d.get("provincia") or {}).get("nombre") or ""}
+            out["texto"] = d.get("nomenclatura") or ", ".join(
+                x for x in (f"{out['calle']} {out['altura']}", out["localidad"], out["provincia"]) if x)
+            return out
+    return None

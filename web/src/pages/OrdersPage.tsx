@@ -146,6 +146,14 @@ export function OrdersPage() {
                       <td className="pedido">
                         <b>#{o.number}</b>
                         <small>{o.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}</small>
+                        {o.delivery_method && (
+                          <small className="order-delivery">
+                            {o.delivery_method === "pickup" ? "Retira en el local"
+                              : `Envío a ${o.delivery_address?.texto ?? `${o.delivery_address?.calle ?? ""} ${o.delivery_address?.altura ?? ""}`}`}
+                            {o.delivery_contact && ` · ${o.delivery_contact.name || "Sin nombre"} ${o.delivery_contact.phone}`}
+                            {o.shipping ? ` · envío $${fmtAmount(o.shipping)}` : o.delivery_note ? ` · ${o.delivery_note}` : ""}
+                          </small>
+                        )}
                       </td>
                       <td className="num" data-label="Total">${fmtAmount(o.total)} <span className="muted">{o.currency}</span>
                         {o.deposit != null && (

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, booking, customer_memory, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
+from ..domain import agent_profile, ai_usage, booking, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -451,8 +451,10 @@ class _Turn:
         self.by_topic = False             # derivó por un tema configurado por el negocio
         self.dry_run = False
         self.text = ""          # mensaje normalizado del turno (el comparador ve qué dato se pidió)
+        self.raw = ""           # el mensaje tal como lo escribió el cliente (nombres, direcciones)
         self.offer: Optional[dict[str, Any]] = None   # propuesta de agregar del turno anterior
         self.slots: Optional[dict[str, Any]] = None   # turnos ofrecidos en el mensaje anterior
+        self.delivery_state: Optional[dict[str, Any]] = None   # paso de entrega pendiente
         self.booking_ask = False
         self.consent = "read"   # ver _consent
         self.no_cart = False    # "todavía no quiero carrito": no se propone agregar
@@ -1171,12 +1173,102 @@ class _Turn:
             if pending:
                 return self.pay_link(pending[0], "Ya tenés un pedido esperando el pago.")
             return "Todavía no agregaste nada al carrito. ¿Qué producto querés llevar?"
-        below = self._below_minimum(cart["total"])
+        below = self._below_minimum(cart["subtotal"])     # el mínimo es de productos: el envío no cuenta
         if below:
             return below
+        # Las evaluaciones no escriben la entrega ni consultan Georef (sin efectos).
+        if delivery.enabled(self.profile) and not cart.get("delivery_method") and not self.dry_run:
+            return self.ask_delivery()
         self.state["pending"] = {"action": "checkout", "total": cart["total"]}
-        return ("Te confirmo el pedido:\n" + self.cart_text(cart)
+        how = delivery.describe(cart)
+        text_cart = self.cart_text(cart)
+        if cart.get("shipping"):        # el envío va ANTES del total (que ya lo incluye)
+            text_cart = text_cart.replace("\nTotal:", f"\nEnvío: {_money(cart['shipping'])}\nTotal:", 1)
+        return ("Te confirmo el pedido:\n" + text_cart
+                + (f"\nEntrega: {how}" if how else "")
                 + "\nAl confirmar te aparto el stock y te paso el link de pago. ¿Confirmás? (sí / no)")
+
+    # -- entrega (envío o retiro), antes del resumen --
+    def ask_delivery(self) -> str:
+        o = delivery.options(self.profile)
+        self.state["delivery"] = {"step": "method"}
+        self.tool("entrega", "pregunta envío o retiro")
+        lines = []
+        if o["zones"]:
+            lines.append(f"1. Envío a domicilio (zonas: {', '.join(o['zones'])})")
+        if o["pickup"]:
+            hours = f" · {o['hours'].rstrip('. ')}" if o["hours"] else ""
+            lines.append(f"{len(lines) + 1}. Retiro en el local: {o['pickup']}{hours}")
+        if len(lines) == 1:
+            only = "envío" if o["zones"] else "retiro"
+            self.state["delivery"] = {"step": "method", "only": only}
+            return f"Antes de confirmar: {lines[0][3:]}. ¿Te sirve así?"
+        return "Antes de confirmar, ¿cómo lo querés recibir?\n" + "\n".join(lines)
+
+    def _cart_id(self) -> Optional[str]:
+        cart = orders.get_cart(self.tenant, self.conv)
+        return cart["id"] if cart else None
+
+    def delivery_step(self, text: str) -> Optional[str]:
+        """Responde el paso de entrega pendiente. None si el mensaje no lo contesta (sigue el agente)."""
+        st, o = self.delivery_state or {}, delivery.options(self.profile)
+        step = st.get("step")
+        if step == "method":
+            wants_pickup = bool(_RE_PICKUP.search(text)) or (
+                st.get("only") == "retiro" and _RE_YES.match(text)) or (o["zones"] and re.fullmatch(r"\s*2\s*", text))
+            wants_ship = bool(re.search(r"\b(envi\w*|domicilio|mand\w*|llev\w*|traig\w*)\b", text)) or (
+                st.get("only") == "envío" and _RE_YES.match(text)) or bool(re.fullmatch(r"\s*1\s*", text) and o["zones"])
+            if wants_pickup and o["pickup"] and not (wants_ship and o["zones"]):   # si nombra el envío, gana el envío
+                cid = self._cart_id()
+                if cid:
+                    with tenant_tx(self.tenant) as cur:
+                        delivery.apply(cur, self.tenant, cid, "pickup")
+                self.tool("entrega", "retiro en el local")
+                return self.prepare_checkout(text)
+            if wants_ship and o["zones"]:
+                self.state["delivery"] = {"step": "address"}
+                return "Pasame la dirección de entrega: calle, número y localidad (ej.: Av. Mitre 1234, Avellaneda)."
+            return None
+        if step == "address":
+            if o["pickup"] and _RE_PICKUP.search(text):          # «mejor lo retiro»: cambia a retiro
+                self.delivery_state = {"step": "method", "only": "retiro"}
+                return self.delivery_step("si")
+            tries = st.get("tries", 0) + 1
+            addr = delivery.parse_address(self.raw or text)
+            if addr is None:
+                if tries >= 2:
+                    self.requires_human = True
+                    return ("No pude ubicar esa dirección. Le paso tu pedido a una persona del equipo para que "
+                            "coordine la entrega con vos por acá." + (" También podés retirarlo en el local." if o["pickup"] else ""))
+                self.state["delivery"] = {"step": "address", "tries": tries}
+                return "No encontré esa dirección. ¿Me la pasás con calle, número y localidad? (ej.: Av. Mitre 1234, Avellaneda)"
+            zone = delivery.zone_for(addr, o["zones"])
+            self.tool("entrega", f"dirección {addr['texto'] or addr['localidad']} → {zone or 'fuera de zona'}")
+            if zone is None:
+                if o["pickup"]:
+                    self.state["delivery"] = {"step": "method", "only": "retiro"}
+                    return (f"A {addr['localidad'] or addr['departamento']} no hacemos envíos (zonas: {', '.join(o['zones'])}). "
+                            f"¿Lo retirás en el local? {o['pickup']}")
+                self.requires_human = True
+                return (f"A {addr['localidad'] or addr['departamento']} no figura que enviemos. Le paso tu consulta a una "
+                        "persona del equipo para ver cómo te lo hacemos llegar.")
+            cost = o["costs"].get(zone)
+            self.state["delivery"] = {"step": "contact", "address": addr, "zone": zone, "cost": cost}
+            price = f"El envío a {zone} cuesta {_money(cost)}." if cost is not None else f"El costo del envío a {zone} te lo confirma el equipo."
+            return f"Perfecto: {addr['texto']}. {price} ¿A nombre de quién y un teléfono para coordinar la entrega?"
+        if step == "contact":
+            contact = delivery.parse_contact(self.raw or text)     # el nombre tal como lo escribe
+            if contact is None:
+                self.state["delivery"] = st
+                return "¿Me pasás un nombre y un teléfono para coordinar la entrega? (ej.: Ana, 11 5555 4444)"
+            cid = self._cart_id()
+            if cid:
+                with tenant_tx(self.tenant) as cur:
+                    delivery.apply(cur, self.tenant, cid, "delivery", address=st["address"], contact=contact,
+                                   cost=st.get("cost"), note=None if st.get("cost") is not None else "costo de envío a coordinar")
+            self.tool("entrega", f"envío a {st['zone']}")
+            return self.prepare_checkout(text)
+        return None
 
     def confirm_checkout(self) -> str:
         pending = self.state.pop("pending", None) or {}
@@ -1426,6 +1518,8 @@ class _Turn:
             requirements={"producto": o["name"], "sku": o["sku"]}, requires_human_quote=True))
 
 
+# Retiro en el local (sin «paso» o «local» sueltos: «te paso la dirección» es un envío).
+_RE_PICKUP = re.compile(r"\b(retir\w*|lo busco|paso a buscar\w*|voy a buscar\w*|en el local|por el local)\b")
 _RE_BOOKING = re.compile(r"\b(turnos?|reserv\w*|agend\w*|cita|coordinar (una )?(visita|medicion|retiro|instalacion))\b")
 
 
@@ -1567,16 +1661,19 @@ def handle_sales_message(tenant_id: str, message: str, conversation_id: Optional
     turn.dry_run = channel == "eval"      # evaluaciones: sin pedidos, stock apartado ni cobros
     text = normalize(message)
     turn.text = text
+    turn.raw = message
     mode = "mock"
     # Una propuesta de agregar vale sólo para el mensaje siguiente; la derivación, para su seguimiento.
     turn.offer = state.pop("offer", None)
     turn.slots = state.pop("slots", None)      # turnos ofrecidos en el mensaje anterior
+    turn.delivery_state = state.pop("delivery", None)   # envío o retiro: un paso por mensaje
     turn.booking_ask = bool(state.pop("booking_ask", None))   # preguntó «¿para qué es el turno?»
     handoff = bool(state.pop("handoff", None))
     turn.no_cart = all(_RE_NO_CART.search(part) for part in _parts(text))
     turn.consent = _consent(message, text, turn.offer)
 
-    reply = (_confirmation_reply(turn, text) or _human_reply(turn, text, handoff) or _reorder_reply(turn, text)
+    reply = (_confirmation_reply(turn, text) or _human_reply(turn, text, handoff)
+             or (turn.delivery_step(text) if turn.delivery_state else None) or _reorder_reply(turn, text)
              or _booking_reply(turn, text))
     if reply is None:
         planner = planner or llm_sales.default_planner()

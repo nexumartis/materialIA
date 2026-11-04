@@ -966,3 +966,4 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
 .alerts-pop li a:hover, .alerts-pop li a:focus-visible { background:var(--accent-soft); }
 .alerts-pop li + li { border-top:1px solid var(--rule); }
 @media (max-width:900px) { .alerts-pop { left:16px; right:16px; width:auto; bottom:110px; } }
+.order-delivery { display:block; color:var(--muted); }

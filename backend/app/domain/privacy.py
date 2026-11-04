@@ -74,6 +74,13 @@ def redact_conversation(cur: Any, tenant_id: str, uid: str, conversation_id: str
         if clean != summary:
             cur.execute("update conversations set handoff_summary = %s::jsonb where tenant_id = %s and id = %s",
                         (json.dumps(clean, ensure_ascii=False), tenant_id, conversation_id))
+    # La entrega de sus pedidos también tiene datos personales: quedan el método y la localidad.
+    cur.execute("update orders set delivery_contact = case when delivery_contact is null then null else "
+                "'{\"name\": \"[oculto]\", \"phone\": \"[oculto]\"}'::jsonb end, "
+                "delivery_address = case when delivery_address is null then null else jsonb_build_object("
+                "'localidad', delivery_address->>'localidad', 'departamento', delivery_address->>'departamento', "
+                "'provincia', delivery_address->>'provincia', 'texto', '[dirección oculta], ' || coalesce(delivery_address->>'localidad', '')) end "
+                "where tenant_id = %s and conversation_id = %s", (tenant_id, conversation_id))
     cur.execute("update conversations set redacted_at = now() where tenant_id = %s and id = %s",
                 (tenant_id, conversation_id))
     opportunities._audit(cur, tenant_id, "conversation_redacted", conversation_id, {"actor": uid, "messages": changed})
