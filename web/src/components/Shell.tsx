@@ -6,7 +6,6 @@ import {
 import type { Health } from "../lib/api";
 import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
-import { Mark } from "./Mark";
 
 export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "inicio" | "login" | "signup";
 
@@ -96,7 +95,6 @@ export function Shell({ health, active, children }: Props) {
 
       <div className="app">
         <aside className="sidebar">
-          <div className="brand brand-product"><Mark /> <b>Presupuesto Vivo</b></div>
           {status === "ready" && me && (
             <div className="store-card" title={me.business_name}>
               <span className="store-avatar" aria-hidden>{me.business_name.trim().charAt(0).toUpperCase()}</span>

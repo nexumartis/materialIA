@@ -837,7 +837,7 @@ tbody td.num { white-space:nowrap; }
 }
 .dotmatrix-ticks { position:relative; display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px; height:18px; }
 .dotmatrix-ticks b { position:absolute; transform:translateX(-50%); color:var(--text); font-weight:600; }
-.delta .muted { white-space:nowrap; font-weight:400; }
+.delta { flex-wrap:wrap; row-gap:0; } .delta .muted { font-weight:400; }
 .kpi-body > div:first-child { min-width:0; }
 
 /* ===== Estética 04/11/2026 (referencia «dashboard suave»): aplica a TODO el panel =====
@@ -867,3 +867,51 @@ table tbody tr:hover { background:var(--ground); }
 .kpi-card, .revenue-card, .recent-card { border-radius:var(--radius-sheet); box-shadow:var(--shadow-card); }
 .empty-box, .state { border-radius:var(--radius-card); }
 @media (prefers-reduced-motion: reduce) { table tbody tr { transition:none; } }
+
+/* Campos de texto: un estilo base para todo el panel (antes quedaba el borde del navegador). */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), select, textarea {
+  border:1px solid var(--control); background:var(--surface); border-radius:var(--radius-control);
+  padding:0 12px; min-height:var(--control-h); color:var(--text); }
+textarea { padding:10px 12px; line-height:1.45; resize:vertical; }
+input::placeholder, textarea::placeholder { color:#8a8f98; }
+input:disabled, select:disabled, textarea:disabled { background:var(--ground); color:var(--muted); }
+
+/* Paneles planos (pantallas de trabajo): borde fino, sin sombra, encabezado con conteo. */
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:20px; min-width:0; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.panel-head h2 { margin:0; font-size:var(--fs-section); font-weight:600; }
+.panel-head h2 .muted { font-weight:400; margin-left:4px; }
+.panel-note { margin:8px 0 12px; }
+.link { color:var(--accent-ink); font-weight:500; }
+.inline-form { display:flex; gap:8px; }
+.inline-form input { flex:1; min-width:0; }
+.team-grid { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:16px; align-items:start; }
+.people { list-style:none; margin:0; padding:0; }
+.people li { display:flex; align-items:center; gap:12px; min-height:60px; padding:10px 0; border-top:1px solid var(--rule); }
+.people li:first-child { border-top:0; }
+.person { flex:1; display:grid; min-width:0; }
+.person b { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.person small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.avatar { width:36px; height:36px; flex:none; border-radius:50%; display:grid; place-items:center; font-weight:600; font-size:14px; }
+.avatar.pending { background:var(--surface); color:var(--muted); border:1px dashed var(--control); }
+.people .people-empty { display:block; min-height:0; padding:16px 0 4px; }
+.qr-form { display:grid; gap:8px; margin-top:12px; }
+.qr-form > div { display:flex; justify-content:flex-end; }
+@media (max-width:900px) { .team-grid { grid-template-columns:1fr; } }
+@media (max-width:520px) { .inline-form { flex-direction:column; } }
+
+/* Inicio: el gráfico de cada tarjeta tiene su ancho; el texto se acomoda al lado y nunca lo pisa. */
+.kpi-body > div:first-child { flex:1 1 auto; min-width:0; }
+.kpi-body .dotbars { flex:none; width:118px; max-width:40%; }
+/* Turnos como agenda por día */
+.agenda { display:grid; gap:16px; }
+.agenda-day { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:6px 20px 8px; }
+.agenda-day h2 { font-size:var(--fs-section); font-weight:600; margin:12px 0 4px; }
+.agenda-day h2 .muted { font-weight:400; margin-left:6px; font-size:var(--fs-small); }
+.agenda-day ul { list-style:none; margin:0; padding:0; }
+.agenda-day li { display:flex; align-items:center; gap:16px; min-height:60px; border-top:1px solid var(--rule); }
+.agenda-day li:first-child { border-top:0; }
+.agenda-time { flex:none; width:64px; font-size:18px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+@media (max-width:520px) { .agenda-day li { flex-wrap:wrap; gap:4px 12px; padding:10px 0; } .agenda-day li .btn { margin-left:76px; } }
+/* Inicio: si la última tarjeta queda sola en su fila, ocupa el ancho (sin hueco). */
+@media (max-width:1100px) and (min-width:641px) { .home-kpis > :last-child:nth-child(odd) { grid-column:1 / -1; } }
