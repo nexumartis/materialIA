@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..db import tenant_tx
-from ..domain import agent_profile, ai_usage, booking, campaigns, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
+from ..domain import agent_profile, ai_usage, booking, campaigns, reparto, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
 from ..payments.providers import PaymentProviderError
@@ -1264,13 +1264,57 @@ class _Turn:
                 self.state["delivery"] = st
                 return "¿Me pasás un nombre y un teléfono para coordinar la entrega? (ej.: Ana, 11 5555 4444)"
             cid = self._cart_id()
+            options: list[dict[str, Any]] = []
             if cid:
                 with tenant_tx(self.tenant) as cur:
                     delivery.apply(cur, self.tenant, cid, "delivery", address=st["address"], contact=contact,
                                    cost=st.get("cost"), note=None if st.get("cost") is not None else "costo de envío a coordinar")
+                    options = reparto.suggest(cur, self.tenant, st["address"], exclude_order=cid)
             self.tool("entrega", f"envío a {st['zone']}")
+            if options:
+                return self.ask_slot(options)
             return self.prepare_checkout(text)
+        if step == "slot":
+            return self.slot_step(text, st.get("options") or [])
         return None
+
+    # -- día y franja de la entrega (con cupo; primero donde ya pasamos cerca) --
+    def ask_slot(self, options: list[dict[str, Any]]) -> str:
+        self.state["delivery"] = {"step": "slot", "options": options}
+        self.tool("entrega", "ofrece franjas: " + ", ".join(f"{o['date']} {o['window']}" for o in options))
+        lines = [f"{i}. {o['label'][:1].upper() + o['label'][1:]}" + (" (ese día ya pasamos por tu zona)" if o["near_km"] is not None else "")
+                 for i, o in enumerate(options, 1)]
+        return ("¿Cuándo te queda mejor recibirlo?\n" + "\n".join(lines)
+                + "\nSi no te sirve ninguno, decime «otro día» y lo coordina el equipo.")
+
+    def slot_step(self, text: str, options: list[dict[str, Any]]) -> Optional[str]:
+        """Entiende «1», «la segunda», «el jueves», «mañana a la tarde»… Si no queda claro, repregunta."""
+        pick = None
+        m = re.fullmatch(r"\s*(?:la |el |opcion )?(\d)\s*[.!]?\s*", text)
+        if m and 1 <= int(m.group(1)) <= len(options):
+            pick = options[int(m.group(1)) - 1]
+        elif re.search(r"\bprimer[ao]?\b", text):
+            pick = options[0]
+        elif re.search(r"\bsegund[ao]\b", text) and len(options) > 1:
+            pick = options[1]
+        else:
+            window = "pm" if re.search(r"\btarde\b", text) else "am" if re.search(r"\b(temprano|a la manana|de manana)\b", text) else None
+            hits = [o for o in options if any(re.search(rf"\b{re.escape(t)}\b", text) for t in reparto.day_tokens(o["date"]))
+                    and (window is None or o["window"] == window)]
+            if len(hits) == 1:
+                pick = hits[0]
+        if pick is None and re.search(r"\b(otro dia|ninguno|ninguna|no puedo|otra fecha)\b", text):
+            self.tool("entrega", "otro día: a coordinar")
+            return self.prepare_checkout(text)
+        if pick is None:
+            self.state["delivery"] = {"step": "slot", "options": options}
+            return "¿Cuál te sirve? Respondé 1" + (" o 2" if len(options) > 1 else "") + ", o «otro día»."
+        cid = self._cart_id()
+        if cid:
+            with tenant_tx(self.tenant) as cur:
+                reparto.hold(cur, self.tenant, cid, pick["date"], pick["window"])
+        self.tool("entrega", f"franja {pick['date']} {pick['window']}")
+        return self.prepare_checkout(text)
 
     def confirm_checkout(self) -> str:
         pending = self.state.pop("pending", None) or {}

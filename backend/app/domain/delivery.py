@@ -89,5 +89,7 @@ def describe(order: dict[str, Any]) -> Optional[str]:
         place = a.get("texto") or ", ".join(x for x in (f"{a.get('calle', '')} {a.get('altura', '')}".strip(),
                                                          a.get("localidad")) if x)
         note = f" ({order['delivery_note']})" if order.get("delivery_note") else ""
-        return f"Envío a {place}{note}"
+        from .reparto import describe_slot
+        when = describe_slot(order)
+        return f"Envío a {place}{note}" + (f" · {when}" if when else "")
     return None

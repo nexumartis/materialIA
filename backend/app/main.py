@@ -807,6 +807,17 @@ def app_deliveries(date: str | None = None, uid: str = Depends(staff_uid)) -> di
         return reparto.board(cur, tenant, _day(date))
 
 
+@app.put("/app/deliveries/slots")
+def app_delivery_slots(body: dict = Body(...), uid: str = Depends(owner_uid)) -> dict:
+    """Cómo reparte el negocio (días, franjas, cupo): con esto el agente ofrece franjas al vender."""
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return reparto.save_slots_config(cur, tenant, uid, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/app/deliveries")
 def app_delivery_schedule(body: dict = Body(...), uid: str = Depends(staff_uid)) -> dict:
     tenant = _team_tx(uid)

@@ -11,11 +11,14 @@
 """
 from __future__ import annotations
 
+import json
+import math
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from . import opportunities, orders
+from .inventory import normalize
 
 AR = ZoneInfo("America/Argentina/Buenos_Aires")
 WINDOWS = {"am": "de 8 a 13 h", "pm": "de 13 a 18 h", "day": "durante el día"}
@@ -30,7 +33,7 @@ MAX_MESSAGE = 300
 _DAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 
 _COLS = ("j.id, j.order_id, j.conversation_id, j.kind, j.scheduled_date, j.time_window, j.assigned_to, j.status, "
-         "j.eta_minutes, j.note, j.failure_reason, j.started_at, j.arrived_at, j.finished_at, j.updated_at, j.created_at, "
+         "j.eta_minutes, j.note, j.failure_reason, j.started_at, j.arrived_at, j.finished_at, j.updated_at, j.created_at, j.source, "
          "o.number, o.status as order_status, o.total, o.delivery_address, o.delivery_contact, o.delivery_note, "
          "u.email as driver_email")
 _FROM = ("from delivery_jobs j join orders o on o.tenant_id = j.tenant_id and o.id = j.order_id "
@@ -80,6 +83,7 @@ def _view(cur: Any, tenant_id: str, row: dict[str, Any], driver: bool = False) -
             "arrived_at": iso(row["arrived_at"]), "finished_at": iso(row["finished_at"]),
             "address": _address(row), "maps_url": _maps(row), "delivery_note": row.get("delivery_note"),
             "contact": {"name": contact.get("name") or "", "phone": contact.get("phone") or ""},
+            "source": row.get("source") or "panel",
             "items": _items(cur, tenant_id, str(row["order_id"]))}
     if driver and row.get("conversation_id"):
         # Lo que escribió el cliente DESDE que se agendó la entrega («toquen timbre»), nada más.
@@ -133,7 +137,17 @@ def board(cur: Any, tenant_id: str, day: date) -> dict[str, Any]:
                 "items": _items(cur, tenant_id, str(r["id"]))} for r in cur.fetchall()]
     return {"date": day.isoformat(), "windows": [{"id": k, "label": v} for k, v in WINDOWS.items()],
             "kinds": [{"id": k, "label": v} for k, v in KINDS.items()], "drivers": drivers(cur, tenant_id),
-            "pending": pending, "jobs": jobs}
+            "pending": pending, "jobs": jobs, "slots": slots_config(cur, tenant_id),
+            "load": _load(cur, tenant_id, day)}
+
+
+def _load(cur: Any, tenant_id: str, day: date) -> dict[str, int]:
+    """Cupo usado por franja ese día (entregas activas + pedidos esperando pago con franja)."""
+    cur.execute("select w, count(*) as n from (select time_window as w from delivery_jobs where tenant_id = %s "
+                "and scheduled_date = %s and status not in ('failed', 'cancelled') union all select delivery_window "
+                "from orders where tenant_id = %s and delivery_date = %s and status = 'PENDING_PAYMENT' "
+                "and reserved_until > now()) x group by w", (tenant_id, day, tenant_id, day))
+    return {r["w"]: r["n"] for r in cur.fetchall()}
 
 
 def _parse_day(value: Any) -> date:
@@ -216,12 +230,163 @@ def update(cur: Any, tenant_id: str, uid: str, job_id: str, body: dict[str, Any]
     return _view(cur, tenant_id, _fetch(cur, tenant_id, job_id))
 
 
+# --- Franjas que ofrece el agente (con cupo y cercanía) -------------------------------------
+SLOT_DEFAULTS: dict[str, Any] = {"enabled": False, "days": [0, 1, 2, 3, 4, 5], "windows": ["am", "pm"],
+                                 "capacity": 6, "horizon_days": 6, "lead_days": 1}
+NEAR_KM = 2.0
+OFFER = 2
+
+
+def slots_config(cur: Any, tenant_id: str) -> dict[str, Any]:
+    cur.execute("select settings_json -> 'delivery_slots' as c from tenants where id = %s", (tenant_id,))
+    row = cur.fetchone()
+    return {**SLOT_DEFAULTS, **((row or {}).get("c") or {})}
+
+
+def save_slots_config(cur: Any, tenant_id: str, uid: str, data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Configuración inválida.")
+    days = sorted({int(d) for d in data.get("days", SLOT_DEFAULTS["days"]) if str(d).isdigit() and 0 <= int(d) <= 6})
+    windows = [w for w in WINDOWS if w in (data.get("windows") or [])]
+    try:
+        capacity, horizon, lead = (int(data.get(k, SLOT_DEFAULTS[k])) for k in ("capacity", "horizon_days", "lead_days"))
+    except (TypeError, ValueError):
+        raise ValueError("Cupo y días tienen que ser números.") from None
+    if not days or not windows:
+        raise ValueError("Elegí al menos un día y una franja.")
+    if not (1 <= capacity <= 200 and 1 <= horizon <= 30 and 0 <= lead <= 7):
+        raise ValueError("Cupo entre 1 y 200, días hacia adelante entre 1 y 30, anticipación entre 0 y 7.")
+    config = {"enabled": bool(data.get("enabled")), "days": days, "windows": windows, "capacity": capacity,
+              "horizon_days": horizon, "lead_days": lead}
+    cur.execute("update tenants set settings_json = jsonb_set(coalesce(settings_json, '{}'::jsonb), '{delivery_slots}', "
+                "%s::jsonb) where id = %s", (json.dumps(config), tenant_id))
+    opportunities._audit(cur, tenant_id, "delivery_slots_updated", None, {"actor": uid})
+    return config
+
+
+def _km(a: dict[str, Any], b: dict[str, Any]) -> Optional[float]:
+    """Distancia en línea recta (haversine). None si alguna dirección no tiene coordenadas."""
+    try:
+        la1, lo1, la2, lo2 = (math.radians(float(x)) for x in (a["lat"], a["lon"], b["lat"], b["lon"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(h))
+
+
+def suggest(cur: Any, tenant_id: str, address: Optional[dict[str, Any]], exclude_order: Optional[str] = None,
+            now: Optional[datetime] = None) -> list[dict[str, Any]]:
+    """Las mejores franjas para ofrecer: con cupo, y primero las que ya tienen una entrega a menos de
+    `NEAR_KM` (el repartidor ya pasa por ahí); después, la más temprana. Nunca ofrece una llena."""
+    cfg = slots_config(cur, tenant_id)
+    if not cfg["enabled"]:
+        return []
+    start = (now or datetime.now(AR)).date() + timedelta(days=cfg["lead_days"])
+    end = start + timedelta(days=cfg["horizon_days"])
+    # Lo ya ocupado: entregas activas + pedidos esperando el pago que reservaron franja.
+    cur.execute("select j.scheduled_date as d, j.time_window as w, o.delivery_address as a from delivery_jobs j "
+                "join orders o on o.tenant_id = j.tenant_id and o.id = j.order_id where j.tenant_id = %s "
+                "and j.scheduled_date between %s and %s and j.status not in ('failed', 'cancelled') "
+                "union all select o.delivery_date, o.delivery_window, o.delivery_address from orders o where o.tenant_id = %s "
+                "and o.delivery_date between %s and %s and o.status = 'PENDING_PAYMENT' and o.reserved_until > now() "
+                "and (%s::uuid is null or o.id <> %s::uuid)",
+                (tenant_id, start, end, tenant_id, start, end, exclude_order, exclude_order))
+    taken: dict[tuple[date, str], list[dict[str, Any]]] = {}
+    for r in cur.fetchall():
+        taken.setdefault((r["d"], r["w"]), []).append(r["a"] or {})
+    options = []
+    for i in range(cfg["horizon_days"] + 1):
+        d = start + timedelta(days=i)
+        if d.weekday() not in cfg["days"]:
+            continue
+        for w in cfg["windows"]:
+            there = taken.get((d, w), [])
+            if len(there) >= cfg["capacity"]:
+                continue
+            dists = [k for k in (_km(address or {}, a) for a in there) if k is not None]
+            near = min(dists) if dists else None
+            options.append({"date": d.isoformat(), "window": w, "label": _when(d, w).replace("el ", "", 1),
+                            "near_km": round(near, 1) if near is not None and near <= NEAR_KM else None,
+                            "free": cfg["capacity"] - len(there), "_rank": (near is None or near > NEAR_KM, i)})
+    options.sort(key=lambda o: o["_rank"])
+    best = options[:OFFER]
+    for o in best:
+        o.pop("_rank")
+    return best
+
+
+def day_tokens(day: str) -> list[str]:
+    """Palabras con las que el cliente nombra ese día (normalizadas): «jueves», «5/11», «mañana»."""
+    d = date.fromisoformat(day)
+    out = [normalize(_DAYS[d.weekday()]), f"{d.day}/{d.month}"]
+    rel = {0: "hoy", 1: "manana", 2: "pasado manana"}.get((d - today()).days)
+    return out + ([rel] if rel else [])
+
+
+def describe_slot(order: dict[str, Any]) -> Optional[str]:
+    if not order.get("delivery_date") or not order.get("delivery_window"):
+        return None
+    d = order["delivery_date"]
+    return _when(d if isinstance(d, date) else date.fromisoformat(str(d)), order["delivery_window"]).replace("el ", "", 1)
+
+
+def hold(cur: Any, tenant_id: str, order_id: str, day: str, window: str) -> None:
+    """El cliente eligió franja: queda en el pedido (y ocupa cupo mientras espera el pago)."""
+    cur.execute("update orders set delivery_date = %s, delivery_window = %s, updated_at = now() "
+                "where tenant_id = %s and id = %s", (day, window, tenant_id, order_id))
+
+
+def from_paid_order(cur: Any, tenant_id: str, order_id: str) -> None:
+    """Pedido recién pagado con franja elegida en el chat: la entrega se agenda sola (sin asignar, o
+    al único repartidor si hay uno). Si ya tiene una entrega activa, no hace nada."""
+    cur.execute("select id, conversation_id, delivery_method, delivery_date, delivery_window from orders "
+                "where tenant_id = %s and id = %s", (tenant_id, order_id))
+    o = cur.fetchone()
+    if not o or o["delivery_method"] != "delivery" or not o["delivery_date"] or not o["delivery_window"]:
+        return
+    cur.execute("select 1 from delivery_jobs where tenant_id = %s and order_id = %s and status not in ('failed', 'cancelled')",
+                (tenant_id, order_id))
+    if cur.fetchone():
+        return
+    cur.execute("select user_id from memberships where tenant_id = %s and role = 'driver'", (tenant_id,))
+    drivers_ = cur.fetchall()
+    cur.execute("insert into delivery_jobs (tenant_id, order_id, conversation_id, scheduled_date, time_window, "
+                "assigned_to, source) values (%s, %s, %s, %s, %s, %s, 'chat') returning id",
+                (tenant_id, order_id, o["conversation_id"], o["delivery_date"], o["delivery_window"],
+                 drivers_[0]["user_id"] if len(drivers_) == 1 else None))
+    job_id = str(cur.fetchone()["id"])
+    row = _fetch(cur, tenant_id, job_id)
+    _notify(cur, tenant_id, row, f"Tu pedido #{row['number']} queda agendado: te lo llevamos "
+                                 f"{_when(o['delivery_date'], o['delivery_window'])}. Te avisamos por acá cuando salgamos.")
+    opportunities._audit(cur, tenant_id, "delivery_scheduled", job_id, {"actor": "chat", "order": order_id})
+
+
+def _by_proximity(jobs: list[dict[str, Any]], coords: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dentro de cada franja, de la parada más cercana a la siguiente (vecino más cercano). Sin
+    coordenadas, queda el orden por número de pedido."""
+    out: list[dict[str, Any]] = []
+    for w in WINDOWS:
+        group = [j for j in jobs if j["window"] == w]
+        if not group:
+            continue
+        ordered, rest = [group[0]], group[1:]
+        while rest:
+            last = coords.get(ordered[-1]["id"], {})
+            rest.sort(key=lambda j: _km(last, coords.get(j["id"], {})) if _km(last, coords.get(j["id"], {})) is not None else 1e9)
+            ordered.append(rest.pop(0))
+        out += ordered
+    return out
+
+
 # --- Hoja de ruta (repartidor) --------------------------------------------------------------
 def route(cur: Any, tenant_id: str, uid: str, day: date) -> list[dict[str, Any]]:
     cur.execute(f"select {_COLS} {_FROM} where j.tenant_id = %s and j.assigned_to = %s and j.scheduled_date = %s "
-                "and j.status <> 'cancelled' order by j.status in ('done', 'failed'), j.time_window, o.number",
-                (tenant_id, uid, day))
-    return [_view(cur, tenant_id, r, driver=True) for r in cur.fetchall()]
+                "and j.status <> 'cancelled' order by j.time_window, o.number", (tenant_id, uid, day))
+    rows = cur.fetchall()
+    jobs = [_view(cur, tenant_id, r, driver=True) for r in rows]
+    coords = {str(r["id"]): r["delivery_address"] or {} for r in rows}
+    active = _by_proximity([j for j in jobs if j["status"] not in ("done", "failed")], coords)
+    return active + [j for j in jobs if j["status"] in ("done", "failed")]
 
 
 def _mine(cur: Any, tenant_id: str, uid: str, role: str, job_id: str) -> dict[str, Any]:

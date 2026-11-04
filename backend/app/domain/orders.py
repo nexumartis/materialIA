@@ -50,7 +50,7 @@ FULFILLMENT_NEXT = {
 _ORDER_COLUMNS = ("id, number, tenant_id, conversation_id, status, currency, subtotal, shipping, "
                   "total, reserved_until, cancel_reason, attention_reason, paid_at, created_at, "
                   "updated_at, quote, deposit, deposit_paid_at, delivery_method, delivery_address, "
-                  "delivery_contact, delivery_note")
+                  "delivery_contact, delivery_note, delivery_date, delivery_window")
 
 
 # --- Lectura ------------------------------------------------------------------
@@ -106,6 +106,8 @@ def _view(cur: Any, row: dict[str, Any]) -> dict[str, Any]:
         "rating": rating["score"] if rating else None,     # calificación del comprador (1 a 5)
         "delivery_method": row.get("delivery_method"), "delivery_address": row.get("delivery_address"),
         "delivery_contact": row.get("delivery_contact"), "delivery_note": row.get("delivery_note"),
+        "delivery_date": row["delivery_date"].isoformat() if row.get("delivery_date") else None,
+        "delivery_window": row.get("delivery_window"),
     }
 
 

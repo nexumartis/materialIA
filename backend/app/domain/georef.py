@@ -109,7 +109,7 @@ def address(street: str, place: Optional[str] = None) -> Optional[dict[str, Any]
         return None
     for key in (["localidad", "departamento", None] if place else [None]):
         params = {"direccion": street, "max": 1, "campos": "calle.nombre,altura.valor,localidad_censal.nombre,"
-                  "departamento.nombre,provincia.nombre,nomenclatura"}
+                  "departamento.nombre,provincia.nombre,nomenclatura,ubicacion.lat,ubicacion.lon"}
         if key:
             params[key] = place
         try:
@@ -125,6 +125,9 @@ def address(street: str, place: Optional[str] = None) -> Optional[dict[str, Any]
                    "localidad": (d.get("localidad_censal") or {}).get("nombre") or "",
                    "departamento": (d.get("departamento") or {}).get("nombre") or "",
                    "provincia": (d.get("provincia") or {}).get("nombre") or ""}
+            loc = d.get("ubicacion") or {}
+            if loc.get("lat") is not None and loc.get("lon") is not None:   # para agrupar entregas cercanas
+                out["lat"], out["lon"] = loc["lat"], loc["lon"]
             out["texto"] = d.get("nomenclatura") or ", ".join(
                 x for x in (f"{out['calle']} {out['altura']}", out["localidad"], out["provincia"]) if x)
             return out
