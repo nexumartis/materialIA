@@ -48,14 +48,14 @@ def conversation_messages(tenant_id: str, conversation_id: str, limit: int = 200
     with tenant_tx(tenant_id) as cur:
         rows = _conversation_messages(cur, tenant_id, conversation_id, limit)
     role = {"inbound": "user", "outbound": "assistant"}
-    return [{"role": role.get(r["direction"], "user"), "content": r["content"], "ui": r["payload"]}
+    return [{"id": str(r["id"]), "role": role.get(r["direction"], "user"), "content": r["content"], "ui": r["payload"]}
             for r in rows]
 
 
 def _conversation_messages(cur: Any, tenant_id: str, conversation_id: str, limit: int) -> list[dict[str, Any]]:
     """Los `limit` mensajes MÁS RECIENTES, en orden cronológico (una conversación larga muestra lo último)."""
     cur.execute(
-        "select direction, content, payload, created_at from (select direction, content, payload, created_at, id "
+        "select id, direction, content, payload, created_at from (select direction, content, payload, created_at, id "
         "from messages where tenant_id = %s and conversation_id = %s order by created_at desc, id desc limit %s) m "
         "order by created_at, id",
         (tenant_id, conversation_id, limit),

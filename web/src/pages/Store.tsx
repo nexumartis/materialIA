@@ -38,6 +38,11 @@ export function Store({ slug, embed = false }: { slug: string; embed?: boolean }
         receipt: (c, receiptId) => api.storeReceipt(slug, c, receiptId),
         cancelOrder: (c, orderId) => api.storeCancelOrder(slug, c, orderId),
         rateOrder: (c, orderId, score, comment) => api.storeRateOrder(slug, c, orderId, score, comment),
+        audio: {
+          caps: () => api.storeAudio(slug),
+          transcribe: (wav, c, signal) => api.storeTranscribe(slug, wav, c, signal),
+          speak: (c, messageId) => api.storeMessageAudio(slug, c, messageId),
+        },
       },
     [info, slug],
   );

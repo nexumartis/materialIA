@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -83,6 +84,29 @@ class Settings(BaseSettings):
     # Firma de los avisos del proveedor SIMULADO (no protege nada real; sólo recorre el camino).
     sim_webhook_secret: str = "sim-local-no-es-secreto"
     reservation_minutes: int = 30
+
+    # --- Audio web: opt-in exclusivo de UN tenant demo C/D. Sin credenciales queda apagado. ---
+    audio_demo_enabled: bool = False
+    audio_demo_tenant: str = ""
+    audio_api_key: str = Field(default="", repr=False)
+    audio_voice_id: str = ""
+    audio_tts_model: str = "eleven_multilingual_v2"
+    # Sólo WAV PCM mono, 16 kHz, 16 bits; se verifica duración y se reconstruye antes de enviarlo.
+    audio_max_upload_bytes: int = Field(default=1_000_000, gt=0, le=4_000_000)
+    audio_max_duration_seconds: int = Field(default=30, gt=0, le=60)
+    audio_max_tts_characters: int = Field(default=2000, gt=0, le=2000)
+    audio_max_response_bytes: int = Field(default=1_000_000, gt=0, le=4_000_000)
+    audio_upload_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    audio_provider_timeout_seconds: float = Field(default=20.0, gt=0, le=60)
+    # Audio exige límites positivos: 0 NO significa ilimitado. Ventanas diarias UTC.
+    audio_ip_per_minute: int = Field(default=3, gt=0, le=1_000_000)
+    audio_conversation_per_hour: int = Field(default=10, gt=0, le=1_000_000)
+    audio_daily_calls_per_tenant: int = Field(default=100, gt=0, le=1_000_000)
+    audio_daily_calls_global: int = Field(default=200, gt=0, le=1_000_000)
+    audio_daily_stt_bytes_per_tenant: int = Field(default=30_000_000, gt=0, le=2_000_000_000)
+    audio_daily_stt_bytes_global: int = Field(default=60_000_000, gt=0, le=2_000_000_000)
+    audio_daily_tts_characters_per_tenant: int = Field(default=20_000, gt=0, le=2_000_000_000)
+    audio_daily_tts_characters_global: int = Field(default=40_000, gt=0, le=2_000_000_000)
 
     # --- Memoria y contexto del agente (worker) ---
     # Minutos de inactividad antes de destilar la memoria del cliente.
