@@ -1059,3 +1059,109 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
   .camp-options { grid-template-columns:1fr; }
 }
 /* /Campañas */
+
+/* Chat en tu web -------------------------------------------------------------------------- */
+.wc-step { margin-bottom:16px; }
+.wc-step h2 { display:flex; align-items:center; gap:8px; font-size:15px; margin:0 0 12px; }
+.wc-step-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.wc-step-head h2 { margin:0; }
+.wc-n { width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; flex:none;
+  border:1px solid var(--control); font-size:12px; font-weight:600; color:var(--muted); }
+
+/* Paso 1: formulario a la izquierda, vista previa a la derecha. */
+.wc-custom { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:24px; align-items:start; }
+.wc-form { display:grid; gap:14px; min-width:0; }
+.wc-form .field > label, .wc-seg-wrap legend { font-size:var(--fs-small); font-weight:500; color:#3c4043; }
+.wc-color { display:flex; align-items:center; gap:8px; }
+.wc-color input[type="color"] { width:42px; min-width:42px; height:42px; padding:3px !important; flex:none; cursor:pointer; -webkit-appearance:none; appearance:none;
+  border:1px solid var(--control); border-radius:var(--radius-control); background:var(--surface); }
+.wc-color input[type="color"]::-webkit-color-swatch-wrapper { padding:0; }
+.wc-color input[type="color"]::-webkit-color-swatch { border:0; border-radius:6px; }
+.wc-color input[type="color"]::-moz-color-swatch { border:0; border-radius:6px; }
+.wc-color input[type="color"]:focus-visible { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); }
+.wc-color #wc-color-hex { width:110px; font-family:var(--mono); text-transform:lowercase; }
+.wc-color #wc-color-hex[aria-invalid="true"] { border-color:var(--negative); }
+.wc-help { display:flex; justify-content:space-between; gap:8px; }
+.wc-seg-wrap { border:0; margin:0; padding:0; min-width:0; }
+.wc-seg-wrap legend { padding:0; margin-bottom:4px; }
+.wc-seg { display:inline-flex; padding:3px; gap:2px; border:1px solid var(--control); border-radius:var(--radius-control); background:var(--ground); }
+.wc-seg label { position:relative; display:inline-flex; align-items:center; height:30px; padding:0 14px; border-radius:8px;
+  font-size:var(--fs-small); font-weight:500; color:var(--muted); cursor:pointer; transition:background .15s var(--ease), color .15s var(--ease); }
+.wc-seg label.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(16,24,40,.08); }
+.wc-seg input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.wc-seg label:has(input:focus-visible) { box-shadow:0 0 0 3px var(--accent-ring); }
+.wc-affix { display:flex; align-items:center; gap:8px; color:var(--muted); }
+.wc-affix input { width:84px; }
+.wc-affix input:disabled { opacity:.55; }
+.wc-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.wc-err { color:var(--negative); }
+
+/* Vista previa: una web de mentira con el botón real del widget (mismas medidas que widget.js). */
+.wc-preview { min-width:0; }
+.wc-site { position:relative; height:400px; overflow:hidden; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); box-shadow:var(--shadow-card); }
+.wc-chrome { display:flex; align-items:center; gap:10px; height:34px; padding:0 12px; border-bottom:1px solid var(--border); background:var(--ground); }
+.wc-dots { display:flex; gap:5px; }
+.wc-dots i { width:9px; height:9px; border-radius:50%; background:#d9dce1; }
+.wc-url { flex:1; min-width:0; max-width:260px; margin:0 auto; padding:3px 10px; border-radius:6px; background:var(--surface);
+  border:1px solid var(--border); font-size:11.5px; color:var(--muted); text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wc-page { display:grid; gap:12px; padding:16px; }
+.wc-sk { background:var(--raised); border-radius:6px; height:56px; }
+.wc-sk-nav { height:14px; width:40%; }
+.wc-sk-hero { height:96px; }
+.wc-sk-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.wc-sk-line { height:10px; }
+.wc-sk-line.short { width:60%; }
+.wc-btn { position:absolute; bottom:16px; z-index:3; border:0; border-radius:999px; padding:12px 18px;
+  font:600 15px/1 system-ui, sans-serif; color:#fff; box-shadow:0 6px 20px rgba(0,0,0,.18); cursor:pointer; max-width:calc(100% - 32px);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wc-btn:focus-visible { outline:3px solid #1b1c1f; outline-offset:2px; }
+.wc-right .wc-btn, .wc-right .wc-bubble, .wc-right .wc-panel { right:16px; }
+.wc-left .wc-btn, .wc-left .wc-bubble, .wc-left .wc-panel { left:16px; }
+.wc-bubble { position:absolute; bottom:70px; z-index:2; max-width:min(240px, calc(100% - 32px)); padding:10px 30px 10px 12px;
+  background:#fff; color:#202124; border-radius:12px; box-shadow:0 4px 16px rgba(16,24,40,.14), 0 1px 2px rgba(16,24,40,.08);
+  font:14px/1.4 system-ui, sans-serif; overflow-wrap:anywhere; animation:wc-pop .2s var(--ease); }
+.wc-bubble-x { position:absolute; top:4px; right:4px; width:24px; height:24px; display:grid; place-items:center; padding:0;
+  border:0; border-radius:50%; background:transparent; color:#6b7280; cursor:pointer; }
+.wc-bubble-x:hover { background:var(--raised); color:var(--text); }
+.wc-bubble-x:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.wc-panel { position:absolute; bottom:70px; z-index:2; width:min(250px, calc(100% - 32px)); display:flex; flex-direction:column;
+  background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.22); overflow:hidden; animation:wc-pop .2s var(--ease); }
+.wc-panel-head { padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600; font-size:13px; }
+.wc-panel-body { padding:12px; min-height:110px; background:var(--ground); }
+.wc-msg { display:inline-block; max-width:90%; padding:8px 10px; background:#fff; border:1px solid var(--border);
+  border-radius:12px 12px 12px 4px; font-size:13px; line-height:1.4; overflow-wrap:anywhere; }
+.wc-panel-input { margin:8px; padding:7px 10px; border:1px solid var(--control); border-radius:999px; font-size:12px; color:#9ca3af; }
+.wc-preview-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
+@keyframes wc-pop { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .wc-bubble, .wc-panel { animation:none; } }
+
+/* Paso 2: código y guías por plataforma. */
+.wc-code { display:flex; align-items:flex-start; gap:8px; padding:10px 10px 10px 12px; border:1px solid var(--border);
+  border-radius:var(--radius-control); background:var(--ground); }
+.wc-code pre { flex:1; min-width:0; margin:0; font-family:var(--mono); font-size:12.5px; line-height:1.5;
+  white-space:pre-wrap; overflow-wrap:anywhere; }
+.wc-code pre:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+.wc-code .btn { gap:6px; flex:none; }
+.wc-tabs { margin-top:16px; overflow-x:auto; scrollbar-width:thin; }
+.wc-tabs button { white-space:nowrap; flex:none; }
+.wc-tabs button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; border-radius:4px; }
+[role="tabpanel"]:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:4px; }
+.wc-steps { margin:4px 0 0; padding-left:22px; display:grid; gap:6px; }
+
+/* Paso 3: dónde quedó instalado. */
+.wc-empty { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; }
+.wc-empty p { margin:0; max-width:60ch; }
+.wc-installs { list-style:none; margin:0; padding:0; }
+.wc-installs li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px 12px; padding:10px 0; border-bottom:1px solid var(--rule); }
+.wc-installs li:first-child { padding-top:0; }
+.wc-installs b { overflow-wrap:anywhere; }
+.wc-refresh { margin-top:12px; }
+
+@media (max-width:860px) { .wc-custom { grid-template-columns:1fr; } }
+@media (max-width:520px) {
+  .wc-site { height:360px; }
+  .wc-code { flex-direction:column; }
+  .wc-code .btn { align-self:flex-end; }
+}
+/* /Chat en tu web */

@@ -141,26 +141,15 @@ function WebhooksPanel({ onChange }: { onChange?: () => void }) {
   );
 }
 
-/** Código para pegar el chat de la tienda en la web del comercio (botón flotante + ventana). */
+/** El chat para la web se configura en su propia sección (apariencia, código y verificación). */
 export function WebChatSnippet() {
-  const [slug, setSlug] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { api.agentProfile().then((p) => setSlug(p.public_slug ?? null), () => setSlug(null)); }, []);
-  if (!slug) return null;
-  const code = `<script src="${window.location.origin}/widget.js" data-tienda="${slug}" async></script>`;
   return (
     <section className="results-card" aria-labelledby="webchat-title">
       <h2 id="webchat-title">Chat para tu página web</h2>
       <p className="muted small">
-        Pegá este código antes de <code>&lt;/body&gt;</code> en tu web (o en el «HTML personalizado» de tu plataforma). Aparece un
-        botón «¿Te ayudo?» que abre tu asistente, con tu catálogo, carrito y cobro verificado. Opcional: <code>data-color="#1b1c1f"</code>.
+        Elegí color, texto y saludo, copiá el código para tu plataforma y fijate en qué webs ya quedó andando.
       </p>
-      <div className="wh-secret"><code>{code}</code>
-        <button className="btn sm" type="button" onClick={() => void navigator.clipboard?.writeText(code).then(() => setCopied(true))}>
-          <Copy size={14} strokeWidth={1.8} aria-hidden /> {copied ? "Copiado" : "Copiar"}
-        </button>
-        <a className="btn sm ghost" href={`#/tienda/${slug}`} target="_blank" rel="noopener noreferrer">Ver la tienda</a>
-      </div>
+      <a className="btn sm" href="#/web">Configurar el chat de tu web</a>
     </section>
   );
 }

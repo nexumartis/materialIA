@@ -232,6 +232,12 @@ export const api = {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scheduled_at: scheduledAt }),
     }),
   cancelCampaign: (id: string) => authed<CampaignSummary>(`/app/campaigns/${id}/cancel`, { method: "POST" }),
+  // Chat en tu web (dueño): el código se pega una vez; la apariencia la lee el script en vivo.
+  widget: () => authed<WidgetInfo>("/app/widget"),
+  saveWidget: (config: WidgetConfig) =>
+    authed<{ config: WidgetConfig; snippet: string }>("/app/widget", {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(config),
+    }),
   quickReplies: () => authed<QuickReply[]>("/app/quick-replies"),
   createQuickReply: (title: string, body: string) =>
     authed<QuickReply>("/app/quick-replies", {
@@ -645,6 +651,26 @@ export interface CampaignPreview {
   count: number;
   excluded: { opted_out: number; recently_contacted: number };
   sample: { name: string; detail: string; message: string }[];
+}
+
+// --- Chat en tu web ---------------------------------------------------------------------
+/** Apariencia del botón flotante. `greeting` vacío = sin globito de saludo. */
+export interface WidgetConfig {
+  color: string; // #rrggbb
+  label: string; // 1-40 caracteres
+  position: "right" | "left";
+  greeting: string; // 0-140 caracteres
+  greeting_delay_s: number; // 0-120
+}
+/** Webs donde el script ya cargó (lo reporta el propio widget). */
+export interface WidgetInstall { host: string; first_seen: string; last_seen: string; hits: number }
+export interface WidgetInfo {
+  slug: string;
+  store_url: string;
+  script_url: string;
+  snippet: string;
+  config: WidgetConfig;
+  installs: WidgetInstall[];
 }
 
 export interface Alert { kind: "handoff" | "order" | "receipt" | "appointment" | "rating"; text: string; href: string;

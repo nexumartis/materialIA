@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
+  AppWindow, BarChart3, Bot, CalendarDays, Code2, LayoutDashboard, Settings, PlugZap, LogIn, LogOut, Megaphone, Menu, MessageCircle, MessagesSquare, Package, ShoppingBag, SlidersHorizontal, Target, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Health } from "../lib/api";
@@ -8,7 +8,7 @@ import { usePendingHandoffs } from "../lib/alerts";
 import { useSession } from "../lib/session";
 import { AlertsBell } from "./AlertsBell";
 
-export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "campanias" | "inicio" | "login" | "signup";
+export type Section = "oportunidades" | "conversaciones" | "pedidos" | "asistente" | "catalogo" | "agente" | "venta" | "equipo" | "resultados" | "integraciones" | "turnos" | "campanias" | "web" | "inicio" | "login" | "signup";
 
 interface Props {
   health: Health | null;
@@ -29,6 +29,7 @@ const TITLES: Record<Section, string> = {
   integraciones: "Integraciones",
   turnos: "Turnos",
   campanias: "Campañas",
+  web: "Chat en tu web",
   inicio: "Inicio",
   login: "Iniciar sesión",
   signup: "Registrá tu negocio",
@@ -53,6 +54,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
     { section: "catalogo", href: "#/catalogo", label: "Catálogo", icon: Package },
   ] },
   { title: "Herramientas", items: [
+    { section: "web", href: "#/web", label: "Chat en tu web", icon: AppWindow, ownerOnly: true },
     { section: "venta", href: "#/venta", label: "Demo del agente", icon: MessageCircle },
     { section: "equipo", href: "#/equipo", label: "Equipo", icon: Users, ownerOnly: true },
     { section: "integraciones", href: "#/integraciones", label: "Integraciones", icon: PlugZap, ownerOnly: true },
