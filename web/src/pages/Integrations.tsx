@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Landmark, MapPin, MessageSquareCode, PlugZap, Trash2, Webhook, X, type LucideIcon } from "lucide-react";
 import { siGooglecalendar, siGooglesheets, siInstagram, siMake, siMercadopago, siShopify, siWhatsapp, siWoocommerce,
   siZapier, type SimpleIcon } from "simple-icons";
@@ -11,6 +11,7 @@ const EVENT_LABEL: Record<string, string> = {
   "order.deposit_paid": "Seña cobrada",
   "order.cancelled": "Pedido cancelado",
   "conversation.needs_human": "Conversación derivada a una persona",
+  "appointment.booked": "Turno reservado",
   "order.rated": "Pedido calificado",
 };
 const when = (iso: string) => new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
@@ -256,6 +257,11 @@ export function Integrations() {
   const [webhooks, setWebhooks] = useState(0);
   const [cat, setCat] = useState<Category | "todas">("todas");
   const [open, setOpen] = useState<string | null>(null);
+  const detailRef = useRef<HTMLElement>(null);
+  // Al abrir una tarjeta, su configuración se trae a la vista (en celular queda lejos de la grilla).
+  useEffect(() => {
+    if (open) detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [open]);
 
   const reload = useCallback(() => {
     api.health().then(setHealth, () => setHealth(null));
@@ -302,7 +308,7 @@ export function Integrations() {
         })}
       </ul>
       {active?.detail && (
-        <section className="intg-detail results-card" aria-labelledby="intg-detail-title">
+        <section ref={detailRef} className="intg-detail results-card" aria-labelledby="intg-detail-title">
           <div className="intg-detail-head">
             <Logo logo={active.logo} />
             <h2 id="intg-detail-title">{active.name}</h2>
