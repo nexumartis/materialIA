@@ -70,3 +70,30 @@ export function parseAmount(text: string): number {
   const normalized = t.includes(",") || /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t;
   return /^\d+(\.\d{1,2})?$/.test(normalized) ? Number(normalized) : NaN;
 }
+
+/** Día local en YYYY-MM-DD (no UTC: a la noche en Argentina, UTC ya es mañana). */
+export function localDay(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Corre un día YYYY-MM-DD en `n` días (a mediodía, para no caer en un cambio de hora). */
+export function shiftDay(day: string, n: number): string {
+  const d = new Date(`${day}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return localDay(d);
+}
+
+/** «hoy», «mañana» o «jueves 6 de noviembre». */
+export function dayLabel(day: string): string {
+  const today = localDay();
+  if (day === today) return "Hoy";
+  if (day === shiftDay(today, 1)) return "Mañana";
+  if (day === shiftDay(today, -1)) return "Ayer";
+  return cap(new Date(`${day}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" }));
+}
+
+/** «2 × Colchón, 1 × Base» para resumir lo que lleva un pedido. */
+export function itemsText(items: { name: string; qty: number }[]): string {
+  return items.map((i) => `${i.qty} × ${i.name}`).join(", ");
+}

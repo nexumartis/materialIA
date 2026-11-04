@@ -1177,3 +1177,97 @@ input:disabled, select:disabled, textarea:disabled { background:var(--ground); c
 .voice-note { display:flex; flex-direction:column; gap:4px; min-width:240px; }
 .voice-note audio { height:36px; width:100%; }
 .rec-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--negative); margin-right:4px; }
+
+/* Reparto */
+/* Equipo: qué va a hacer la persona invitada. */
+.role-choice { border:0; margin:0 0 10px; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.role-choice label { display:flex; align-items:flex-start; gap:8px; padding:10px 12px; border:1px solid var(--control);
+  border-radius:var(--radius-control); cursor:pointer; min-height:44px; }
+.role-choice label.on { border-color:var(--accent); background:var(--accent-soft); }
+.role-choice input { accent-color:var(--accent); margin-top:3px; flex:none; }
+.role-choice b { display:block; font-weight:600; font-size:var(--fs-body); }
+.role-choice small { display:block; font-size:var(--fs-small); }
+.role-choice label:focus-within { box-shadow:0 0 0 3px var(--accent-ring); }
+
+/* Entregas (panel) */
+.dl-days { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.dl-days .chip { min-height:36px; }
+.dl-days .date-input { height:36px; }
+.dl-grid { display:grid; grid-template-columns:minmax(0, 400px) minmax(0, 1fr); gap:16px; align-items:start; }
+.dl-list { list-style:none; margin:0; padding:0; }
+.dl-list > li { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:12px 0; border-top:1px solid var(--rule); }
+.dl-list > li:first-child { border-top:0; padding-top:0; }
+.dl-order, .dl-job { display:flex; flex-direction:column; gap:3px; min-width:0; width:100%; }
+.dl-job { gap:4px; }
+.dl-line { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; }
+.dl-line .pill { margin-left:0; }
+.dl-total { margin-left:auto; font-variant-numeric:tabular-nums; }
+.dl-meta { display:flex; align-items:center; gap:6px; overflow-wrap:anywhere; }
+.dl-meta svg { color:var(--muted); flex:none; }
+.dl-eta { color:var(--accent-ink); font-weight:500; }
+.dl-fail { color:var(--negative); }
+.dl-window + .dl-window { margin-top:16px; }
+.dl-window h3 { margin:0 0 8px; font-size:var(--fs-small); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.dl-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+.dl-select { width:auto; max-width:240px; height:30px; font-size:var(--fs-small); }
+.dl-form, .dl-move { display:flex; flex-direction:column; gap:10px; width:100%; padding:12px; background:var(--ground);
+  border:1px solid var(--rule); border-radius:var(--radius-control); }
+.dl-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+.dl-form-grid .field, .dl-form-grid select, .dl-form-grid input { min-width:0; width:100%; max-width:100%; }
+.dl-move { flex-direction:row; flex-wrap:wrap; align-items:flex-end; }
+.dl-job .state.err, .dl-form .state.err { margin:4px 0 0; }
+
+/* Hoja de ruta (celular primero) */
+.rt { max-width:640px; margin:0 auto; }
+.rt-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.rt-head h1 { margin:0; font-size:24px; font-weight:650; letter-spacing:-0.02em; }
+.rt-days, .rt-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.rt-days .chip, .rt-chip { min-height:44px; padding:8px 14px; font-size:var(--fs-body); }
+.rt-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+.rt-card { display:flex; flex-direction:column; gap:10px; padding:16px; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius-card); }
+.rt-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.rt-top .pill { margin-left:0; }
+.rt-when { font-size:var(--fs-small); font-weight:600; color:var(--muted); }
+.rt-title { margin:0; font-size:20px; font-weight:650; }
+.rt-items { margin:0; }
+.rt-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding-top:10px; border-top:1px solid var(--rule); }
+.rt-addr { display:flex; align-items:flex-start; gap:6px; min-width:0; overflow-wrap:anywhere; flex:1 1 200px; }
+.rt-addr svg { flex:none; margin-top:3px; color:var(--muted); }
+.rt-btn { min-height:44px; height:auto; padding:10px 16px; font-size:var(--fs-body); }
+.rt-note { margin:0; font-size:var(--fs-body); }
+.rt-msgs { display:flex; flex-direction:column; gap:6px; }
+.rt-quote { margin:0; align-self:flex-start; max-width:90%; padding:8px 12px; background:var(--raised);
+  border:1px solid var(--rule); border-radius:12px; border-bottom-left-radius:4px; overflow-wrap:anywhere; }
+.rt-steps { display:flex; flex-wrap:wrap; gap:8px; padding-top:4px; }
+.rt-main { flex:1 1 160px; font-size:16px; font-weight:600; min-height:52px; }
+.rt-steps .ghost { color:var(--negative); }
+.rt-panel { display:flex; flex-direction:column; gap:10px; padding:12px; background:var(--ground);
+  border:1px solid var(--rule); border-radius:var(--radius-control); }
+.rt-write { display:flex; flex-direction:column; gap:8px; padding-top:10px; border-top:1px solid var(--rule); }
+.rt-write-label { display:flex; align-items:center; gap:6px; font-size:var(--fs-small); font-weight:600; color:var(--muted); }
+.rt-compose { display:flex; gap:8px; }
+.rt-compose input { flex:1; min-width:0; min-height:44px; padding:0 12px; font-size:16px; background:var(--surface);
+  border:1px solid var(--control); border-radius:var(--radius-control); }
+.rt-compose input:focus-visible { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); }
+.rt-sent { display:flex; align-items:center; gap:6px; margin:0; color:var(--positive); }
+.rt-card .state.err { margin:0; }
+.rt-closed { margin-top:20px; }
+.rt-closed h2 { margin:0 0 8px; font-size:var(--fs-section); font-weight:600; }
+.rt-closed ul { list-style:none; margin:0; padding:0; }
+.rt-closed li { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; padding:10px 0; border-top:1px solid var(--rule); }
+.rt-closed .pill { margin-left:0; }
+.rt-reason { flex-basis:100%; }
+
+/* Chat del cliente: aviso del reparto */
+.delivery-author { display:inline-flex; align-items:center; gap:4px; }
+
+@media (max-width:900px) { .dl-grid { grid-template-columns:1fr; } }
+@media (max-width:520px) {
+  .role-choice, .dl-form-grid { grid-template-columns:1fr; }
+  .dl-days { gap:6px; }
+  .dl-days .date-input { flex:1 1 0; min-width:0; width:auto; padding:0 4px; font-size:13px; }
+  .dl-days .btn.icon { width:32px; }
+  .rt .sheet, .sheet.rt { padding:12px; }
+}
+/* /Reparto */

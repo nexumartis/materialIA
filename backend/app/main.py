@@ -26,7 +26,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, campaigns, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, reparto, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -342,6 +342,14 @@ def owner_uid(uid: str = Depends(current_uid)) -> str:
     return uid
 
 
+def staff_uid(uid: str = Depends(current_uid)) -> str:
+    """Dueño o empleado. El reparto NO entra al panel: sólo a su hoja de ruta (`/app/route`)."""
+    with user_tx(uid) as (cur, _tenant):
+        if team.role(cur) == "driver":
+            raise HTTPException(status_code=403, detail="Tu usuario es de reparto: entrá a «Mi hoja de ruta».")
+    return uid
+
+
 @app.get("/app/me", response_model=MeResponse)
 def me(uid: str = Depends(current_uid)) -> MeResponse:
     with user_tx(uid) as (cur, tenant):
@@ -352,14 +360,14 @@ def me(uid: str = Depends(current_uid)) -> MeResponse:
 
 
 @app.get("/app/opportunities", response_model=list[OpportunitySummary])
-def app_opps(uid: str = Depends(current_uid)) -> list[OpportunitySummary]:
+def app_opps(uid: str = Depends(staff_uid)) -> list[OpportunitySummary]:
     with user_tx(uid) as (cur, tenant):
         return opportunities._list(cur, tenant)
 
 
 @app.patch("/app/opportunities/{opportunity_id}", response_model=OpportunitySummary)
 def app_update_opp(opportunity_id: UUID, body: OpportunityUpdate,
-                   uid: str = Depends(current_uid)) -> OpportunitySummary:
+                   uid: str = Depends(staff_uid)) -> OpportunitySummary:
     with user_tx(uid) as (cur, tenant):
         try:
             updated = opportunities._update(
@@ -376,7 +384,7 @@ def app_update_opp(opportunity_id: UUID, body: OpportunityUpdate,
 
 
 @app.get("/app/opportunities/{opportunity_id}/activity")
-def app_opp_activity(opportunity_id: UUID, uid: str = Depends(current_uid)) -> list[dict]:
+def app_opp_activity(opportunity_id: UUID, uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         if opportunities._get(cur, tenant, str(opportunity_id)) is None:
             raise HTTPException(status_code=404, detail="Oportunidad no encontrada.")
@@ -444,12 +452,12 @@ async def app_agent_suggest_pdf(request: Request, uid: str = Depends(owner_uid))
 
 
 @app.get("/app/agent-templates")
-def app_agent_templates(uid: str = Depends(current_uid)) -> list[dict]:
+def app_agent_templates(uid: str = Depends(staff_uid)) -> list[dict]:
     return [{"key": k, "label": t["label"]} for k, t in agent_profile.TEMPLATES.items()]
 
 
 @app.get("/app/agent-templates/{key}")
-def app_agent_template(key: str, uid: str = Depends(current_uid)) -> dict:
+def app_agent_template(key: str, uid: str = Depends(staff_uid)) -> dict:
     """Contenido de la plantilla de un rubro SIN aplicarla (el asistente la vuelca en su borrador).
     No incluye envíos, horarios ni medios de pago: eso es del negocio, no del rubro."""
     if key not in agent_profile.TEMPLATES:
@@ -460,7 +468,7 @@ def app_agent_template(key: str, uid: str = Depends(current_uid)) -> dict:
 
 
 @app.get("/app/agent-profile")
-def app_get_profile(uid: str = Depends(current_uid)) -> dict:
+def app_get_profile(uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         return agent_profile._ensure(cur, tenant, _business_name(cur, tenant))
 
@@ -502,13 +510,13 @@ def app_put_profile(body: dict = Body(...), uid: str = Depends(owner_uid)) -> di
 
 
 @app.get("/app/agent-tools")
-def app_agent_tools(uid: str = Depends(current_uid)) -> list[dict]:
+def app_agent_tools(uid: str = Depends(staff_uid)) -> list[dict]:
     """Herramientas que el negocio puede apagar (buscar, consultar y carrito son fijas)."""
     return [{"key": k, "label": v} for k, v in agent_profile.TOGGLEABLE_TOOLS.items()]
 
 
 @app.get("/app/agent-profile/versions")
-def app_profile_versions(uid: str = Depends(current_uid)) -> list[dict]:
+def app_profile_versions(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return agent_profile.list_versions(cur, tenant)
 
@@ -525,7 +533,7 @@ def app_profile_restore(version: int, uid: str = Depends(owner_uid)) -> dict:
 
 
 @app.get("/app/catalog")
-def app_catalog(uid: str = Depends(current_uid)) -> list[dict]:
+def app_catalog(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return backoffice.list_catalog(cur, tenant)
 
@@ -549,7 +557,7 @@ def app_update_product(item_id: UUID, body: dict = Body(...), uid: str = Depends
 
 
 @app.get("/app/catalog/{item_id}/movements")
-def app_stock_movements(item_id: UUID, uid: str = Depends(current_uid)) -> list[dict]:
+def app_stock_movements(item_id: UUID, uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         found = backoffice.movements(cur, tenant, str(item_id))
     if found is None:
@@ -559,7 +567,7 @@ def app_stock_movements(item_id: UUID, uid: str = Depends(current_uid)) -> list[
 
 # --- Panel: catálogo desde Google Sheets -------------------------------------------
 @app.get("/app/catalog/sheet")
-def app_catalog_sheet(uid: str = Depends(current_uid)) -> dict:
+def app_catalog_sheet(uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         return {"sheet": catalog_sheet.get(cur, tenant)}
 
@@ -611,13 +619,13 @@ def app_import_catalog(body: dict = Body(...), uid: str = Depends(owner_uid)) ->
 
 
 @app.get("/app/orders")
-def app_orders(uid: str = Depends(current_uid)) -> list[dict]:
+def app_orders(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return backoffice.list_orders(cur, tenant)
 
 
 @app.post("/app/orders/{order_id}/status")
-def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depends(current_uid)) -> dict:
+def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         try:
             order = backoffice.advance_order(cur, tenant, str(order_id), status)
@@ -632,7 +640,7 @@ def app_order_status(order_id: UUID, status: str = Query(...), uid: str = Depend
 # --- Panel: bandeja de conversaciones y toma de control humana ----------------------
 @app.get("/app/inbox")
 def app_inbox(filter: str = Query("todas", description="todas | derivadas | con_pedido | sin_responder | mias"),
-              uid: str = Depends(current_uid)) -> list[dict]:
+              uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         try:
             return inbox.list_conversations(cur, tenant, uid, filter)
@@ -641,7 +649,7 @@ def app_inbox(filter: str = Query("todas", description="todas | derivadas | con_
 
 
 @app.get("/app/inbox/{conversation_id}")
-def app_inbox_detail(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_inbox_detail(conversation_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         found = inbox.detail(cur, tenant, uid, str(conversation_id))
     if found is None:
@@ -664,17 +672,17 @@ def _inbox_action(conversation_id: UUID, uid: str, action) -> dict:
 
 
 @app.post("/app/inbox/{conversation_id}/take")
-def app_inbox_take(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_inbox_take(conversation_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     return _inbox_action(conversation_id, uid, inbox.take)
 
 
 @app.post("/app/inbox/{conversation_id}/release")
-def app_inbox_release(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_inbox_release(conversation_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     return _inbox_action(conversation_id, uid, inbox.release)
 
 
 @app.post("/app/inbox/{conversation_id}/reply")
-def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(current_uid)) -> dict:
+def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(staff_uid)) -> dict:
     try:
         return _inbox_action(conversation_id, uid, lambda cur, t, u, c: inbox.reply(cur, t, u, c, req.text))
     except ValueError as exc:
@@ -682,7 +690,7 @@ def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(c
 
 
 @app.post("/app/inbox/{conversation_id}/notes")
-def app_inbox_note(conversation_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+def app_inbox_note(conversation_id: UUID, body: dict = Body(...), uid: str = Depends(staff_uid)) -> dict:
     with system_tx() as cur:
         cur.execute("select email from auth.users where id = %s", (uid,))
         row = cur.fetchone()
@@ -735,7 +743,7 @@ def app_inbox_quote(conversation_id: UUID, body: dict = Body(...), uid: str = De
 
 # --- Panel: centro de avisos -----------------------------------------------------------
 @app.get("/app/alerts")
-def app_alerts(uid: str = Depends(current_uid)) -> list[dict]:
+def app_alerts(uid: str = Depends(staff_uid)) -> list[dict]:
     """Lo que necesita a alguien del equipo (derivaciones, cobros a revisar, comprobantes, turnos,
     clientes insatisfechos), calculado del estado real."""
     with user_tx(uid) as (cur, tenant):
@@ -744,13 +752,13 @@ def app_alerts(uid: str = Depends(current_uid)) -> list[dict]:
 
 # --- Panel: turnos ---------------------------------------------------------------------
 @app.get("/app/appointments")
-def app_appointments(uid: str = Depends(current_uid)) -> list[dict]:
+def app_appointments(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return booking.upcoming(cur, tenant)
 
 
 @app.post("/app/appointments/{appointment_id}/cancel")
-def app_appointment_cancel(appointment_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_appointment_cancel(appointment_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         if not booking.cancel(cur, tenant, uid, str(appointment_id)):
             raise HTTPException(status_code=404, detail="Turno no encontrado.")
@@ -760,7 +768,7 @@ def app_appointment_cancel(appointment_id: UUID, uid: str = Depends(current_uid)
 
 # --- Panel: respuestas rápidas (las usa el equipo; las administra el dueño) ---------------
 @app.get("/app/quick-replies")
-def app_quick_replies(uid: str = Depends(current_uid)) -> list[dict]:
+def app_quick_replies(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return quick_replies.list_all(cur, tenant)
 
@@ -782,6 +790,91 @@ def app_quick_reply_delete(reply_id: UUID, uid: str = Depends(owner_uid)) -> dic
         if not quick_replies.delete(cur, tenant, str(reply_id)):
             raise HTTPException(status_code=404, detail="Respuesta rápida no encontrada.")
     return {"deleted": True}
+
+
+# --- Reparto e instalación -------------------------------------------------------------------
+def _day(value: str | None):
+    try:
+        return reparto.today() if not value else __import__("datetime").date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Fecha inválida.")
+
+
+@app.get("/app/deliveries")
+def app_deliveries(date: str | None = None, uid: str = Depends(staff_uid)) -> dict:
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return reparto.board(cur, tenant, _day(date))
+
+
+@app.post("/app/deliveries")
+def app_delivery_schedule(body: dict = Body(...), uid: str = Depends(staff_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return reparto.schedule(cur, tenant, uid, body)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.patch("/app/deliveries/{job_id}")
+def app_delivery_update(job_id: UUID, body: dict = Body(...), uid: str = Depends(staff_uid)) -> dict:
+    tenant = _team_tx(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            view = reparto.update(cur, tenant, uid, str(job_id), body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if view is None:
+        raise HTTPException(status_code=404, detail="Entrega no encontrada.")
+    return view
+
+
+def _member(uid: str) -> tuple[str, str, str | None]:
+    """(negocio, rol, email) de quien está logueado. El negocio lo resuelve la base (membresía)."""
+    with user_tx(uid) as (cur, tenant):
+        role = team.role(cur)
+    with tenant_tx(tenant) as cur:
+        cur.execute("select email from auth.users where id = %s", (uid,))
+        row = cur.fetchone()
+    return tenant, role, row["email"] if row else None
+
+
+@app.get("/app/route")
+def app_route(date: str | None = None, uid: str = Depends(current_uid)) -> dict:
+    """Hoja de ruta: las entregas asignadas a quien está logueado (cualquier rol)."""
+    day = _day(date)
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {"date": day.isoformat(), "jobs": reparto.route(cur, tenant, uid, day)}
+
+
+@app.post("/app/route/{job_id}/status")
+def app_route_step(job_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    tenant, role, email = _member(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            return reparto.step(cur, tenant, uid, role, email, str(job_id), body)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Entrega no encontrada.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/app/route/{job_id}/message")
+def app_route_message(job_id: UUID, body: dict = Body(...), uid: str = Depends(current_uid)) -> dict:
+    limits.guard_user(uid, scope="route-message")
+    tenant, role, email = _member(uid)
+    try:
+        with tenant_tx(tenant) as cur:
+            reparto.message(cur, tenant, uid, role, email, str(job_id), body.get("text"))
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Entrega no encontrada.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"sent": True}
 
 
 # --- Panel: chat en la web del negocio (sólo el dueño) --------------------------------------
@@ -933,7 +1026,7 @@ def app_team_invite(body: dict = Body(...), uid: str = Depends(owner_uid)) -> di
     tenant = _team_tx(uid)
     try:
         with tenant_tx(tenant) as cur:
-            team.invite(cur, tenant, uid, str(body.get("email") or ""))
+            team.invite(cur, tenant, uid, str(body.get("email") or ""), str(body.get("role") or "staff"))
             return team.members(cur, tenant)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -966,7 +1059,7 @@ def _member_conv(uid: str, conversation_id: UUID) -> tuple[str, str]:
 
 
 @app.post("/app/inbox/{conversation_id}/block")
-def app_inbox_block(conversation_id: UUID, body: dict = Body(default={}), uid: str = Depends(current_uid)) -> dict:
+def app_inbox_block(conversation_id: UUID, body: dict = Body(default={}), uid: str = Depends(staff_uid)) -> dict:
     """Bloquea (o desbloquea con {"blocked": false}) un contacto: el agente deja de responderle."""
     tenant, conv = _member_conv(uid, conversation_id)
     with tenant_tx(tenant) as cur:
@@ -976,7 +1069,7 @@ def app_inbox_block(conversation_id: UUID, body: dict = Body(default={}), uid: s
 
 
 @app.post("/app/inbox/{conversation_id}/redact")
-def app_inbox_redact(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_inbox_redact(conversation_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     """Oculta DNI, CUIT, CBU/CVU y tarjetas de la conversación. No se puede deshacer."""
     tenant, conv = _member_conv(uid, conversation_id)
     with tenant_tx(tenant) as cur:
@@ -989,7 +1082,7 @@ def app_inbox_redact(conversation_id: UUID, uid: str = Depends(current_uid)) -> 
 # El dueño revisa los archivos y acredita sólo lo que cotejó en su banco (confirm_transfer).
 @app.get("/app/payment-documents")
 def app_payment_documents(month: str = Query(..., description="AAAA-MM, hora Argentina"),
-                          uid: str = Depends(current_uid)) -> list[dict]:
+                          uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         try:
             return documents.list_month(cur, tenant, month)
@@ -998,7 +1091,7 @@ def app_payment_documents(month: str = Query(..., description="AAAA-MM, hora Arg
 
 
 @app.get("/app/payment-documents/{document_id}/original")
-def app_payment_document_original(document_id: UUID, uid: str = Depends(current_uid)) -> Response:
+def app_payment_document_original(document_id: UUID, uid: str = Depends(staff_uid)) -> Response:
     with user_tx(uid) as (cur, tenant):
         found = documents.original(cur, tenant, str(document_id))
     if found is None:
@@ -1011,7 +1104,7 @@ def app_payment_document_original(document_id: UUID, uid: str = Depends(current_
 
 
 @app.post("/app/payment-documents/{document_id}/reject")
-def app_payment_document_reject(document_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_payment_document_reject(document_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (cur, tenant):
         if not documents.reject(cur, tenant, uid, str(document_id)):
             raise HTTPException(status_code=404, detail="Comprobante no encontrado o ya asociado a un pago.")
@@ -1063,7 +1156,7 @@ def app_payment_register(month: str = Query(..., description="AAAA-MM, hora Arge
 
 
 @app.get("/app/orders/{order_id}/receipt.pdf")
-def app_receipt_pdf(order_id: UUID, uid: str = Depends(current_uid)) -> Response:
+def app_receipt_pdf(order_id: UUID, uid: str = Depends(staff_uid)) -> Response:
     with user_tx(uid) as (cur, tenant):
         receipt = receipts.get(cur, tenant, str(order_id))
     return _receipt_pdf(receipt)
@@ -1268,7 +1361,7 @@ def public_receipt_pdf(slug: str, conversation_id: UUID, receipt_id: UUID,
 
 # --- Panel: base de conocimiento y evaluaciones del agente ---------------------
 @app.get("/app/knowledge")
-def app_knowledge(uid: str = Depends(current_uid)) -> list[dict]:
+def app_knowledge(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return knowledge.list_documents(cur, tenant)
 
@@ -1297,7 +1390,7 @@ def app_delete_knowledge(document_id: UUID, uid: str = Depends(owner_uid)) -> di
 
 
 @app.get("/app/agent-evals")
-def app_eval_cases(uid: str = Depends(current_uid)) -> list[dict]:
+def app_eval_cases(uid: str = Depends(staff_uid)) -> list[dict]:
     with user_tx(uid) as (cur, tenant):
         return evals.list_cases(cur, tenant)
 
@@ -1329,7 +1422,7 @@ def _draft_profile(cur, tenant: str, draft: dict) -> dict:
 
 
 @app.post("/app/agent-preview")
-def app_agent_preview(req: AgentPreview, uid: str = Depends(current_uid)) -> dict:
+def app_agent_preview(req: AgentPreview, uid: str = Depends(staff_uid)) -> dict:
     """Un mensaje de la vista previa del asistente: el agente responde con el perfil BORRADOR, sin
     guardarlo, en una conversación de prueba (sin pedidos, stock ni cobros) que se borra al reiniciar
     o la limpia el worker."""
@@ -1348,7 +1441,7 @@ def app_agent_preview(req: AgentPreview, uid: str = Depends(current_uid)) -> dic
 
 
 @app.delete("/app/agent-preview/{conversation_id}")
-def app_agent_preview_end(conversation_id: UUID, uid: str = Depends(current_uid)) -> dict:
+def app_agent_preview_end(conversation_id: UUID, uid: str = Depends(staff_uid)) -> dict:
     with user_tx(uid) as (_, tenant):
         pass
     return {"deleted": evals.end_preview(tenant, str(conversation_id))}

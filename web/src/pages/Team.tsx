@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Badge, PageHeader } from "../components/ui";
-import { api, type QuickReply, type Team } from "../lib/api";
+import { api, type QuickReply, type Team, type TeamRole } from "../lib/api";
 
-const ROLE = { owner: "Dueño", staff: "Empleado" } as const;
+const ROLE = { owner: "Dueño", staff: "Empleado", driver: "Reparto" } as const;
+const ROLE_CHOICES: { id: TeamRole; label: string; hint: string }[] = [
+  { id: "staff", label: "Atiende el panel", hint: "Ve la bandeja, los pedidos y las oportunidades." },
+  { id: "driver", label: "Reparto e instalación", hint: "Sólo ve sus entregas del día en el celular, no el panel." },
+];
 
 /** Equipo del negocio: el dueño invita por email y quita accesos. No se envían emails. */
 export function TeamPage() {
   const [team, setTeam] = useState<Team | null>(null);
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<TeamRole>("staff");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -34,7 +39,7 @@ export function TeamPage() {
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
-    if (await run(() => api.invite(email.trim()))) setEmail("");
+    if (await run(() => api.invite(email.trim(), role))) setEmail("");
   }
 
   return (
@@ -47,9 +52,18 @@ export function TeamPage() {
           <header className="panel-head">
             <h2 id="people-title">Personas {team && <span className="muted">{team.members.length}</span>}</h2>
           </header>
+          <fieldset className="role-choice">
+            <legend className="sr">Qué va a hacer</legend>
+            {ROLE_CHOICES.map((c) => (
+              <label key={c.id} className={role === c.id ? "on" : ""}>
+                <input type="radio" name="invite-role" value={c.id} checked={role === c.id} onChange={() => setRole(c.id)} />
+                <span><b>{c.label}</b><small className="muted">{c.hint}</small></span>
+              </label>
+            ))}
+          </fieldset>
           <form className="inline-form" onSubmit={(e) => void invite(e)}>
             <label className="sr" htmlFor="invite-email">Email de la persona a invitar</label>
-            <input id="invite-email" type="email" required autoComplete="off" placeholder="Email de quien te ayuda a atender"
+            <input id="invite-email" type="email" required autoComplete="off" placeholder={role === "driver" ? "Email de quien reparte" : "Email de quien te ayuda a atender"}
               value={email} onChange={(e) => setEmail(e.target.value)} />
             <button className="btn primary" type="submit" disabled={busy || !email.trim()}>
               <UserPlus size={15} strokeWidth={1.8} aria-hidden /> Invitar
@@ -71,7 +85,7 @@ export function TeamPage() {
                     <b>{m.email ?? "—"}</b>
                     <small className="muted">{ROLE[m.role]} · desde {since(m.since)}</small>
                   </span>
-                  {m.role === "staff" ? (
+                  {m.role !== "owner" ? (
                     <button className="btn sm ghost" type="button" disabled={busy}
                       onClick={() => window.confirm(`¿Quitar el acceso de ${m.email ?? "esta persona"}?`)
                         && void run(() => api.removeMember(m.user_id))}>
@@ -85,7 +99,7 @@ export function TeamPage() {
                   <Avatar text={i.email} pending />
                   <span className="person">
                     <b>{i.email}</b>
-                    <small className="muted">Invitado · todavía no se registró</small>
+                    <small className="muted">{ROLE[i.role] ?? "Empleado"} · invitado, todavía no se registró</small>
                   </span>
                   <button className="btn sm ghost" type="button" disabled={busy}
                     onClick={() => void run(() => api.cancelInvite(i.email))}>Cancelar</button>
