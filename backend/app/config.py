@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     ollama_api_key: str | None = None
+    # Fotos del cliente → búsqueda en el catálogo. Vacío = la tienda no ofrece fotos (nunca se finge).
+    vision_provider: str = ""            # "ollama" | "openai"
+    vision_model: str = ""               # p. ej. un modelo con visión de Ollama o de OpenAI
+    vision_max_upload_bytes: int = 5_000_000
+    vision_per_ip_hour: int = 20
+    vision_per_store_day: int = 300
 
     # --- Ventas: pagos y reservas de stock ---
     # "simulated" (default, sin credenciales; mismo camino de webhook y verificación) |

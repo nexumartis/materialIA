@@ -26,7 +26,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, campaigns, modules, reparto, shipping, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, modules, reparto, shipping, vision, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -1257,6 +1257,42 @@ async def public_widget_seen(slug: str, request: Request) -> Response:
         page = None
     await run_in_threadpool(widget.seen, store["tenant_id"], page)
     return Response(status_code=204, headers=_ANY_ORIGIN)
+
+
+# Fotos del cliente: la imagen se describe como búsqueda y se descarta; el texto entra al chat.
+@app.get("/public/{slug}/photos")
+def public_photo_caps(slug: str) -> dict:
+    _store(slug)
+    return {"enabled": vision.enabled(), "max_upload_bytes": settings.vision_max_upload_bytes}
+
+
+@app.post("/public/{slug}/photos")
+async def public_photo(slug: str, request: Request, conversation_id: UUID | None = None,
+                       token: str | None = Header(None, alias=buyer_session.HEADER)) -> dict:
+    from .audio_routes import read_upload
+    store = _store(slug)
+    tenant = str(store["tenant_id"])
+    if not vision.enabled():
+        raise HTTPException(status_code=404, detail="Esta tienda todavía no recibe fotos.")
+    if conversation_id:
+        if not await run_in_threadpool(buyer_session.owns, tenant, str(conversation_id), token):
+            raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+        if await run_in_threadpool(privacy.is_blocked, tenant, str(conversation_id)):
+            raise HTTPException(status_code=403, detail="El negocio pausó esta conversación.")
+    mime = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if mime not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(status_code=415, detail="Mandá la foto en JPG, PNG o WEBP.")
+    ip = limits.client_ip(request)
+    if not await run_in_threadpool(limits.hit, "photo-ip", ip, settings.vision_per_ip_hour, 3_600) or \
+            not await run_in_threadpool(limits.hit, "photo-store", tenant, settings.vision_per_store_day, 86_400):
+        raise HTTPException(status_code=429, detail="Mandaste muchas fotos. Probá en un rato o contame con palabras.",
+                            headers={"Retry-After": "600"})
+    data = await read_upload(request, settings.vision_max_upload_bytes)
+    try:
+        jpeg = await run_in_threadpool(vision.normalize, data)
+        return await run_in_threadpool(vision.describe, tenant, jpeg)
+    except vision.PhotoRejected as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
 
 
 @app.get("/public/{slug}")

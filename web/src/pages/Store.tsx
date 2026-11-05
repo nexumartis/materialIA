@@ -43,6 +43,10 @@ export function Store({ slug, embed = false }: { slug: string; embed?: boolean }
           transcribe: (wav, c, signal) => api.storeTranscribe(slug, wav, c, signal),
           speak: (c, messageId) => api.storeMessageAudio(slug, c, messageId),
         },
+        photos: {
+          caps: () => api.storePhotos(slug),
+          describe: (image, c, signal) => api.storeDescribePhoto(slug, image, c, signal),
+        },
       },
     [info, slug],
   );

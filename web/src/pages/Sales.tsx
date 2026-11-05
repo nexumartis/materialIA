@@ -9,6 +9,8 @@ import {
   type Health,
   type MessageUI,
   type Order,
+  type PhotoCaps,
+  type PhotoDescription,
   type ProductCard,
   type SalesConversation,
   type SalesResponse,
@@ -16,6 +18,7 @@ import {
 import { saveBlob } from "../lib/download";
 import { fmtAmount } from "../lib/format";
 import { VoiceInput } from "../components/VoiceInput";
+import { PhotoInput } from "../components/PhotoInput";
 
 const money = (n: number) => `$${fmtAmount(n)}`;
 
@@ -220,6 +223,21 @@ export interface ChatSource {
     transcribe: (wav: Blob, ref: ConversationRef | null, signal: AbortSignal) => Promise<{ text: string }>;
     speak: (ref: ConversationRef, messageId: string) => Promise<Blob>;
   };
+  /** Tienda pública: mandar una foto del producto (si el backend lo habilita). */
+  photos?: {
+    caps: () => Promise<PhotoCaps>;
+    describe: (image: Blob, ref: ConversationRef | null, signal: AbortSignal) => Promise<PhotoDescription>;
+  };
+}
+
+// Errores de la foto en criollo; el resto usa el `detail` del backend.
+function photoError(e: unknown): string {
+  if (!(e instanceof ApiError)) return "No pude mandar la foto. Probá de nuevo o escribí tu consulta.";
+  if (e.status === 413) return "La foto es demasiado pesada. Probá con otra.";
+  if (e.status === 415) return "No pude usar esa imagen. Probá con otra foto del producto o escribí tu consulta.";
+  if (e.status === 429) return "Mandaste varias fotos seguidas. Esperá un ratito o escribí tu consulta.";
+  if (e.status === 0) return "No pude conectar para mandar la foto. Probá de nuevo.";
+  return e.message;
 }
 
 const RATEABLE = ["PAID", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED"];
@@ -291,6 +309,14 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   // Notas de voz del comprador, por posición en la conversación (sobrevive a la relectura del
   // historial; por texto, dos notas iguales o un mensaje escrito igual compartirían el audio).
   const [myVoice, setMyVoice] = useState<Record<number, string>>({});
+  // Fotos del comprador, igual que las notas de voz: por posición, sólo en esta sesión (la imagen
+  // no se guarda; al recargar queda el mensaje de texto). Las URLs locales se liberan con las de voz.
+  const [myPhoto, setMyPhoto] = useState<Record<number, { url: string; query: string | null }>>({});
+  const [photoCaps, setPhotoCaps] = useState<PhotoCaps | null>(null);
+  // Foto en curso («Mirando la foto…») o que no se pudo usar (con la pista local, que no va al servidor).
+  const [photo, setPhoto] = useState<{ url: string; hint?: string } | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const photoAbort = useRef<AbortController | null>(null);
   const voiceUrls = useRef<string[]>([]);
   const [voiceKey, setVoiceKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -308,10 +334,22 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
   useEffect(
     () => () => {
       gen.current++;
+      photoAbort.current?.abort();
       voiceUrls.current.forEach((u) => URL.revokeObjectURL(u));
     },
     [],
   );
+
+  useEffect(() => {
+    let alive = true;
+    source.photos
+      ?.caps()
+      .then((c) => alive && setPhotoCaps(c.enabled ? c : null))
+      .catch(() => alive && setPhotoCaps(null)); // sin capacidades no aparece la cámara
+    return () => {
+      alive = false;
+    };
+  }, [source]);
 
   useEffect(() => {
     let alive = true;
@@ -342,6 +380,11 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     voiceUrls.current = [];
     setVoices({});
     setMyVoice({});
+    setMyPhoto({});
+    photoAbort.current?.abort();
+    photoAbort.current = null;
+    setPhoto(null);
+    setPhotoNote(null);
     setVoiceKey((k) => k + 1); // descarta grabación/transcripción en curso
   }
 
@@ -434,7 +477,7 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
     }
   }
 
-  async function send(text: string, voiceUrl?: string) {
+  async function send(text: string, voiceUrl?: string, photoOf?: { url: string; query: string | null }) {
     const msg = text.trim();
     if (!msg || sending) return;
     if (voiceUrl) {
@@ -442,6 +485,12 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       const at = messages.length;
       setMyVoice((v) => ({ ...v, [at]: voiceUrl }));
     }
+    if (photoOf) {
+      const at = messages.length;
+      setMyPhoto((p) => ({ ...p, [at]: photoOf }));
+    }
+    setPhoto((p) => (p && !p.hint ? p : null)); // la pista de una foto anterior deja de tener sentido
+    setPhotoNote(null);
     const g = gen.current;
     reads.current++;
     setInput("");
@@ -477,6 +526,40 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
       }
     } finally {
       if (g === gen.current) setSending(false);
+    }
+  }
+
+  // La descripción llega varios renders después: se manda con el `send` vigente (conversación y
+  // lista de mensajes actuales), como hace la nota de voz.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+
+  async function describePhoto(image: Blob) {
+    if (!source.photos || (photo && !photo.hint)) return;
+    const g = gen.current;
+    const url = URL.createObjectURL(image);
+    voiceUrls.current.push(url);
+    setPhoto({ url });
+    setPhotoNote(null);
+    const ac = new AbortController();
+    photoAbort.current = ac;
+    try {
+      const r = await source.photos.describe(image, conv, ac.signal);
+      if (g !== gen.current) return;
+      const text = r.text?.trim();
+      if (r.ok && text) {
+        setPhoto(null);
+        void sendRef.current(text.slice(0, MAX_MESSAGE), undefined, { url, query: r.query });
+      } else {
+        setPhoto({ url, hint: r.reply || "No llegué a reconocer el producto en la foto. ¿Me contás cuál buscás?" });
+        inputRef.current?.focus();
+      }
+    } catch (e) {
+      if (g !== gen.current) return;
+      setPhoto(null);
+      setPhotoNote(photoError(e));
+    } finally {
+      if (photoAbort.current === ac) photoAbort.current = null;
     }
   }
 
@@ -550,7 +633,12 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                     <Truck size={13} strokeWidth={1.8} aria-hidden /> Reparto{m.ui.by ? ` · ${m.ui.by}` : ""}
                   </span>
                 )}
-                {m.role === "me" && myVoice[i] ? (
+                {m.role === "me" && myPhoto[i] ? (
+                  <div className="bubble me photo-note">
+                    <img src={myPhoto[i].url} alt="Tu foto del producto" />
+                    <span className="small">Entendí: {myPhoto[i].query || m.text}</span>
+                  </div>
+                ) : m.role === "me" && myVoice[i] ? (
                   <div className="bubble me voice-note">
                     <audio controls src={myVoice[i]} aria-label="Tu audio" />
                     <span className="small">«{m.text}»</span>
@@ -610,6 +698,19 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
                 )}
               </div>
             ))}
+            {photo && (
+              <div className="msg me">
+                <div className="bubble me photo-note">
+                  <img src={photo.url} alt="Tu foto del producto" />
+                  {!photo.hint && <span className="small" role="status">Mirando la foto…</span>}
+                </div>
+              </div>
+            )}
+            {photo?.hint && (
+              <div className="msg bot">
+                <div className="bubble bot">{photo.hint}</div>
+              </div>
+            )}
             {sending && <div className="bubble bot typing">Escribiendo…</div>}
             {attended && (
               <div className="human-note" role="status">Te está atendiendo una persona del negocio.</div>
@@ -643,10 +744,19 @@ export function Sales({ health, source = DEMO_SOURCE }: { health: Health | null;
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
-            <button className="btn primary" type="submit" disabled={sending || !input.trim()}>
+            {photoCaps && source.photos && (
+              <PhotoInput
+                caps={photoCaps}
+                disabled={sending || (!!photo && !photo.hint)}
+                onPhoto={(image) => void describePhoto(image)}
+                onError={setPhotoNote}
+              />
+            )}
+            <button className="btn primary" type="submit" disabled={sending || (!!photo && !photo.hint) || !input.trim()}>
               Enviar
             </button>
           </form>
+          {photoNote && <p className="state err small photo-error" role="alert">{photoNote}</p>}
           {!source.customerView && (
             <p className="note">
               Canal simulado. El pago se confirma sólo con el aviso del proveedor; en modo simulado no

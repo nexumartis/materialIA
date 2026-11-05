@@ -124,10 +124,10 @@ confirmar (#60), seguridad y RLS rápido (#61), campañas (#64) y chat instalabl
 con una línea (#65).
 
 **Ahora (sin WhatsApp), en este orden:**
-1. **Fotos del cliente → producto del catálogo** en el chat web (sale del grupo «con WhatsApp»):
-   precio y stock siempre del catálogo; si la coincidencia es dudosa, deriva (`requires_human`).
-2. **Audios del cliente** en el chat web: transcripción y respuesta como texto; sin IA, se dice
-   explícitamente (`mode:"mock"`), nunca se finge.
+1. ~~**Fotos del cliente → producto del catálogo**~~ **Hecho** (05/11/2026): la foto se describe como
+   búsqueda (modelo con visión, p. ej. `gemma4:31b` en Ollama) y el agente responde con el catálogo
+   real; la imagen no se guarda; con duda, se pide que el cliente lo cuente.
+2. ~~**Audios del cliente**~~ **Hecho** (PR #67, Mati): notas de voz con ElevenLabs.
 3. **Conector de catálogo Tiendanube** (stock y precio, sólo lectura) + app en su tienda de apps que
    inyecta el script del chat. Después WooCommerce y Shopify.
 4. **Onboarding sin llamada:** «pegá tu web» propone FAQ, horario y políticas para aprobar (nunca

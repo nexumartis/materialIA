@@ -448,6 +448,14 @@ export const api = {
       `/public/${encodeURIComponent(slug)}/audio/transcriptions${ref ? `?conversation_id=${encodeURIComponent(ref.id)}` : ""}`,
       { method: "POST", headers: { "content-type": "audio/wav", ...buyerHeader(ref) }, body: wav, signal },
     ),
+  // Foto del producto en el chat público (la habilita el backend por tienda). La imagen no se
+  // guarda: vuelve la descripción y el texto listo para mandar al chat. Sin reintentos (cuota).
+  storePhotos: (slug: string) => request<PhotoCaps>(`/public/${encodeURIComponent(slug)}/photos`),
+  storeDescribePhoto: (slug: string, image: Blob, ref: ConversationRef | null, signal?: AbortSignal) =>
+    request<PhotoDescription>(
+      `/public/${encodeURIComponent(slug)}/photos${ref ? `?conversation_id=${encodeURIComponent(ref.id)}` : ""}`,
+      { method: "POST", headers: { "content-type": image.type || "image/jpeg", ...buyerHeader(ref) }, body: image, signal },
+    ),
   storeMessageAudio: (slug: string, ref: ConversationRef, messageId: string) =>
     request<Blob>(
       `/public/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(ref.id)}/messages/${encodeURIComponent(messageId)}/audio`,
@@ -463,6 +471,23 @@ export interface AudioCaps {
   max_duration_seconds: number;
   max_tts_characters: number;
   max_transcript_characters: number;
+}
+
+/** Capacidades de fotos de una tienda pública (`GET /public/{slug}/photos`). */
+export interface PhotoCaps {
+  enabled: boolean;
+  max_upload_bytes: number;
+}
+
+/** Lo que se entendió de la foto. Con `ok`, `text` se manda al chat como un mensaje escrito;
+ *  sin `ok`, `reply` es una pista local para que el comprador escriba (no va al servidor). */
+export interface PhotoDescription {
+  ok: boolean;
+  text: string | null;
+  query: string | null;
+  description: string | null;
+  confidence: "alta" | "media" | "baja";
+  reply: string | null;
 }
 
 /** Referencia del comprador a su conversación. En la tienda pública lleva el token que emitió el

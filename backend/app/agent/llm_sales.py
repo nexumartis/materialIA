@@ -559,6 +559,39 @@ def _keep_delivered_offer(turn: _Turn, reply: str) -> None:
         turn.state.pop("offer", None)
 
 
+def _as_json(text: str) -> Optional[dict[str, Any]]:
+    """El texto es (sólo) un objeto JSON, con o sin ```json … ```."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.strip("`").removeprefix("json").strip()
+    if not (t.startswith("{") and t.endswith("}")):
+        return None
+    try:
+        data = json.loads(t)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _leaked_call(content: str, tools: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Algunos modelos escriben los argumentos de una herramienta como respuesta en vez de llamarla.
+    Si el JSON calza con UNA herramienta (claves conocidas y obligatorias presentes), se toma como esa
+    llamada; si no, None. Nunca llega al cliente un JSON crudo."""
+    data = _as_json(content)
+    if not data:
+        return None
+    fits = []
+    for t in tools:
+        params = t.get("parameters") or {}
+        props, required = set((params.get("properties") or {})), set(params.get("required") or [])
+        if set(data) <= props and required <= set(data):
+            fits.append((len(props) - len(data), t["name"]))
+    if not fits:
+        return None
+    fits.sort()
+    return {"name": fits[0][1], "arguments": data}
+
+
 def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Optional[str]:
     """Bucle de herramientas. Devuelve la respuesta, o None si el modelo no está disponible y
     todavía no ejecutó nada (entonces responde el planner por reglas)."""
@@ -589,6 +622,11 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             resp = planner(messages, tools)
             turn.model_answered = True
             calls = [c for c in resp.get("tool_calls") or [] if c.get("name")]
+            if not calls:
+                leaked = _leaked_call(resp.get("content") or "", tools)
+                if leaked:          # escribió los argumentos como texto: se ejecuta la herramienta
+                    calls = [leaked]
+                    resp = {"content": "", "tool_calls": calls}
             if not calls:
                 reply = (resp.get("content") or "").strip()
                 break
@@ -632,6 +670,8 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
     total = _money(cart["total"]) if cart_changed and cart and cart["items"] else None
 
     def problem(text: str) -> Optional[str]:
+        if _as_json(text) is not None:
+            return "es un JSON interno, no una respuesta para el cliente"
         if total and total not in text:
             return f"cambió el carrito y no muestra el total real ({total})"
         low = normalize(text)
