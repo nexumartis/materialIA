@@ -113,3 +113,18 @@ def test_markdown_is_stripped(shop):
     llm = Scripted(tool("buscar_productos", consulta="flexible"), say("El **flexible** sale $6.800."))
     r = handle_sales_message(shop["tenant"], "flexible?", planner=llm)
     assert "**" not in r.reply and "$6.800" in r.reply
+
+
+def test_tool_arguments_written_as_text_run_the_tool_and_never_reach_the_customer(shop):
+    # Visto con fotos: el modelo escribió {"consulta": …} en vez de llamar a buscar_productos.
+    llm = Scripted(say('```json\n{"consulta": "canilla cocina negra", "precio_maximo": 1000000}\n```'),
+                   say("¡Sí! La monocomando negra mate sale $89.900 y hay 6 disponibles. ¿Te la agrego?"))
+    r = handle_sales_message(shop["tenant"], "Busco esto (te mandé una foto): canilla cocina negra", planner=llm)
+    assert "consulta" not in r.reply and "{" not in r.reply
+    assert "$89.900" in r.reply
+
+
+def test_raw_json_reply_is_never_sent(shop):
+    llm = Scripted(say('{"accion": "nada", "x": 1}'))
+    r = handle_sales_message(shop["tenant"], "canilla negra cocina", planner=llm)
+    assert "{" not in r.reply and "accion" not in r.reply
