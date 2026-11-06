@@ -1,0 +1,13 @@
+{
+  "id": "P010",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "habit",
+  "reason": "Mis clientes me escriben por WhatsApp, no por una web que no tengo, y encima tendría que mantener los precios y el stock en una planilla aparte de mi sistema de gestión. Cargar todo dos veces con el mostrador lleno no lo voy a hacer, ni con la prueba gratis.",
+  "objection": "Que no conecta con mi sistema de stock y facturación: si los precios del chat quedan desfasados de los del sistema, le termino vendiendo mal a un cliente, y además no está en WhatsApp que es donde me hablan.",
+  "would_change_my_mind": "Que tome precios y stock directo de mi sistema de gestión sin cargar nada a mano y que conteste dentro de mi WhatsApp.",
+  "price_too_cheap": 10000,
+  "price_cheap": 25000,
+  "price_expensive": 50000,
+  "price_too_expensive": 80000
+}

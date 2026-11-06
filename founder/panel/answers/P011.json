@@ -1,0 +1,13 @@
+{
+  "id": "P011",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Mis clientes me escriben por WhatsApp, no tengo web y por Instagram casi no me compran; un chat en un link que nadie va a abrir no me sirve. Y $45.000 por mes para mí es plata, ya pagué sistemas que quedaron juntando polvo.",
+  "objection": "Que no anda en WhatsApp, que es donde está toda mi clientela, y que termine siendo otro sistema que pago y no uso.",
+  "would_change_my_mind": "Que funcione dentro de mi WhatsApp y verlo andando en otra ferretería como la mía, vendiendo de verdad, antes de pagar un peso.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

@@ -1,0 +1,13 @@
+{
+  "id": "P008",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "convenience",
+  "reason": "Mis clientes me escriben todos por WhatsApp y no tengo web; si no anda ahí, es mandarlos a un link que la mitad no va a abrir y yo sigo contestando igual desde el celular. Encima no me la juego con que le pase un precio mal a un cliente y después tenga que bancarlo yo.",
+  "objection": "No confío en que la IA no le diga un precio equivocado a un cliente, y mi lista cambia seguido; si un precio quedó viejo en la planilla, el que queda mal soy yo.",
+  "would_change_my_mind": "Que funcione dentro de mi WhatsApp y que yo pueda ver y aprobar el precio antes de que salga al cliente, al menos el primer mes.",
+  "price_too_cheap": 10000,
+  "price_cheap": 25000,
+  "price_expensive": 50000,
+  "price_too_expensive": 80000
+}
