@@ -1,4 +1,4 @@
 Un vendedor con IA que atiende a tus clientes dentro de tu propio WhatsApp, las 24 horas, con tu lista de precios y tu stock reales (desde tu Excel, Google Sheets o tu sistema).
-Responde consultas, entiende fotos y audios, arma el pedido, coordina el envío (correo, tu reparto o retiro) y cobra con Mercado Pago o transferencia; un pedido figura pagado sólo cuando el pago está verificado. Lo dudoso o a medida te lo pasa a vos con un resumen.
+Responde consultas, entiende fotos y audios, arma el pedido, coordina el envío (correo, tu reparto o retiro), cobra con Mercado Pago o transferencia y, en lo que es a medida, cobra la seña antes de fabricar; un pedido figura pagado sólo cuando el pago está verificado. Lo dudoso o a medida te lo pasa a vos con un resumen.
 Usa la conexión oficial de Meta con tu mismo número (sin trucos que te lo puedan bloquear). Responderle a un cliente que te escribió no tiene costo de Meta; las campañas sí, las paga tu cuenta de Meta y te avisamos cuánto antes de mandarlas.
 Precio: $35.000 por mes + IVA. Los primeros comercios: 2 meses gratis y te lo dejamos andando nosotros con tu catálogo.

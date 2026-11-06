@@ -9,7 +9,7 @@
   "segments": [
     {
       "name": "Ropa e indumentaria (local + Instagram, envía por correo)",
-      "share": 0.25,
+      "share": 0.1,
       "income": [
         4000000,
         25000000
@@ -17,26 +17,74 @@
     },
     {
       "name": "Electro con entrega e instalación (reparto propio)",
-      "share": 0.25,
+      "share": 0.1,
       "income": [
         15000000,
         80000000
       ]
     },
     {
-      "name": "Colchones y muebles (entrega coordinada)",
-      "share": 0.25,
+      "name": "Colchones y muebles estándar (entrega coordinada)",
+      "share": 0.1,
       "income": [
         8000000,
         40000000
       ]
     },
     {
+      "name": "Muebles a medida (seña o anticipo antes de fabricar)",
+      "share": 0.1,
+      "income": [
+        5000000,
+        30000000
+      ]
+    },
+    {
       "name": "Ferretería y sanitarios de barrio",
-      "share": 0.25,
+      "share": 0.1,
       "income": [
         3000000,
         30000000
+      ]
+    },
+    {
+      "name": "Farmacia y perfumería (sólo venta libre y perfumería por chat)",
+      "share": 0.1,
+      "income": [
+        10000000,
+        60000000
+      ]
+    },
+    {
+      "name": "Juguetería y regalería",
+      "share": 0.1,
+      "income": [
+        3000000,
+        20000000
+      ]
+    },
+    {
+      "name": "Comida y rotisería (pedidos y delivery)",
+      "share": 0.1,
+      "income": [
+        3000000,
+        20000000
+      ]
+    },
+    {
+      "name": "Librería, papelería y artículos escolares",
+      "share": 0.1,
+      "income": [
+        2000000,
+        15000000
+      ]
+    },
+    {
+      "name": "Bazar, deco y artículos para el hogar",
+      "share": 0.1,
+      "income": [
+        3000000,
+        20000000
       ]
     }
   ],
@@ -79,7 +127,9 @@
     "No tengo tiempo de cargar y mantener el catálogo",
     "Meta ya me ofrece un asistente con IA gratis en WhatsApp Business",
     "El cliente quiere hablar con una persona para cosas a medida o reclamos",
-    "Es otro gasto fijo mensual en una época de ventas flojas"
+    "Es otro gasto fijo mensual en una época de ventas flojas",
+    "En lo que es a medida, primero cobro una seña y no quiero que la IA prometa plazos o medidas",
+    "En farmacia no puedo vender por chat medicamentos con receta"
   ],
   "habits": [
     "tus clientes te escriben por WhatsApp a toda hora, también de noche y los domingos",
@@ -87,6 +137,8 @@
     "te mandan fotos de lo que buscan",
     "cobrás mucho por transferencia y Mercado Pago",
     "hacés envíos o entregas un par de días por semana",
-    "el Instagram del negocio lo maneja alguien de la familia"
+    "el Instagram del negocio lo maneja alguien de la familia",
+    "en temporada (Día del Niño, Navidad, vuelta a clases, Hot Sale) te explota el WhatsApp",
+    "para lo que es a medida pedís una seña antes de empezar"
   ]
 }
