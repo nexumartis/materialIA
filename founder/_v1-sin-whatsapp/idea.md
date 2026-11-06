@@ -1,0 +1,7 @@
+# materialIA ("Presupuesto Vivo", nombre de trabajo)
+
+- What it is: un agente de ventas por chat con IA que atiende a los clientes de un comercio y cierra la venta de punta a punta (consulta → carrito → entrega → cobro verificado), con el stock y los precios reales del negocio.
+- Who it is for: dueños de comercios PyME de Argentina que hoy contestan consultas a mano por chat/WhatsApp/web y pierden ventas por responder tarde o fuera de horario. Multi-rubro: ferretería y sanitarios, ropa, comida, electrodomésticos/colchones/muebles (con entrega e instalación). Muchos no tienen tienda online; sí tienen un catálogo en planilla.
+- What it sells, at what price: suscripción mensual (SaaS) al agente + panel del negocio. **Precio: sin definir** (hipótesis a testear). Referencia pública del competidor directo: notchatbot, «Planes desde USD 300/mes» en su ficha de la tienda de apps de Tiendanube.
+- Where and how: online, Argentina. El negocio se registra solo, carga su catálogo (CSV o Google Sheets), configura el agente y pega una línea de código en su web (o comparte el link de su tienda). Hoy: chat web; WhatsApp todavía no.
+- Budget and constraints: dos socios fundadores técnicos (Tomás y Matías), producto construido y funcionando en local, sin clientes pagos ni deploy. Presupuesto de marketing y capital: no informados. Reglas del producto: nunca inventar precios ni stock; un pedido es «pagado» sólo con pago verificado por el proveedor o transferencia cotejada por el dueño; sin WhatsApp ni mensajes salientes a clientes en esta fase.

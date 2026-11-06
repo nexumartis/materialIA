@@ -1,27 +1,13 @@
-# Brief para el directorio: materialIA
+# materialIA (nombre de trabajo; candidato de marca: Hornel)
 
-(Escrito para que alguien sin contexto lo entienda. Sin opinión sobre la idea.)
+- What it is: un agente de ventas con IA que atiende a los clientes de un comercio **dentro de su propio WhatsApp** (y también en su web/Instagram con un link) y cierra la venta de punta a punta: consulta → carrito → entrega → cobro verificado, con el stock y los precios reales del negocio.
+- Who it is for: comercios PyME de Argentina que hoy contestan a mano por WhatsApp. Multi-rubro, con módulos que se prenden según el negocio: **ropa e indumentaria** (envío por correo, talles), **electro con entrega e instalación** (reparto propio, franjas, señas), **colchones y muebles** (entrega coordinada, medidas), **ferretería y sanitarios** (fotos de repuestos, stock). Muchos no tienen tienda online; sí un catálogo en planilla o un sistema de gestión.
+- What it sells, at what price: suscripción mensual al agente + panel. Precio a testear: **$35.000/mes + IVA** (rango aceptable de un panel anterior: $10.000–$50.000). Aparte, los mensajes de WhatsApp que cobra Meta los paga **cada comercio en su propia cuenta de Meta**: responder a un cliente que escribió (ventana de 24 h) no tiene costo de Meta; las campañas (carritos abandonados, promociones) sí, y el panel avisa el costo antes de enviar (precios de Meta a verificar en su tabla vigente).
+- Where and how: online, Argentina. El comercio se registra, conecta **su número de WhatsApp con la API oficial de Meta** (alta integrada, sin bots no oficiales que arriesgan el número), carga su catálogo (Excel/Google Sheets) y elige sus módulos. Los socios hacen la puesta en marcha de los primeros comercios.
+- Budget and constraints: dos socios fundadores técnicos; producto construido en local (WhatsApp por integrar: requiere cuenta de Meta Business verificada y aprobación de la app). Sin clientes pagos ni deploy. Sueldos y presupuesto de marketing: no informados. Reglas del producto: nunca inventa precios ni stock; un pedido es «pagado» sólo con pago verificado.
 
-## La idea
-Ver founder/idea.md. Resumen: SaaS argentino. Un agente de ventas por chat con IA para comercios PyME que vende de punta a punta con datos reales del negocio.
-
-## Qué hace hoy el producto (construido, funcionando en local)
-- Responde consultas con stock y precio reales del catálogo del comercio (CSV o Google Sheets sincronizada); nunca inventa precios ni stock; lo «a medida» o dudoso lo deriva a una persona.
-- Arma el carrito, ofrece productos complementarios, pide envío o retiro: valida la dirección con la API pública Georef, calcula el costo por zona cargada por el negocio, ofrece día y franja con cupo (priorizando donde ya hay entregas cerca) o despacho por correo con número de seguimiento.
-- Cobra: link de Mercado Pago (el pedido figura pagado sólo con la confirmación verificada del proveedor) o transferencia que el dueño coteja; señas para productos a pedido; constancia en PDF.
-- Turnos (visitas, mediciones), reparto propio con hoja de ruta para el repartidor, bandeja para que una persona tome la conversación (con resumen), roles de equipo, campañas (carritos abandonados, cobranzas; envío hoy simulado), encuesta de satisfacción, webhooks salientes.
-- Se instala en cualquier web con una línea de código (botón de chat configurable). Entiende fotos (busca el producto en el catálogo) y notas de voz.
-- Panel del negocio con métricas de ventas, conversación y conversión.
-
-## Cliente objetivo
-Dueños de comercios PyME argentinos multi-rubro (ferretería/sanitarios, ropa, comida, electrodomésticos/colchones/muebles con entrega e instalación). Muchos sin tienda online. Hoy atienden por chat a mano.
-
-## Competencia conocida (datos públicos)
-- notchatbot: CRM omnicanal argentino con IA para ecommerce (WhatsApp, Instagram, TikTok, Mercado Libre, web). Muestra logos de +100 marcas (Nespresso, Arredo, Cheeky, Kevingston, Paula Cahen d'Anvers, Grisino…). «Planes desde USD 300/mes» según su ficha en la tienda de apps de Tiendanube; sin prueba gratis; instalación con llamada; integra Tiendanube, Shopify, VTEX, WooCommerce. Lleva al cliente al checkout de la tienda (no arma carrito ni cobra en el chat).
-- Otros jugadores de chat/IA en LatAm existen (no relevados con detalle).
-
-## Situación
-- Dos socios fundadores técnicos. Producto en local, sin deploy, sin clientes pagos, sin precio definido.
-- Sin WhatsApp todavía (requiere cuenta de Meta Business y cambio de alcance acordado).
-- Presupuesto, tamaño de mercado, costo de adquisición: no informados (preguntas abiertas).
-- Costo variable conocido: uso de IA por conversación (el equipo estimó de forma interna ~USD 4–30/mes por negocio chico y ~USD 85–600 por negocio grande; estimación, no medición).
+## Contexto adicional para el directorio
+- Competencia relevada (founder/competitors.md): notchatbot (CRM omnicanal AR, +100 marcas, desde USD 300/mes), Meta Business AI dentro de WhatsApp Business (gratis/centavos), Tiendanube Chat Nube (sólo tiendas Tiendanube), Botmaker/Leadsales/Cliengo/Kommo (USD 35–220/mes). La brecha: cerrar la venta en el chat (carrito, entrega, cobro verificado) para comercios sin tienda online.
+- En el ecosistema (charla con otro fundador del rubro) preocupa el costo de Meta: algunos usan WhatsApp Web con bots no oficiales (riesgo de baneo del número) y otros hacen que cada cliente pague su consumo de Meta. Este negocio elige la API oficial con el consumo pagado por cada comercio.
+- Números por comercio (founder/cfo.md, proyección con costos estimados): a $35.000/mes deja $17.836 (51%) tras IA y cobro; con dos sueldos de $2 M el equilibrio es ~232 comercios.
+- Un panel anterior de compradores simulados se corrió con el producto SIN WhatsApp y dio 15% de compra, casi todos los «no» por «mis clientes me escriben por WhatsApp». Ese panel no evalúa el producto objetivo.
