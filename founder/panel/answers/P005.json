@@ -1,0 +1,13 @@
+{
+  "id": "P005",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "habit",
+  "reason": "Mis clientes me escriben por WhatsApp, no entran a ninguna web ni a un link de tienda, y ya tengo mi sistema de stock y facturación; no voy a andar manteniendo además una planilla aparte para que el chat sepa los precios. Y $45.000 por mes para un negocio chico como el mío es mucha plata por algo que no está donde están mis clientes.",
+  "objection": "Que no funciona en WhatsApp y que tengo que cargar el catálogo dos veces: si un día me olvido de actualizar la planilla, el bot le vende a alguien algo a precio viejo o algo que no tengo, y el lío lo arreglo yo en el mostrador.",
+  "would_change_my_mind": "Que ande dentro de WhatsApp y que tome los precios y el stock directo de mi sistema de gestión, sin planilla aparte.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

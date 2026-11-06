@@ -1,0 +1,13 @@
+{
+  "id": "P014",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "habit",
+  "reason": "Mis clientes me escriben por WhatsApp y ahí los atiendo yo, con las respuestas rápidas que ya tengo gratis. No voy a mandar a la gente del barrio a un link o a una web que no tengo para que les conteste un robot.",
+  "objection": "Si no anda adentro de WhatsApp no me sirve: nadie me va a escribir a otro lado, y encima tengo que tener la planilla de precios y stock al día, que hoy no la tengo así.",
+  "would_change_my_mind": "Que conteste directo en mi WhatsApp de siempre y que me lo dejen andando con mis precios sin que yo tenga que armar ninguna planilla.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 40000,
+  "price_too_expensive": 70000
+}

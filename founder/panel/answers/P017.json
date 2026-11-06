@@ -1,0 +1,13 @@
+{
+  "id": "P017",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "habit",
+  "reason": "Mis clientes me escriben por WhatsApp y ahí les contesto con las respuestas rápidas, que no me cuestan nada. No tengo web y no voy a andar mandando a la gente a un link para que hable con un robot; $45.000 por mes es plata para un negocio como el mío.",
+  "objection": "Si no anda en WhatsApp no me sirve, porque ahí está toda mi clientela. Y encima alguien tiene que tener la planilla de precios al día, y yo eso no lo hago: lo tendría que hacer mi hijo.",
+  "would_change_my_mind": "Que funcione adentro de WhatsApp y que mi hijo lo pruebe y me diga que me ahorra horas los sábados sin que yo tenga que tocar nada.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

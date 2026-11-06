@@ -1,0 +1,13 @@
+{
+  "id": "P009",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Mis clientes me escriben por WhatsApp y quieren hablar conmigo, sobre todo por medidas y repuestos; un chat en una web que no tengo no me saca trabajo. Y $45.000 por mes para un negocio de dos personas es mucha plata para algo que no está donde está mi gente.",
+  "objection": "Que no funcione dentro de WhatsApp. Yo ya contesto todo desde el celular y el cliente no va a ir a un link a hablar con una máquina cuando quiere preguntarme a mí si el repuesto le sirve.",
+  "would_change_my_mind": "Que ande en mi mismo WhatsApp, contestando lo fácil de noche (precio y si hay stock) y dejándome a mí lo de medidas, a un precio bastante más bajo.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

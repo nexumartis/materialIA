@@ -1,0 +1,13 @@
+{
+  "id": "P020",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "convenience",
+  "reason": "Mis clientes me escriben por WhatsApp, no van a entrar a una web ni a un link para preguntar si tengo una canilla; si no está en WhatsApp lo sigo contestando yo como siempre. Y 45 mil por mes para un negocio de dos personas no es poca plata para algo que mis clientes no van a usar.",
+  "objection": "No anda en WhatsApp, que es donde está toda mi clientela del barrio, y encima tengo que tener la planilla al día para que no le diga un precio viejo a nadie; a mi edad no quiero estar peleando con otro sistema.",
+  "would_change_my_mind": "Que funcione dentro de mi mismo WhatsApp leyendo la planilla de Excel que ya actualizo, sin que yo tenga que cargar nada aparte.",
+  "price_too_cheap": 8000,
+  "price_cheap": 15000,
+  "price_expensive": 30000,
+  "price_too_expensive": 50000
+}
