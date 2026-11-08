@@ -40,8 +40,10 @@ def wa_settings(monkeypatch, raw_conn):
     yield
     raw_conn.rollback()
     _exec(raw_conn, "delete from conversations where wa_id is not null")
+    _exec(raw_conn, "delete from conversations where tenant_id = %s and channel = 'whatsapp'", TENANT_C)
     _exec(raw_conn, "delete from whatsapp_inbound")
     _exec(raw_conn, "delete from whatsapp_connections")
+    _exec(raw_conn, "delete from rate_limits where bucket like 'wa-contact:%%'")
 
 
 # --- Tarea 2: firma y conexión -----------------------------------------------------------
@@ -198,3 +200,116 @@ def test_respuesta_de_la_bandeja_sale_por_whatsapp(wa_settings, sent, accounts, 
     r = TestClient(app).post(f"/app/inbox/{conv}/reply", headers=bearer(uid), json={"text": "Hola, soy Juan del local"})
     assert r.status_code == 200
     assert sent[-1]["text"]["body"] == "Hola, soy Juan del local"
+
+
+# --- Tarea 4: ruta de avisos y mensajes entrantes ---------------------------------------------
+def _payload(pnid: str, wamid: str, wa_id: str, text, type_: str = "text") -> dict:
+    msg = {"from": wa_id, "id": wamid, "timestamp": "1794161074", "type": type_}
+    if type_ == "text":
+        msg["text"] = {"body": text}
+    else:
+        msg[type_] = {"id": "media-1", "mime_type": "image/jpeg"}
+    return {"object": "whatsapp_business_account", "entry": [{"id": "WABA", "changes": [{"field": "messages", "value": {
+        "messaging_product": "whatsapp", "metadata": {"display_phone_number": "15551654354", "phone_number_id": pnid},
+        "contacts": [{"profile": {"name": "Cliente"}, "wa_id": wa_id}], "messages": [msg]}}]}]}
+
+
+def _directions(raw_conn, conv: str) -> list[str]:
+    raw_conn.rollback()
+    with raw_conn.cursor() as cur:
+        cur.execute("select direction from messages where conversation_id = %s order by created_at", (conv,))
+        return [r["direction"] for r in cur.fetchall()]
+
+
+def _signed(body: bytes) -> dict:
+    return {"X-Hub-Signature-256": "sha256=" + hmac.new(APP_SECRET.encode(), body, hashlib.sha256).hexdigest(),
+            "Content-Type": "application/json"}
+
+
+@pytest.fixture
+def client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    return TestClient(app)
+
+
+def test_verificacion_get(client, wa_settings):
+    ok = {"hub.mode": "subscribe", "hub.verify_token": VERIFY, "hub.challenge": "42"}
+    r = client.get("/channels/whatsapp/webhook", params=ok)
+    assert r.status_code == 200 and r.text == "42"
+    assert client.get("/channels/whatsapp/webhook", params={**ok, "hub.verify_token": "x"}).status_code == 403
+
+
+def test_post_firma_invalida_403(client, wa_settings):
+    r = client.post("/channels/whatsapp/webhook", content=b"{}", headers={"X-Hub-Signature-256": "sha256=00"})
+    assert r.status_code == 403
+
+
+def test_post_firmado_lo_procesa(client, wa_settings, sent, raw_conn):
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    body = json.dumps(_payload("PNID-C", "wamid.http", "5491100000016", "hola")).encode()
+    r = client.post("/channels/whatsapp/webhook", content=body, headers=_signed(body))
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert _directions(raw_conn, whatsapp.conversation_for(TENANT_C, "5491100000016")) == ["inbound", "outbound"]
+
+
+def test_texto_lo_contesta_el_agente(wa_settings, sent, raw_conn):
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    assert whatsapp.process_payload(_payload("PNID-C", "wamid.1", "5491100000010", "hola, tienen canillas?")) == 1
+    conv = whatsapp.conversation_for(TENANT_C, "5491100000010")
+    assert _directions(raw_conn, conv) == ["inbound", "outbound"]
+    assert sent[0]["to"] == "5491100000010"
+
+
+def test_mismo_wamid_dos_veces_una_respuesta(wa_settings, sent):
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    p = _payload("PNID-C", "wamid.dup", "5491100000011", "hola")
+    whatsapp.process_payload(p)
+    whatsapp.process_payload(p)
+    assert len(sent) == 1
+
+
+def test_numero_no_conectado_se_ignora(wa_settings, sent, raw_conn):
+    assert whatsapp.process_payload(_payload("PNID-NADIE", "wamid.2", "5491100000012", "hola")) == 0
+    assert sent == []
+    assert _row(raw_conn, "select count(*) n from conversations where wa_id = %s", "5491100000012")["n"] == 0
+
+
+def test_tope_por_contacto(wa_settings, sent, monkeypatch):
+    monkeypatch.setattr(settings, "whatsapp_per_contact_hour", 2)
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    for i in range(4):
+        whatsapp.process_payload(_payload("PNID-C", f"wamid.f{i}", "5491100000013", "hola"))
+    assert len(sent) == 2
+
+
+def test_redactar_conversacion_borra_el_numero(wa_settings, sent, raw_conn):
+    from app.db import tenant_tx
+    from app.domain import privacy
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    whatsapp.process_payload(_payload("PNID-C", "wamid.r", "5491100000015", "hola"))
+    conv = whatsapp.conversation_for(TENANT_C, "5491100000015")
+    with tenant_tx(TENANT_C) as cur:
+        privacy.redact_conversation(cur, TENANT_C, "00000000-0000-0000-0000-000000000001", conv)
+    raw_conn.rollback()
+    assert _row(raw_conn, "select wa_id from conversations where id = %s", conv)["wa_id"] is None
+
+
+def test_imagen_respuesta_amable(wa_settings, sent):
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    whatsapp.process_payload(_payload("PNID-C", "wamid.3", "5491100000014", None, type_="image"))
+    assert sent[0]["text"]["body"] == whatsapp.UNSUPPORTED_REPLY
+
+
+def test_estado_failed_de_meta_marca_la_cola(wa_settings, sent, raw_conn):
+    conv = _wa_conv(TENANT_C, "5491100000017")
+    opportunities.add_message(TENANT_C, conv, "outbound", "hola")
+    whatsapp.deliver_due(conversation_id=conv)
+    status = {"object": "whatsapp_business_account", "entry": [{"id": "WABA", "changes": [{"field": "messages", "value": {
+        "messaging_product": "whatsapp", "metadata": {"phone_number_id": f"PNID-{TENANT_C}"},
+        "statuses": [{"id": "wamid.out.1", "status": "failed", "recipient_id": "5491100000017",
+                      "errors": [{"code": 131031, "title": "Business Account locked"}]}]}}]}]}
+    whatsapp.process_payload(status)
+    raw_conn.rollback()
+    row = _row(raw_conn, "select status, last_error from whatsapp_outbox where conversation_id = %s", conv)
+    assert row["status"] == "failed" and "131031" in row["last_error"]

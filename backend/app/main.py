@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
-from . import buyer_session, audio_routes, whatsapp
+from . import buyer_session, audio_routes, whatsapp, whatsapp_routes
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
@@ -58,6 +58,7 @@ if settings.app_env != "local" and settings.supabase_url == Settings.model_field
 
 app = FastAPI(title="Presupuesto Vivo — Sandbox API", version="0.1.0")
 app.include_router(audio_routes.router)
+app.include_router(whatsapp_routes.router)
 
 # CORS abierto SÓLO para el sandbox local (la UI se abre como file:// => origin "null").
 # En producción restringir a los orígenes del panel autenticado.

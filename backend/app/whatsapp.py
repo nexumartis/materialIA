@@ -25,6 +25,7 @@ from .config import settings
 from .db import system_tx, tenant_tx
 
 MAX_TEXT = 4096                       # tope de un mensaje de texto de WhatsApp
+UNSUPPORTED_REPLY = "Por ahora entiendo mensajes de texto. ¿Me lo escribís?"
 RETRY_DELAYS_S = (30, 120, 600)       # esperas entre reintentos; después del último, 'failed'
 
 
@@ -90,6 +91,63 @@ def conversation_for(tenant_id: str, wa_id: str) -> str:
                     "on conflict (tenant_id, wa_id) where wa_id is not null do nothing", (tenant_id, wa_id))
         cur.execute("select id from conversations where tenant_id = %s and wa_id = %s", (tenant_id, wa_id))
         return str(cur.fetchone()["id"])
+
+
+# --- Avisos de Meta -------------------------------------------------------------------------
+def process_payload(payload: dict[str, Any]) -> int:
+    """Procesa un aviso ya verificado. Devuelve cuántos mensajes nuevos procesó. Un número que no
+    está conectado se ignora entero: ni conversación ni IA."""
+    done = 0
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            pnid = (value.get("metadata") or {}).get("phone_number_id")
+            tenant = tenant_for(str(pnid)) if pnid else None
+            if tenant is None:
+                continue
+            for status in value.get("statuses") or []:
+                _status(tenant, status)
+            for message in value.get("messages") or []:
+                done += _inbound(tenant, message)
+    return done
+
+
+def _status(tenant_id: str, status: dict[str, Any]) -> None:
+    if status.get("status") != "failed" or not status.get("id"):
+        return
+    err = (status.get("errors") or [{}])[0]
+    with system_tx() as cur:
+        cur.execute("update whatsapp_outbox set status = 'failed', last_error = %s where tenant_id = %s and wamid = %s",
+                    (f"{err.get('code', '')} {err.get('title', '')}".strip()[:200], tenant_id, status["id"]))
+
+
+def _inbound(tenant_id: str, message: dict[str, Any]) -> int:
+    from .agent import sales_agent
+    from .domain import customer_memory, limits, opportunities, privacy
+
+    wamid, wa_id = message.get("id"), message.get("from")
+    if not wamid or not wa_id:
+        return 0
+    with system_tx() as cur:      # Meta reintenta: cada mensaje, una sola vez
+        cur.execute("insert into whatsapp_inbound (wamid, tenant_id) values (%s, %s) on conflict do nothing",
+                    (wamid, tenant_id))
+        if cur.rowcount == 0:
+            return 0
+    conv = conversation_for(tenant_id, wa_id)
+    customer = customer_memory.identify(tenant_id, "whatsapp", f"whatsapp:{wa_id}")
+    if customer:
+        customer_memory.link_conversation(tenant_id, conv, customer)
+    if privacy.is_blocked(tenant_id, conv) or not limits.hit(
+            "wa-contact", f"{tenant_id}:{wa_id}", settings.whatsapp_per_contact_hour, 3600):
+        return 1
+    if message.get("type") == "text":
+        sales_agent.handle_sales_message(tenant_id, (message.get("text") or {}).get("body") or "", conv,
+                                         channel="whatsapp")
+    else:
+        opportunities.add_message(tenant_id, conv, "inbound", f"[{message.get('type')}]")
+        opportunities.add_message(tenant_id, conv, "outbound", UNSUPPORTED_REPLY)
+    deliver_due(conversation_id=conv)
+    return 1
 
 
 # --- Envío ----------------------------------------------------------------------------------
