@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     sim_webhook_secret: str = "sim-local-no-es-secreto"
     reservation_minutes: int = 30
 
+    # --- WhatsApp (Cloud API de Meta). Sin los tres secretos queda apagado. ---
+    whatsapp_app_secret: str = Field(default="", repr=False)     # firma de los avisos de Meta
+    whatsapp_verify_token: str = Field(default="", repr=False)   # lo inventamos; Meta lo repite al verificar
+    whatsapp_token_key: str = Field(default="", repr=False)      # clave Fernet que cifra el token de cada local
+    whatsapp_graph_version: str = "v25.0"
+    whatsapp_per_contact_hour: int = 60                          # tope de mensajes por contacto y hora
+
     # --- Audio web: opt-in exclusivo de UN tenant demo C/D. Sin credenciales queda apagado. ---
     audio_demo_enabled: bool = False
     audio_demo_tenant: str = ""

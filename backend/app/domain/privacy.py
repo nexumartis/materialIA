@@ -81,7 +81,8 @@ def redact_conversation(cur: Any, tenant_id: str, uid: str, conversation_id: str
                 "'localidad', delivery_address->>'localidad', 'departamento', delivery_address->>'departamento', "
                 "'provincia', delivery_address->>'provincia', 'texto', '[dirección oculta], ' || coalesce(delivery_address->>'localidad', '')) end "
                 "where tenant_id = %s and conversation_id = %s", (tenant_id, conversation_id))
-    cur.execute("update conversations set redacted_at = now() where tenant_id = %s and id = %s",
+    # El número de WhatsApp también es un dato personal: si vuelve a escribir, es una conversación nueva.
+    cur.execute("update conversations set redacted_at = now(), wa_id = null where tenant_id = %s and id = %s",
                 (tenant_id, conversation_id))
     opportunities._audit(cur, tenant_id, "conversation_redacted", conversation_id, {"actor": uid, "messages": changed})
     return changed
