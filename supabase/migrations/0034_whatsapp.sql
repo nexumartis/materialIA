@@ -28,6 +28,12 @@ create table if not exists whatsapp_inbound (
     tenant_id    uuid not null references tenants(id) on delete cascade,
     received_at  timestamptz not null default now()
 );
+-- El mensaje se guarda hasta procesarlo: si el proceso falla o se reinicia, el worker lo retoma
+-- (hasta 3 intentos). processed_at null = todavía no se atendió.
+alter table whatsapp_inbound add column if not exists message jsonb;
+alter table whatsapp_inbound add column if not exists processed_at timestamptz;
+alter table whatsapp_inbound add column if not exists attempts integer not null default 0;
+create index if not exists idx_whatsapp_inbound_pending on whatsapp_inbound (received_at) where processed_at is null;
 
 create table if not exists whatsapp_outbox (
     id               uuid primary key default gen_random_uuid(),

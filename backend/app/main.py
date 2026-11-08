@@ -722,7 +722,10 @@ def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(s
         result = _inbox_action(conversation_id, uid, lambda cur, t, u, c: inbox.reply(cur, t, u, c, req.text))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    whatsapp.deliver_due(conversation_id=str(conversation_id))   # si es de WhatsApp, sale ya
+    try:
+        whatsapp.deliver_due(conversation_id=str(conversation_id))   # si es de WhatsApp, sale ya
+    except Exception:  # noqa: BLE001 — la respuesta ya quedó guardada; el worker reintenta el envío
+        logging.getLogger(__name__).exception("whatsapp: no pude mandar la respuesta de la bandeja")
     return result
 
 

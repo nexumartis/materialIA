@@ -38,7 +38,8 @@ def run_once() -> dict[str, int]:
             "webhooks_delivered": webhooks.deliver_due(),
             "campaign_messages": campaigns.dispatch_due(),
             "handoff_summaries": handoff.summarize_due(),
-            "whatsapp_messages": whatsapp.deliver_due()}
+            "whatsapp_messages": whatsapp.deliver_due(),
+            "whatsapp_inbound_retried": whatsapp.retry_unprocessed()}
 
 
 def main(argv: list[str]) -> None:

@@ -12,20 +12,27 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import json
+import logging
 import os
 import sys
+import threading
 import time
 from typing import Any, Optional
 
 import httpx
 import psycopg
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from .config import settings
 from .db import system_tx, tenant_tx
 
 MAX_TEXT = 4096                       # tope de un mensaje de texto de WhatsApp
 UNSUPPORTED_REPLY = "Por ahora entiendo mensajes de texto. ¿Me lo escribís?"
+IGNORED_TYPES = frozenset({"reaction", "system", "unsupported"})   # ni se guardan ni se contestan
+MAX_INBOUND_ATTEMPTS = 3
+
+log = logging.getLogger("app.whatsapp")
 RETRY_DELAYS_S = (30, 120, 600)       # esperas entre reintentos; después del último, 'failed'
 
 
@@ -106,10 +113,27 @@ def process_payload(payload: dict[str, Any]) -> int:
             if tenant is None:
                 continue
             for status in value.get("statuses") or []:
-                _status(tenant, status)
+                try:
+                    _status(tenant, status)
+                except Exception:  # noqa: BLE001 — un aviso que falla no tira los demás
+                    log.exception("whatsapp: no pude registrar un estado")
             for message in value.get("messages") or []:
-                done += _inbound(tenant, message)
+                try:
+                    done += _inbound(tenant, message)
+                except Exception:  # noqa: BLE001 — queda sin procesar y lo retoma retry_unprocessed
+                    log.exception("whatsapp: falló un mensaje entrante")
     return done
+
+
+_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _contact_lock(key: str) -> threading.Lock:
+    """Un turno por contacto a la vez: una ráfaga de mensajes no corre turnos en paralelo.
+    ponytail: lock en memoria, vale con UN proceso de API; con varios, pg_advisory_xact_lock."""
+    with _locks_guard:
+        return _locks.setdefault(key, threading.Lock())
 
 
 def _status(tenant_id: str, status: dict[str, Any]) -> None:
@@ -122,32 +146,64 @@ def _status(tenant_id: str, status: dict[str, Any]) -> None:
 
 
 def _inbound(tenant_id: str, message: dict[str, Any]) -> int:
-    from .agent import sales_agent
-    from .domain import customer_memory, limits, opportunities, privacy
-
     wamid, wa_id = message.get("id"), message.get("from")
-    if not wamid or not wa_id:
+    if not wamid or not wa_id or message.get("type") in IGNORED_TYPES:
         return 0
     with system_tx() as cur:      # Meta reintenta: cada mensaje, una sola vez
-        cur.execute("insert into whatsapp_inbound (wamid, tenant_id) values (%s, %s) on conflict do nothing",
-                    (wamid, tenant_id))
+        cur.execute("insert into whatsapp_inbound (wamid, tenant_id, message) values (%s, %s, %s::jsonb) "
+                    "on conflict do nothing", (wamid, tenant_id, json.dumps(message)))
         if cur.rowcount == 0:
             return 0
-    conv = conversation_for(tenant_id, wa_id)
-    customer = customer_memory.identify(tenant_id, "whatsapp", f"whatsapp:{wa_id}")
-    if customer:
-        customer_memory.link_conversation(tenant_id, conv, customer)
-    if privacy.is_blocked(tenant_id, conv) or not limits.hit(
-            "wa-contact", f"{tenant_id}:{wa_id}", settings.whatsapp_per_contact_hour, 3600):
-        return 1
-    if message.get("type") == "text":
-        sales_agent.handle_sales_message(tenant_id, (message.get("text") or {}).get("body") or "", conv,
-                                         channel="whatsapp")
-    else:
-        opportunities.add_message(tenant_id, conv, "inbound", f"[{message.get('type')}]")
-        opportunities.add_message(tenant_id, conv, "outbound", UNSUPPORTED_REPLY)
-    deliver_due(conversation_id=conv)
+    _attend(tenant_id, message)
     return 1
+
+
+def _attend(tenant_id: str, message: dict[str, Any]) -> None:
+    """Atiende un mensaje ya registrado y lo marca procesado. Si algo falla antes de marcarlo, queda
+    para `retry_unprocessed`. ponytail: si el turno se cortó a la mitad, el reintento puede repetir
+    el mensaje entrante en el historial."""
+    from .agent import sales_agent
+    from .domain import customer_memory, inbox, limits, opportunities, privacy
+
+    wa_id = message["from"]
+    with _contact_lock(f"{tenant_id}:{wa_id}"):
+        conv = conversation_for(tenant_id, wa_id)
+        customer = customer_memory.identify(tenant_id, "whatsapp", f"whatsapp:{wa_id}")
+        if customer:
+            customer_memory.link_conversation(tenant_id, conv, customer)
+        if not privacy.is_blocked(tenant_id, conv) and limits.hit(
+                "wa-contact", f"{tenant_id}:{wa_id}", settings.whatsapp_per_contact_hour, 3600):
+            if message.get("type") == "text":
+                sales_agent.handle_sales_message(tenant_id, (message.get("text") or {}).get("body") or "", conv,
+                                                 channel="whatsapp")
+            else:
+                opportunities.add_message(tenant_id, conv, "inbound", f"[{message.get('type')}]")
+                if not inbox.is_taken(tenant_id, conv):      # nunca encima de una persona
+                    opportunities.add_message(tenant_id, conv, "outbound", UNSUPPORTED_REPLY)
+        with system_tx() as cur:
+            cur.execute("update whatsapp_inbound set processed_at = now() where wamid = %s", (message["id"],))
+    deliver_due(conversation_id=conv)
+
+
+def retry_unprocessed(limit: int = 20) -> int:
+    """Worker: retoma los mensajes que quedaron sin procesar (falla o reinicio), hasta 3 intentos."""
+    done = 0
+    while done < limit:
+        with system_tx() as cur:
+            cur.execute("update whatsapp_inbound set attempts = attempts + 1, received_at = now() where wamid = ("
+                        " select wamid from whatsapp_inbound where processed_at is null and message is not null"
+                        " and attempts < %s and received_at < now() - interval '2 minutes'"
+                        " order by received_at for update skip locked limit 1)"
+                        " returning tenant_id, message", (MAX_INBOUND_ATTEMPTS,))
+            row = cur.fetchone()
+        if row is None:
+            break
+        done += 1
+        try:
+            _attend(str(row["tenant_id"]), row["message"])
+        except Exception:  # noqa: BLE001
+            log.exception("whatsapp: falló el reintento de un mensaje entrante")
+    return done
 
 
 # --- Envío ----------------------------------------------------------------------------------
@@ -193,7 +249,7 @@ def _post(tenant_id: str, phone_number_id: str, to: str, parts: list[str]) -> tu
                     return None, f"HTTP {r.status_code}: {err.get('code', '')} {err.get('message', '')}".strip()[:200]
                 wamid = (r.json().get("messages") or [{}])[0].get("id")
         return wamid, None
-    except (httpx.HTTPError, LookupError, ValueError) as exc:
+    except (httpx.HTTPError, LookupError, ValueError, InvalidToken) as exc:
         return None, type(exc).__name__
 
 

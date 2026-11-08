@@ -313,3 +313,111 @@ def test_estado_failed_de_meta_marca_la_cola(wa_settings, sent, raw_conn):
     raw_conn.rollback()
     row = _row(raw_conn, "select status, last_error from whatsapp_outbox where conversation_id = %s", conv)
     assert row["status"] == "failed" and "131031" in row["last_error"]
+
+
+# --- Revisión final: arreglos -----------------------------------------------------------------
+def _multi(pnid: str, wa_id: str, items: list[tuple[str, str]]) -> dict:
+    """Un aviso con varios mensajes de texto del mismo contacto: [(wamid, texto), …]."""
+    p = _payload(pnid, items[0][0], wa_id, items[0][1])
+    msgs = p["entry"][0]["changes"][0]["value"]["messages"]
+    for wamid, text in items[1:]:
+        msgs.append({**msgs[0], "id": wamid, "text": {"body": text}})
+    return p
+
+
+def test_rafaga_del_mismo_contacto_no_corre_turnos_en_paralelo(wa_settings, sent, monkeypatch):
+    import threading
+    import time as _time
+    from app.agent import sales_agent
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    state = {"active": 0, "max": 0, "calls": 0}
+    guard = threading.Lock()
+
+    def slow_turn(tenant, text, conv, channel="web_sandbox"):
+        with guard:
+            state["active"] += 1
+            state["calls"] += 1
+            state["max"] = max(state["max"], state["active"])
+        _time.sleep(0.2)
+        with guard:
+            state["active"] -= 1
+
+    monkeypatch.setattr(sales_agent, "handle_sales_message", slow_turn)
+    threads = [threading.Thread(target=whatsapp.process_payload,
+                                args=(_payload("PNID-C", f"wamid.burst{i}", "5491100000030", "hola"),))
+               for i in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert state["calls"] == 3 and state["max"] == 1
+
+
+def test_un_mensaje_que_falla_no_tira_los_demas(wa_settings, sent, monkeypatch, raw_conn):
+    from app.agent import sales_agent
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    seen = []
+
+    def turn(tenant, text, conv, channel="web_sandbox"):
+        if text == "rompe":
+            raise RuntimeError("falla de prueba")
+        seen.append(text)
+
+    monkeypatch.setattr(sales_agent, "handle_sales_message", turn)
+    whatsapp.process_payload(_multi("PNID-C", "5491100000031", [("wamid.m1", "rompe"), ("wamid.m2", "sigue")]))
+    assert seen == ["sigue"]
+    raw_conn.rollback()
+    assert _row(raw_conn, "select processed_at from whatsapp_inbound where wamid = %s", "wamid.m1")["processed_at"] is None
+    assert _row(raw_conn, "select processed_at from whatsapp_inbound where wamid = %s", "wamid.m2")["processed_at"] is not None
+
+
+def test_mensaje_fallido_se_reprocesa(wa_settings, sent, monkeypatch, raw_conn):
+    from app.agent import sales_agent
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    real = sales_agent.handle_sales_message
+    monkeypatch.setattr(sales_agent, "handle_sales_message",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caída de prueba")))
+    whatsapp.process_payload(_payload("PNID-C", "wamid.retry", "5491100000032", "hola"))
+    assert sent == []
+    monkeypatch.setattr(sales_agent, "handle_sales_message", real)
+    _exec(raw_conn, "update whatsapp_inbound set received_at = now() - interval '10 minutes' where wamid = %s",
+          "wamid.retry")
+    assert whatsapp.retry_unprocessed() == 1
+    assert len(sent) == 1
+    assert whatsapp.retry_unprocessed() == 0
+
+
+def test_clave_equivocada_no_cuelga_el_envio(wa_settings, sent, monkeypatch, raw_conn):
+    conv = _wa_conv(TENANT_C, "5491100000033")
+    monkeypatch.setattr(settings, "whatsapp_token_key", Fernet.generate_key().decode())
+    opportunities.add_message(TENANT_C, conv, "outbound", "hola")
+    whatsapp.deliver_due(conversation_id=conv)
+    raw_conn.rollback()
+    row = _row(raw_conn, "select status, attempts, last_error from whatsapp_outbox where conversation_id = %s", conv)
+    assert sent == [] and row["attempts"] == 1 and row["last_error"] == "InvalidToken"
+
+
+def test_bandeja_responde_aunque_falle_el_envio(wa_settings, sent, accounts, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    monkeypatch.setattr(auth, "_signing_key", lambda token: KEY.public_key())
+    uid, tenant = accounts("Tienda WhatsApp Falla")
+    conv = _wa_conv(tenant, "5491100000034")
+    monkeypatch.setattr(whatsapp, "deliver_due", lambda **k: (_ for _ in ()).throw(RuntimeError("caída")))
+    r = TestClient(app).post(f"/app/inbox/{conv}/reply", headers=bearer(uid), json={"text": "Hola"})
+    assert r.status_code == 200
+
+
+def test_foto_con_la_conversacion_tomada_no_responde(wa_settings, sent, accounts, raw_conn):
+    uid, tenant = accounts("Tienda WhatsApp Tomada")
+    conv = _wa_conv(tenant, "5491100000035")
+    _exec(raw_conn, "update conversations set taken_by = %s, taken_at = now() where id = %s", uid, conv)
+    whatsapp.process_payload(_payload(f"PNID-{tenant}", "wamid.taken", "5491100000035", None, type_="image"))
+    assert sent == []
+    assert _directions(raw_conn, conv) == ["inbound", "inbound"]
+
+
+def test_reaccion_no_se_responde(wa_settings, sent):
+    whatsapp.connect(TENANT_C, "PNID-C", "WABA-C", "+1", "t")
+    whatsapp.process_payload(_payload("PNID-C", "wamid.react", "5491100000036", None, type_="reaction"))
+    assert sent == []
