@@ -1,0 +1,13 @@
+{
+  "id": "P013",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "convenience",
+  "reason": "Mis clientes me escriben por WhatsApp, no a una web que no tengo. Pagar $45.000 por mes por un chat al que nadie va a entrar es tirar la plata, y el link en Instagram lo usarían dos o tres.",
+  "objection": "Que no ande en WhatsApp, que es donde está toda mi clientela. Encima son $45.000 todos los meses y no sé si se va a mantener o lo van a subir con el dólar.",
+  "would_change_my_mind": "Que funcione dentro de mi WhatsApp leyendo mi planilla de precios. Ahí probaría los 14 días gratis.",
+  "price_too_cheap": 5000,
+  "price_cheap": 15000,
+  "price_expensive": 30000,
+  "price_too_expensive": 50000
+}

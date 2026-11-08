@@ -1,0 +1,222 @@
+[
+ {
+  "id": "P001",
+  "name": "Dana",
+  "age": 31,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 25971000,
+  "behaviour": "Quiere crecer y vender más",
+  "behaviour_how": "Prueba herramientas nuevas, tiene Instagram activo, quiere vender fuera de horario.",
+  "objection": "No tengo tiempo de cargar y mantener el catálogo",
+  "habit": "te escriben fotos de repuestos rotos preguntando si tenés uno igual"
+ },
+ {
+  "id": "P002",
+  "name": "Seth",
+  "age": 40,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 40125000,
+  "behaviour": "Cuida cada peso",
+  "behaviour_how": "Compara precios, todo lo que es en dólares le parece caro, paga mes a mes.",
+  "objection": "No tengo tiempo de cargar y mantener el catálogo",
+  "habit": "tu hijo te maneja el Instagram del negocio"
+ },
+ {
+  "id": "P003",
+  "name": "Jade",
+  "age": 33,
+  "segment": "Comercio con local y algo de web/Instagram activo",
+  "income": 14044000,
+  "behaviour": "Quiere crecer y vender más",
+  "behaviour_how": "Prueba herramientas nuevas, tiene Instagram activo, quiere vender fuera de horario.",
+  "objection": "WhatsApp Business ya me da respuestas rápidas gratis",
+  "habit": "tenés el mostrador lleno los sábados a la mañana"
+ },
+ {
+  "id": "P004",
+  "name": "Noor",
+  "age": 60,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 33703000,
+  "behaviour": "Desconfiado de la tecnología",
+  "behaviour_how": "Ya pagó sistemas que no usó; quiere ver que funcione antes de poner plata.",
+  "objection": "No tengo tiempo de cargar y mantener el catálogo",
+  "habit": "te escriben fotos de repuestos rotos preguntando si tenés uno igual"
+ },
+ {
+  "id": "P005",
+  "name": "Anya",
+  "age": 48,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 5015000,
+  "behaviour": "Fiel a su sistema de gestión",
+  "behaviour_how": "Tiene un sistema de stock/facturación y no quiere cargar el catálogo dos veces.",
+  "objection": "WhatsApp Business ya me da respuestas rápidas gratis",
+  "habit": "tenés el mostrador lleno los sábados a la mañana"
+ },
+ {
+  "id": "P006",
+  "name": "Mei",
+  "age": 50,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 8455000,
+  "behaviour": "Desconfiado de la tecnología",
+  "behaviour_how": "Ya pagó sistemas que no usó; quiere ver que funcione antes de poner plata.",
+  "objection": "El cliente quiere hablar con una persona, sobre todo por medidas o repuestos",
+  "habit": "tu hijo te maneja el Instagram del negocio"
+ },
+ {
+  "id": "P007",
+  "name": "Fatima",
+  "age": 49,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 36529000,
+  "behaviour": "Cuida cada peso",
+  "behaviour_how": "Compara precios, todo lo que es en dólares le parece caro, paga mes a mes.",
+  "objection": "Si se cae o contesta mal, el que queda mal soy yo",
+  "habit": "te escriben fotos de repuestos rotos preguntando si tenés uno igual"
+ },
+ {
+  "id": "P008",
+  "name": "Harper",
+  "age": 35,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 33294000,
+  "behaviour": "Contesta todo él mismo por WhatsApp",
+  "behaviour_how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó.",
+  "objection": "No confío en que la IA no le diga un precio equivocado a un cliente",
+  "habit": "cobrás mucho por transferencia y Mercado Pago"
+ },
+ {
+  "id": "P009",
+  "name": "Zoe",
+  "age": 58,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 4395000,
+  "behaviour": "Contesta todo él mismo por WhatsApp",
+  "behaviour_how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó.",
+  "objection": "El cliente quiere hablar con una persona, sobre todo por medidas o repuestos",
+  "habit": "hacés envíos en la zona con tu camioneta un par de días por semana"
+ },
+ {
+  "id": "P010",
+  "name": "Emma",
+  "age": 59,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 39434000,
+  "behaviour": "Fiel a su sistema de gestión",
+  "behaviour_how": "Tiene un sistema de stock/facturación y no quiere cargar el catálogo dos veces.",
+  "objection": "Mis clientes me escriben por WhatsApp, no por una web que no tengo",
+  "habit": "tenés el mostrador lleno los sábados a la mañana"
+ },
+ {
+  "id": "P011",
+  "name": "Gabriel",
+  "age": 50,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 3970000,
+  "behaviour": "Desconfiado de la tecnología",
+  "behaviour_how": "Ya pagó sistemas que no usó; quiere ver que funcione antes de poner plata.",
+  "objection": "Mis clientes me escriben por WhatsApp, no por una web que no tengo",
+  "habit": "cobrás mucho por transferencia y Mercado Pago"
+ },
+ {
+  "id": "P012",
+  "name": "Ruby",
+  "age": 47,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 4791000,
+  "behaviour": "Delega en el hijo o un empleado",
+  "behaviour_how": "La tecnología la maneja otro; decide si se lo recomiendan.",
+  "objection": "Si se cae o contesta mal, el que queda mal soy yo",
+  "habit": "te escriben fotos de repuestos rotos preguntando si tenés uno igual"
+ },
+ {
+  "id": "P013",
+  "name": "Kofi",
+  "age": 30,
+  "segment": "Comercio con local y algo de web/Instagram activo",
+  "income": 25178000,
+  "behaviour": "Cuida cada peso",
+  "behaviour_how": "Compara precios, todo lo que es en dólares le parece caro, paga mes a mes.",
+  "objection": "Mis clientes me escriben por WhatsApp, no por una web que no tengo",
+  "habit": "tu lista de precios está en una planilla de Excel que actualizás cuando cambian los proveedores"
+ },
+ {
+  "id": "P014",
+  "name": "Jasper",
+  "age": 53,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 35325000,
+  "behaviour": "Contesta todo él mismo por WhatsApp",
+  "behaviour_how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó.",
+  "objection": "WhatsApp Business ya me da respuestas rápidas gratis",
+  "habit": "hacés envíos en la zona con tu camioneta un par de días por semana"
+ },
+ {
+  "id": "P015",
+  "name": "Levi",
+  "age": 51,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 5148000,
+  "behaviour": "Quiere crecer y vender más",
+  "behaviour_how": "Prueba herramientas nuevas, tiene Instagram activo, quiere vender fuera de horario.",
+  "objection": "Es otro gasto fijo mensual en una época de ventas flojas",
+  "habit": "tu hijo te maneja el Instagram del negocio"
+ },
+ {
+  "id": "P016",
+  "name": "Hugo",
+  "age": 54,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 11175000,
+  "behaviour": "Cuida cada peso",
+  "behaviour_how": "Compara precios, todo lo que es en dólares le parece caro, paga mes a mes.",
+  "objection": "Si se cae o contesta mal, el que queda mal soy yo",
+  "habit": "tenés el mostrador lleno los sábados a la mañana"
+ },
+ {
+  "id": "P017",
+  "name": "Julian",
+  "age": 58,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 10296000,
+  "behaviour": "Delega en el hijo o un empleado",
+  "behaviour_how": "La tecnología la maneja otro; decide si se lo recomiendan.",
+  "objection": "WhatsApp Business ya me da respuestas rápidas gratis",
+  "habit": "tenés el mostrador lleno los sábados a la mañana"
+ },
+ {
+  "id": "P018",
+  "name": "Priya",
+  "age": 34,
+  "segment": "Comercio con local y algo de web/Instagram activo",
+  "income": 28646000,
+  "behaviour": "Fiel a su sistema de gestión",
+  "behaviour_how": "Tiene un sistema de stock/facturación y no quiere cargar el catálogo dos veces.",
+  "objection": "Si se cae o contesta mal, el que queda mal soy yo",
+  "habit": "te escriben fotos de repuestos rotos preguntando si tenés uno igual"
+ },
+ {
+  "id": "P019",
+  "name": "Tomas",
+  "age": 46,
+  "segment": "Sanitarios/corralón mediano (3 a 8 empleados)",
+  "income": 39724000,
+  "behaviour": "Contesta todo él mismo por WhatsApp",
+  "behaviour_how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó.",
+  "objection": "No tengo tiempo de cargar y mantener el catálogo",
+  "habit": "tu lista de precios está en una planilla de Excel que actualizás cuando cambian los proveedores"
+ },
+ {
+  "id": "P020",
+  "name": "Rhys",
+  "age": 60,
+  "segment": "Ferretería de barrio chica (dueño + 1 empleado)",
+  "income": 11198000,
+  "behaviour": "Contesta todo él mismo por WhatsApp",
+  "behaviour_how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó.",
+  "objection": "No tengo tiempo de cargar y mantener el catálogo",
+  "habit": "tu lista de precios está en una planilla de Excel que actualizás cuando cambian los proveedores"
+ }
+]

@@ -1,0 +1,36 @@
+{
+  "business": "materialIA: agente de ventas por chat con IA para comercios PyME argentinos (foco: ferretería, sanitarios y corralón sin tienda online)",
+  "target": "Dueño o encargado de una ferretería / casa de sanitarios / corralón de barrio en Argentina, 30 a 60 años, que hoy contesta a mano consultas de precio, stock y medidas por WhatsApp e Instagram, y no tiene tienda online",
+  "where": "Argentina (AMBA y ciudades del interior), atención por WhatsApp e Instagram",
+  "age": [30, 60],
+  "segments": [
+    {"name": "Ferretería de barrio chica (dueño + 1 empleado)", "share": 0.45, "income": [3000000, 12000000]},
+    {"name": "Sanitarios/corralón mediano (3 a 8 empleados)", "share": 0.40, "income": [12000000, 45000000]},
+    {"name": "Comercio con local y algo de web/Instagram activo", "share": 0.15, "income": [8000000, 30000000]}
+  ],
+  "behaviours": [
+    {"name": "Contesta todo él mismo por WhatsApp", "share": 0.25, "how": "Responde desde su celular entre cliente y cliente; de noche contesta lo que quedó."},
+    {"name": "Desconfiado de la tecnología", "share": 0.15, "how": "Ya pagó sistemas que no usó; quiere ver que funcione antes de poner plata."},
+    {"name": "Cuida cada peso", "share": 0.20, "how": "Compara precios, todo lo que es en dólares le parece caro, paga mes a mes."},
+    {"name": "Quiere crecer y vender más", "share": 0.15, "how": "Prueba herramientas nuevas, tiene Instagram activo, quiere vender fuera de horario."},
+    {"name": "Fiel a su sistema de gestión", "share": 0.15, "how": "Tiene un sistema de stock/facturación y no quiere cargar el catálogo dos veces."},
+    {"name": "Delega en el hijo o un empleado", "share": 0.10, "how": "La tecnología la maneja otro; decide si se lo recomiendan."}
+  ],
+  "objections": [
+    "Mis clientes me escriben por WhatsApp, no por una web que no tengo",
+    "No confío en que la IA no le diga un precio equivocado a un cliente",
+    "No tengo tiempo de cargar y mantener el catálogo",
+    "WhatsApp Business ya me da respuestas rápidas gratis",
+    "El cliente quiere hablar con una persona, sobre todo por medidas o repuestos",
+    "Es otro gasto fijo mensual en una época de ventas flojas",
+    "Si se cae o contesta mal, el que queda mal soy yo"
+  ],
+  "habits": [
+    "tenés el mostrador lleno los sábados a la mañana",
+    "tu lista de precios está en una planilla de Excel que actualizás cuando cambian los proveedores",
+    "te escriben fotos de repuestos rotos preguntando si tenés uno igual",
+    "cobrás mucho por transferencia y Mercado Pago",
+    "hacés envíos en la zona con tu camioneta un par de días por semana",
+    "tu hijo te maneja el Instagram del negocio"
+  ]
+}

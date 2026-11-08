@@ -1,0 +1,68 @@
+{
+  "business": "materialIA (SaaS: agente de ventas por chat para comercios)",
+  "unit": "comercio-mes (suscripción)",
+  "price": 35000,
+  "variable": [
+    {
+      "label": "IA por comercio por mes (ESTIMACIÓN: ~USD 10 a 1 USD = ARS 1.450)",
+      "cost": 14500
+    },
+    {
+      "label": "Comisión de cobro de la suscripción (ESTIMACIÓN 7,6%: 6,29% + IVA al instante, comparador de terceros, sin confirmar en MP; ops.md)",
+      "cost": 2664
+    },
+    {
+      "label": "Soporte e implementación prorrateados (ESTIMACIÓN: 1 h/mes a ARS 0, la hacen los socios)",
+      "cost": 0
+    }
+  ],
+  "fixed_monthly": [
+    {
+      "label": "Base de datos Supabase Pro (USD 25, precio público supabase.com/pricing 05/11/2026)",
+      "cost": 36250
+    },
+    {
+      "label": "Hosting de API, worker y web (ESTIMACIÓN USD 25)",
+      "cost": 36250
+    },
+    {
+      "label": "Mail Resend Pro USD 20 (precio público, resend.com/pricing 05/11/2026) + dominio ESTIMACIÓN USD 2",
+      "cost": 31900
+    },
+    {
+      "label": "IA: Ollama Cloud Pro USD 20 (precio público, ollama.com/pricing 05/11/2026; incluye USD 60 de uso)",
+      "cost": 29000
+    },
+    {
+      "label": "Sueldos de los socios (NO INFORMADO: 0 en este escenario)",
+      "cost": 0
+    }
+  ],
+  "startup": [
+    {
+      "label": "Constitución de la sociedad y contador (NO INFORMADO)",
+      "cost": 0
+    },
+    {
+      "label": "Lanzamiento: anuncios y visitas a ferreterías (ESTIMACIÓN)",
+      "cost": 300000
+    }
+  ],
+  "days_per_month": 1,
+  "capacity_per_day": 100000,
+  "plan_per_day": 40,
+  "ramp_per_day": [
+    3,
+    5,
+    8,
+    11,
+    14,
+    17,
+    20,
+    24,
+    28,
+    32,
+    36,
+    40
+  ]
+}

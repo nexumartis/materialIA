@@ -1,0 +1,161 @@
+{
+ "business": "materialIA: agente de ventas por chat con IA para comercios PyME argentinos (foco: ferretería, sanitarios y corralón sin tienda online)",
+ "seed": 184954,
+ "dealt": 20,
+ "answered": 20,
+ "skipped": [],
+ "buys": 3,
+ "passes": 17,
+ "buy_rate": 0.15,
+ "by_segment": [
+  [
+   "Comercio con local y algo de web/Instagram activo",
+   3,
+   0.3333333333333333
+  ],
+  [
+   "Sanitarios/corralón mediano (3 a 8 empleados)",
+   8,
+   0.125
+  ],
+  [
+   "Ferretería de barrio chica (dueño + 1 empleado)",
+   9,
+   0.1111111111111111
+  ]
+ ],
+ "by_behaviour": [
+  [
+   "Quiere crecer y vender más",
+   3,
+   1.0
+  ],
+  [
+   "Cuida cada peso",
+   4,
+   0.0
+  ],
+  [
+   "Desconfiado de la tecnología",
+   3,
+   0.0
+  ],
+  [
+   "Fiel a su sistema de gestión",
+   3,
+   0.0
+  ],
+  [
+   "Contesta todo él mismo por WhatsApp",
+   5,
+   0.0
+  ],
+  [
+   "Delega en el hijo o un empleado",
+   2,
+   0.0
+  ]
+ ],
+ "by_income": [
+  [
+   "$10,296,000 to $33,294,000",
+   7,
+   0.2857142857142857
+  ],
+  [
+   "under $10,296,000",
+   6,
+   0.16666666666666666
+  ],
+  [
+   "$33,294,000 and up",
+   7,
+   0.0
+  ]
+ ],
+ "why_not": [
+  [
+   "convenience",
+   5,
+   [
+    "Mis clientes me escriben por WhatsApp, no por una web que no tengo. Y la lista de precios la cambio cada dos por tres; si el bot depende de que yo tenga la planilla al día, no tengo tiempo de mantenerla y termina pasando precios viejos.",
+    "Mis clientes me escriben todos por WhatsApp y no tengo web; si no anda ahí, es mandarlos a un link que la mitad no va a abrir y yo sigo contestando igual desde el celular. Encima no me la juego con que le pase un precio mal a un cliente y después tenga que bancarlo yo."
+   ],
+   [
+    "P002",
+    "P008"
+   ]
+  ],
+  [
+   "trust",
+   5,
+   [
+    "Ya pagué sistemas que quedaron juntando polvo y esto me suena igual: mis clientes me mandan las fotos por WhatsApp, no a una web que no tengo. Capaz pruebo los 14 días gratis si me lo dejan cargado ustedes, pero pagar, por ahora no.",
+    "Ya pagué sistemas que quedaron juntando polvo, y acá el cliente me pregunta por un repuesto o una medida y quiere que le conteste alguien que sepa. Encima mis clientes me escriben por WhatsApp, y si no anda ahí no sé quién va a usar el chat ese."
+   ],
+   [
+    "P004",
+    "P006"
+   ]
+  ],
+  [
+   "habit",
+   5,
+   [
+    "Mis clientes me escriben por WhatsApp, no entran a ninguna web ni a un link de tienda, y ya tengo mi sistema de stock y facturación; no voy a andar manteniendo además una planilla aparte para que el chat sepa los precios. Y $45.000 por mes para un negocio chico como el mío es mucha plata por algo que no está donde están mis clientes.",
+    "Mis clientes me escriben por WhatsApp, no por una web que no tengo, y encima tendría que mantener los precios y el stock en una planilla aparte de mi sistema de gestión. Cargar todo dos veces con el mostrador lleno no lo voy a hacer, ni con la prueba gratis."
+   ],
+   [
+    "P005",
+    "P010"
+   ]
+  ],
+  [
+   "need",
+   2,
+   [
+    "Mis clientes me escriben por WhatsApp y quieren hablar conmigo, sobre todo por medidas y repuestos; un chat en una web que no tengo no me saca trabajo. Y $45.000 por mes para un negocio de dos personas es mucha plata para algo que no está donde está mi gente.",
+    "Mis clientes me escriben por WhatsApp, no tengo web y por Instagram casi no me compran; un chat en un link que nadie va a abrir no me sirve. Y $45.000 por mes para mí es plata, ya pagué sistemas que quedaron juntando polvo."
+   ],
+   [
+    "P009",
+    "P011"
+   ]
+  ]
+ ],
+ "why_yes": [
+  [
+   "need",
+   3,
+   [
+    "Me escriben a toda hora con fotos de repuestos y de noche no contesto, así que vendo menos. Si me lo dejan andando ustedes y la prueba es gratis sin tarjeta, lo pruebo con el link en Instagram, y si en dos semanas me cierra aunque sea un par de ventas fuera de horario, $45.000 los pago.",
+    "Quiero vender fuera de horario y el Instagram ya me trae consultas que contesto tarde. Si me lo dejan andando con mi planilla y la prueba es gratis sin tarjeta, lo pruebo; si en los 14 días me cierra ventas de noche, pago los 45 mil."
+   ],
+   [
+    "P001",
+    "P003"
+   ]
+  ]
+ ],
+ "flip": [
+  "Que funcione dentro de WhatsApp y que ustedes me mantengan la lista de precios al día a partir de lo que me mandan los proveedores, sin que yo toque nada.",
+  "Que funcione dentro de WhatsApp y verlo andando con mis propios repuestos: que un cliente mande la foto de una pieza rota y el chat le encuentre la correcta de mi stock sin que yo toque nada.",
+  "Que ande dentro de WhatsApp y que tome los precios y el stock directo de mi sistema de gestión, sin planilla aparte.",
+  "Ver que ande en WhatsApp y que en la prueba gratis me cierre ventas de verdad en mi negocio, con mis clientes, sin que yo tenga que andar arreglándole la planilla.",
+  "Que funcione dentro de WhatsApp y que en la prueba vea con mis propias fotos de repuestos que acierta o me pasa la charla cuando duda.",
+  "Que funcione dentro de mi WhatsApp y que yo pueda ver y aprobar el precio antes de que salga al cliente, al menos el primer mes.",
+  "Que ande en mi mismo WhatsApp, contestando lo fácil de noche (precio y si hay stock) y dejándome a mí lo de medidas, a un precio bastante más bajo.",
+  "Que tome precios y stock directo de mi sistema de gestión sin cargar nada a mano y que conteste dentro de mi WhatsApp.",
+  "Que funcione dentro de mi WhatsApp y verlo andando en otra ferretería como la mía, vendiendo de verdad, antes de pagar un peso.",
+  "Que me lo recomiende otro ferretero de la zona que ya lo use y le ande bien, y que funcione dentro de WhatsApp.",
+  "Que funcione dentro de mi WhatsApp leyendo mi planilla de precios. Ahí probaría los 14 días gratis.",
+  "Que conteste directo en mi WhatsApp de siempre y que me lo dejen andando con mis precios sin que yo tenga que armar ninguna planilla.",
+  "Que funcione dentro de WhatsApp y ver a otra ferretería del barrio usándolo meses sin quilombos.",
+  "Que funcione adentro de WhatsApp y que mi hijo lo pruebe y me diga que me ahorra horas los sábados sin que yo tenga que tocar nada.",
+  "Que se conecte directo a mi sistema de gestión y lea el stock y los precios de ahí, sin cargar nada dos veces, y que funcione dentro de WhatsApp.",
+  "Que funcione dentro de mi mismo WhatsApp y que tome la planilla de Excel sola cada vez que la actualizo, sin que yo tenga que cargar nada.",
+  "Que funcione dentro de mi mismo WhatsApp leyendo la planilla de Excel que ya actualizo, sin que yo tenga que cargar nada aparte."
+ ],
+ "purchases_first_month_per_buyer": 1.0,
+ "price_answers": 20
+}
