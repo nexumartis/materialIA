@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
-from . import buyer_session, audio_routes
+from . import buyer_session, audio_routes, whatsapp
 from .agent import sales_agent
 from .auth import current_uid
 from .config import Settings, settings
@@ -718,9 +718,11 @@ def app_inbox_release(conversation_id: UUID, uid: str = Depends(staff_uid)) -> d
 @app.post("/app/inbox/{conversation_id}/reply")
 def app_inbox_reply(conversation_id: UUID, req: HumanReply, uid: str = Depends(staff_uid)) -> dict:
     try:
-        return _inbox_action(conversation_id, uid, lambda cur, t, u, c: inbox.reply(cur, t, u, c, req.text))
+        result = _inbox_action(conversation_id, uid, lambda cur, t, u, c: inbox.reply(cur, t, u, c, req.text))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    whatsapp.deliver_due(conversation_id=str(conversation_id))   # si es de WhatsApp, sale ya
+    return result
 
 
 @app.post("/app/inbox/{conversation_id}/notes")

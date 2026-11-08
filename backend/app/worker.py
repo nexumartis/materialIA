@@ -6,7 +6,8 @@ Cada vuelta (todas idempotentes; el estado vive en la base):
 - resume la parte vieja de las conversaciones largas;
 - lee con OCR local los comprobantes de pago recibidos (nunca acreditan el pago);
 - borra conversaciones de prueba abandonadas (vistas previas del asistente);
-- sincroniza el catálogo de los negocios con Google Sheets conectada (cada 15 minutos).
+- sincroniza el catálogo de los negocios con Google Sheets conectada (cada 15 minutos);
+- manda por WhatsApp los mensajes pendientes y reintenta los que fallaron.
 
     python -m app.worker            # bucle cada WORKER_INTERVAL_S segundos (default 60)
     python -m app.worker --once     # una sola vuelta (cron, tests)
@@ -18,6 +19,7 @@ import os
 import sys
 import time
 
+from . import whatsapp
 from .agent import compaction
 from .documents import store as documents
 from .domain import campaigns, catalog_sheet, customer_memory, evals, handoff, limits, orders, webhooks
@@ -35,7 +37,8 @@ def run_once() -> dict[str, int]:
             "rate_limit_windows_cleaned": limits.cleanup(),
             "webhooks_delivered": webhooks.deliver_due(),
             "campaign_messages": campaigns.dispatch_due(),
-            "handoff_summaries": handoff.summarize_due()}
+            "handoff_summaries": handoff.summarize_due(),
+            "whatsapp_messages": whatsapp.deliver_due()}
 
 
 def main(argv: list[str]) -> None:

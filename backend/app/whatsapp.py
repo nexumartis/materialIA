@@ -14,13 +14,18 @@ import hashlib
 import hmac
 import os
 import sys
-from typing import Optional
+import time
+from typing import Any, Optional
 
+import httpx
 import psycopg
 from cryptography.fernet import Fernet
 
 from .config import settings
-from .db import system_tx
+from .db import system_tx, tenant_tx
+
+MAX_TEXT = 4096                       # tope de un mensaje de texto de WhatsApp
+RETRY_DELAYS_S = (30, 120, 600)       # esperas entre reintentos; después del último, 'failed'
 
 
 class NumberTaken(ValueError):
@@ -75,6 +80,112 @@ def _token(tenant_id: str) -> str:
     if row is None:
         raise LookupError("El negocio no tiene WhatsApp conectado.")
     return _fernet().decrypt(row["token_encrypted"].encode()).decode()
+
+
+# --- Conversaciones ---------------------------------------------------------------------------
+def conversation_for(tenant_id: str, wa_id: str) -> str:
+    """La conversación de este contacto en este negocio (una sola; se crea la primera vez)."""
+    with tenant_tx(tenant_id) as cur:
+        cur.execute("insert into conversations (tenant_id, channel, status, wa_id) values (%s, 'whatsapp', 'open', %s) "
+                    "on conflict (tenant_id, wa_id) where wa_id is not null do nothing", (tenant_id, wa_id))
+        cur.execute("select id from conversations where tenant_id = %s and wa_id = %s", (tenant_id, wa_id))
+        return str(cur.fetchone()["id"])
+
+
+# --- Envío ----------------------------------------------------------------------------------
+def split_text(text: str, limit: int = MAX_TEXT) -> list[str]:
+    """Partes de hasta `limit` caracteres, cortando en un salto de línea cuando se puede."""
+    parts = []
+    while len(text) > limit:
+        cut = text.rfind("\n", 0, limit + 1)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    if text:
+        parts.append(text)
+    return parts
+
+
+def _client() -> httpx.Client:
+    """Frontera HTTP con Meta (los tests la reemplazan por un MockTransport)."""
+    return httpx.Client(timeout=15, follow_redirects=False, trust_env=False)
+
+
+def _body(content: str, payload: Optional[dict[str, Any]]) -> str:
+    url = ((payload or {}).get("payment") or {}).get("url")
+    return f"{content}\n{url}" if url and url not in content else content
+
+
+def _post(tenant_id: str, phone_number_id: str, to: str, parts: list[str]) -> tuple[Optional[str], Optional[str]]:
+    """Manda las partes en orden. Devuelve (wamid de la última, None) o (None, error sin secretos)."""
+    url = f"https://graph.facebook.com/{settings.whatsapp_graph_version}/{phone_number_id}/messages"
+    try:
+        headers = {"Authorization": f"Bearer {_token(tenant_id)}"}
+        wamid = None
+        with _client() as client:
+            for part in parts:
+                r = client.post(url, headers=headers, json={"messaging_product": "whatsapp", "to": to,
+                                                            "type": "text", "text": {"body": part}})
+                if r.status_code != 200:
+                    try:
+                        err = r.json().get("error") or {}
+                    except ValueError:
+                        err = {}
+                    return None, f"HTTP {r.status_code}: {err.get('code', '')} {err.get('message', '')}".strip()[:200]
+                wamid = (r.json().get("messages") or [{}])[0].get("id")
+        return wamid, None
+    except (httpx.HTTPError, LookupError, ValueError) as exc:
+        return None, type(exc).__name__
+
+
+def deliver_due(limit: int = 20, budget_s: float = 20.0, conversation_id: Optional[str] = None) -> int:
+    """Manda los mensajes pendientes, de a uno y en orden de creación. Cada fila se RECLAMA corriendo
+    su próximo intento 2 minutos (dos procesos no la mandan a la vez) y el POST va fuera de la
+    transacción. Fuera de la ventana de 24 h no se manda: queda 'window_closed', sin reintentos.
+    ponytail: si falla la 2.ª parte de un texto largo, el reintento repite la 1.ª."""
+    started, done = time.monotonic(), 0
+    while done < limit and time.monotonic() - started < budget_s:
+        with system_tx() as cur:
+            cur.execute("update whatsapp_outbox set next_attempt_at = now() + interval '2 minutes' where id = ("
+                        " select id from whatsapp_outbox where status = 'pending' and next_attempt_at <= now()"
+                        " and (%(conv)s::uuid is null or conversation_id = %(conv)s::uuid)"
+                        " order by created_at for update skip locked limit 1)"
+                        " returning id, tenant_id, attempts", {"conv": conversation_id})
+            row = cur.fetchone()
+            if row is None:
+                break
+            cur.execute("select c.wa_id, c.last_customer_message_at > now() - interval '24 hours' as open, "
+                        "m.content, m.payload, w.phone_number_id from whatsapp_outbox o "
+                        "join conversations c on c.id = o.conversation_id join messages m on m.id = o.message_id "
+                        "left join whatsapp_connections w on w.tenant_id = o.tenant_id and w.status = 'connected' "
+                        "where o.id = %s", (row["id"],))
+            info = cur.fetchone()
+            if not info["open"]:
+                skip = ("window_closed", None)
+            elif not (info["wa_id"] and info["phone_number_id"]):
+                skip = ("failed", "sin WhatsApp conectado o contacto borrado")
+            else:
+                skip = None
+            if skip:
+                cur.execute("update whatsapp_outbox set status = %s, last_error = %s where id = %s", (*skip, row["id"]))
+        done += 1
+        if skip:
+            continue
+        wamid, error = _post(str(row["tenant_id"]), info["phone_number_id"], info["wa_id"],
+                             split_text(_body(info["content"], info["payload"])))
+        attempts = row["attempts"] + 1
+        with system_tx() as cur:
+            if error is None:
+                cur.execute("update whatsapp_outbox set status = 'sent', attempts = %s, wamid = %s, last_error = null, "
+                            "sent_at = now() where id = %s", (attempts, wamid, row["id"]))
+            else:
+                final = attempts > len(RETRY_DELAYS_S)
+                delay = RETRY_DELAYS_S[min(attempts, len(RETRY_DELAYS_S)) - 1]
+                cur.execute("update whatsapp_outbox set status = %s, attempts = %s, last_error = %s, "
+                            "next_attempt_at = now() + make_interval(secs => %s) where id = %s",
+                            ("failed" if final else "pending", attempts, error, delay, row["id"]))
+    return done
 
 
 def main(argv: list[str]) -> None:
