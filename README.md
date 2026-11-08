@@ -9,7 +9,7 @@ ferretería. Diseño y etapas: [docs/superpowers/specs/2026-10-26-agente-ventas-
 
 > Estado: backend Python/FastAPI + Supabase Postgres, front React (`web/`), cuentas por
 > negocio con aislamiento por RLS, stock concurrente, pagos simulados o Mercado Pago de prueba.
-> **Sin WhatsApp, sin envíos a clientes reales, sin producción.**
+> **WhatsApp en diseño** ([docs/superpowers/specs/2026-11-08-whatsapp-design.md](docs/superpowers/specs/2026-11-08-whatsapp-design.md)); todavía sin campañas reales ni producción.
 
 ## Arquitectura (resumen)
 

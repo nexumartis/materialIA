@@ -32,7 +32,10 @@ uvicorn app.main:app --port 8077 --reload    # /docs para Swagger
 - **Secretos:** jamás commitear `.env`, DB passwords ni `service_role`. Sólo `.env.example`.
 - **Esquema:** una sola fuente de verdad = migraciones SQL en `supabase/migrations/`. No ORM.
   Migraciones idempotentes, sin `DROP`/reset remoto sin permiso.
-- **Alcance:** NO WhatsApp, NO envíos a clientes, NO producción en esta fase.
+- **Alcance:** WhatsApp **sí**, prioridad aprobada por ambos socios el 08/11/2026, sólo con la API
+  oficial de Meta. Diseño: `docs/superpowers/specs/2026-11-08-whatsapp-design.md`. Se responde a
+  clientes que escribieron (ventana de 24 h). Todavía NO: mensajes que inicia el negocio fuera de
+  esa ventana (campañas, plantillas). La puesta en producción para el piloto sigue `founder/launch.md`.
 
 ## Mapa
 - `backend/app/domain/` — catálogo, `inventory.py` (stock concurrente), `orders.py`
