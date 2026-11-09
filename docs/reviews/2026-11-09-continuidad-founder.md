@@ -55,3 +55,10 @@ Rama de entrega: `docs/continuidad-founder-2026-11-09`, sobre main vigente al in
 La instrucción del usuario cubre compartir/publicar esta entrega; no se hace merge a main
 ni despliegue por inferencia. El commit documental de origen y la revisión indexada son
 `0ee50dee6ece2676957014a236aebb9b859e9c00`; el artefacto se publica en un commit posterior.
+
+**Resultado:** rama subida con la cuenta personal `matipaule` y
+[PR #75 abierta](https://github.com/nexumartis/materialIA/pull/75), base `main`.
+El remoto confirmó `745e628e927e8f39e0e63531921864fb515f4a92` para los dos commits de entrega;
+esta constancia de publicación se agrega después. Main permanece en `b8714fa`: **sin merge**.
+Se verificó árbol local limpio tras la subida. La selección explícita de `matipaule` resolvió
+la ambigüedad entre las dos cuentas guardadas; no se modificó la configuración global de Git.

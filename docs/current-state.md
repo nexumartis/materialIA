@@ -3,6 +3,10 @@
 **Actualizado: 09/11/2026.** Primera lectura para ambos socios y sus agentes.
 Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
+Esta actualización se comparte en la [PR #75](https://github.com/nexumartis/materialIA/pull/75),
+rama `docs/continuidad-founder-2026-11-09`. Al publicarla queda pendiente su integración a main;
+Tomi puede consultar esa rama o esperar a que se integre antes de actualizar su main.
+
 ## Base técnica comprobada
 
 Main remoto consultado: **`b8714faaecc1ac1bd49791acef60553b157bd437`**,
