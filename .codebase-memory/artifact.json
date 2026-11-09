@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "a4e9d025604935675fdb91d6ef643ba1a4d21af7",
-    "indexed_at": "2026-10-28T18:38:51Z",
+    "commit": "0ee50dee6ece2676957014a236aebb9b859e9c00",
+    "indexed_at": "2026-11-09T16:48:16Z",
     "project": "materialIA",
-    "nodes": 1468,
-    "edges": 6635,
-    "original_size": 4849664,
-    "compressed_size": 603268,
-    "compression_level": 3
+    "nodes": 4231,
+    "edges": 18120,
+    "original_size": 6291456,
+    "compressed_size": 970521,
+    "compression_level": 9
 }

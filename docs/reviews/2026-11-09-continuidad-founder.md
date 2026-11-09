@@ -39,12 +39,19 @@ No se consumen créditos ni se prueba Meta/ElevenLabs en cuentas reales.
 
 ## Codebase Memory
 
-El artefacto anterior corresponde a `a4e9d025604935675fdb91d6ef643ba1a4d21af7`, indexado el
-28/10/2026. Se intentará regenerar después del commit documental; registrar revisión exacta,
-resultado y límites antes del cierre. El grafo no reemplaza los documentos de negocio.
+Actualización **ejecutada y persistida el 09/11/2026 a las 16:48:16 UTC**, modo `fast`, sobre
+el commit documental **`0ee50dee6ece2676957014a236aebb9b859e9c00`**: 4.231 nodos y 18.120 relaciones,
+con conteos observados iguales a los esperados del indexador. Grafo de 970.521 bytes y
+manifiesto generados por la herramienta. Reemplaza el índice del 28/10.
+
+Límites: el indexador excluye `.claude/`, `docs/`, `web/e2e`, `web/public`, `supabase/migrations`,
+entorno/dependencias y herramientas del backend, y estáticos. Skills, negocio, invariantes y
+migraciones se consultan directamente. El grafo no contiene esta actualización de su propio
+manifiesto ni acredita pruebas del producto; la revisión de origen queda explícita.
 
 ## Publicación
 
 Rama de entrega: `docs/continuidad-founder-2026-11-09`, sobre main vigente al iniciar.
 La instrucción del usuario cubre compartir/publicar esta entrega; no se hace merge a main
-ni despliegue por inferencia. Registrar commit, PR y resultado remoto al terminar.
+ni despliegue por inferencia. El commit documental de origen y la revisión indexada son
+`0ee50dee6ece2676957014a236aebb9b859e9c00`; el artefacto se publica en un commit posterior.

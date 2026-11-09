@@ -78,3 +78,8 @@ no una memoria de entrevistas o de la conversación. Comprobar su revisión en
 [artifact.json](../.codebase-memory/artifact.json) antes de consultarlo. El estado de la
 actualización de este cierre se registra en la revisión documental; no asumir que el índice
 incluye el commit que publica su propio manifiesto.
+
+**Regenerado el 09/11/2026**, modo `fast`, sobre `0ee50dee6ece2676957014a236aebb9b859e9c00`:
+4.231 nodos y 18.120 relaciones; grafo comprimido y manifiesto persistidos. El indexador excluye
+`docs/`, `.claude/` y migraciones SQL, entre otros directorios: leer esos archivos directamente.
+El commit que comparte este artefacto y esta nota es posterior a la revisión indexada.
