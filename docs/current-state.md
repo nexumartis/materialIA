@@ -1,84 +1,89 @@
 # Estado actual — materialIA
 
-**Primera lectura, 29/10/2026.** Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md), skills en [SKILLS.md](SKILLS.md), etapas en [roadmap.md](roadmap.md). Git y Markdown son la verdad; Codebase Memory es derivado y **no** se reindexó en este cierre.
+**Actualizado: 09/11/2026.** Primera lectura para ambos socios y sus agentes.
+Invariantes en [CLAUDE.md](../CLAUDE.md), roles en [AI-WORKFLOW.md](AI-WORKFLOW.md).
 
-## Entrega: comprobantes de clientes (roadmap etapa 1, hecha)
+Esta actualización se comparte en la [PR #75](https://github.com/nexumartis/materialIA/pull/75),
+rama `docs/continuidad-founder-2026-11-09`. Al publicarla queda pendiente su integración a main;
+Tomi puede consultar esa rama o esperar a que se integre antes de actualizar su main.
 
-En `main` con los PRs #16 (T1+T2) y #17 (T3+T4); las correcciones de la revisión van en la rama `fix/comprobantes-revision`. Lo implementó Claude Code en la sesión de Tomi.
+## Base técnica comprobada
 
-- **T1 — OCR local:** RapidOCR/ONNX en CPU, modelos fijados por hash, plazo total de 60 s y red bloqueada por el SO (macOS/Linux).
-- **T2 — Pago y constancia:** el dueño confirma la transferencia que cotejó en su banco, con el mismo efecto que un pago del proveedor. Constancia y aviso en la misma transacción. Migración 0008.
-- **T3 — Comprobantes:** el comprador sube el comprobante al pedido y el worker lo lee. El panel lista, muestra el original, descarta y confirma asociando comprobantes. CSV mensual en hora argentina. Migración 0009.
-- **T4 — PDF y pantallas:** constancia en PDF, chat del comprador y panel del dueño. Aceptación en navegador.
+Main remoto consultado: **`b8714faaecc1ac1bd49791acef60553b157bd437`**,
+merge del [PR #74](https://github.com/nexumartis/materialIA/pull/74), el 08/11/2026.
+Esta entrega documental parte de esa revisión. Incluye los cambios previos de Tomi y Mati:
 
-Un archivo o su OCR **nunca** acreditan un pago. Las decisiones y alternativas están en [decisions/2026-10-29](decisions/2026-10-29-comprobantes-implementacion.md); el detalle, en la [revisión](reviews/2026-10-28-comprobantes.md).
+- Cuentas, negocios, roles y aislamiento; agente con catálogo real, stock, carrito, pedidos,
+  pagos verificados, comprobantes/OCR, bandeja humana y panel.
+- Audio web con ElevenLabs (PR #67), reparto/agenda/franjas/correo (PRs #68–70),
+  fotos para buscar en el catálogo (PR #71) y documentos founder (PR #72).
+- WhatsApp oficial, etapa 1 (PR #74): conexión por negocio, token cifrado, firma del webhook,
+  texto entrante/saliente, idempotencia, cola/reintentos, ventana de 24 horas y respuesta desde
+  la bandeja. No confundir con campañas, audio de WhatsApp, Instagram o alta SaaS integrada.
+- El esquema versionado llega a **0034_whatsapp.sql**. Esto no certifica qué migraciones
+  tiene hoy una DB local o remota; no se inspeccionaron ni modificaron bases en esta entrega.
 
-## Revisión
+La prueba real de WhatsApp está pendiente según [whatsapp-pruebas.md](whatsapp-pruebas.md):
+se registró `Business account locked` entre el 08 y el 09/11. No se verificó de nuevo la cuenta.
+ElevenLabs requiere secretos y configuración de cada entorno; no se consumieron créditos aquí.
+Consultar [audio-web.md](audio-web.md), distinguiendo su handoff inicial del código ya integrado.
 
-T1–T4 entraron a `main` **sin** la revisión cruzada de Mati, porque Tomi mergeó los PRs. Después hubo una revisión de Claude en un contexto separado (`/code-review high` sobre `94f0c26..ba3259a`), que no acredita diversidad de modelo ni de cuenta. Encontró 10 problemas y los 10 se corrigieron en `fix/comprobantes-revision`, cada uno con su test:
+## Trabajo de negocio de hoy, compartido
 
-- devolver un pago duplicado reintegraba el pedido entero;
-- una confirmación con error de tipeo dejaba plata fantasma en el CSV y asociaba los comprobantes;
-- una constancia de un pedido reintegrado seguía mostrándose válida (ahora sale ANULADA);
-- un PDF con texto y logo se pasaba igual por OCR;
-- subir el mismo archivo a la vez en dos pedidos daba 500;
-- el panel no aceptaba importes con formato argentino;
-- el OCR podía frenar el worker;
-- `CLAUDE.md` no contemplaba las transferencias verificadas por el dueño;
-- había lógica duplicada.
+Empezar por [founder/README.md](../founder/README.md). Se incorporan los **24 archivos**
+producidos con Claude el 09/11: intake, brainstorm, investigación/síntesis, insumos,
+verificación, compuerta, progreso y guía/planilla de entrevistas.
 
-**Pendiente:** revisión de Mati con Codex sobre todo el conjunto.
+- Orientación para validar: sanitarios/grifería de CABA, instalación acompañada y precio
+  tentativo de $70.000. No hay precio final, demanda validada ni clientes pagos acreditados.
+- La planilla de entrevistas contiene sólo encabezados. Segundas visitas y aceptación de
+  un piloto/precio deben registrarse por separado de la primera charla de investigación.
+- El análisis del 05/11 ($35.000, varios rubros y GBA sur) queda identificado como antecedente;
+  no tomar sus cronogramas, garantías ni cifras como acuerdos vigentes.
+- Se corrigió el supuesto de cobro de respuestas de servicio de Meta: ver
+  [correcciones del 09/11](../founder/startup-design/01-discovery/corrections-2026-11-09.md).
+  Los insumos originales y la verificación anterior se conservan con advertencias.
 
-## Evidencia (29/10/2026, macOS, Python 3.14)
+## Skills y forma de trabajar
 
-- **Backend:** **325 passed, 0 failed, 0 skipped** en una DB descartable (`127.0.0.1:55436`, contenedor `materialia-test-pg`, 0001–0009 + seed). Warnings históricos: httpx/Starlette y JWT corto de tests.
-- **Navegador** (entorno aislado: API 8078, web 4174, worker, LLM `mock`, pagos simulados):
-  - `npm run e2e:comprobantes`: **17/17**;
-  - `npm run e2e`: **36 PASS, 0 FAIL**.
-- **Control visual:** PDF de la constancia y panel de pedidos.
+Las **17 skills de negocio completas** viven en [`.claude/skills/`](../.claude/skills/README.md),
+con referencias, scripts, licencias MIT y [manifiesto de integridad](../.claude/skills/manifest.json).
+Tomi puede abrir el repo con su propio Claude Code y comprobar su carga. Para ingeniería,
+ver [SKILLS.md](SKILLS.md). Las cuentas, plugins personales y `.env` no se comparten.
 
-## Datos y entornos
+El orquestador coordina y documenta; Claude Code y Codex personal implementan y revisan
+cruzadamente cuando se usa esa modalidad. Tomi puede usar Claude con revisión en otro contexto.
+Mantener briefs cortos, un owner por archivo y cargar sólo lo necesario para cada tarea.
 
-- **Supabase remoto** (`zfmjcturyhxytyfzmcha`): **0001–0010 aplicadas el 29/10/2026** por instrucción expresa de Tomi (`supabase db push` por el pooler de sesión). Antes se revisó que no hubiera operaciones destructivas: sólo se recrean políticas y el check de `payments.provider`. La prueba en seco listó exactamente 0006–0010 y no había pagos que chocaran con el check nuevo. Verificado después: tablas y columnas nuevas presentes; datos intactos (4 negocios, 24 conversaciones); `app_user` sin acceso a `access_token_hash`. No se cargó el seed.
-- **Demo local de esta PC:** Supabase 54321/54322 con 0001–0010 (0004–0007 se registraron porque las tablas ya existían; sin reset), API 8077 y web 5173. El worker no corre solo: `python -m app.worker`.
-- **Antes de un piloto real:**
-  - almacenamiento privado para los originales (hoy `bytea`) y una política de retención;
-  - comprobantes de bancos argentinos reales;
-  - decidir si, sin aislamiento de red del SO (Windows), el OCR debe negarse a leer.
+## Evidencia y límites de este cierre
 
-## Entrega en curso: bandeja y toma de control humana (roadmap etapa 2)
+Esta entrega es documental y de distribución de skills: no modifica producto ni migraciones.
+Se comprueban integridad/procedencia de skills, sintaxis de los datos y enlaces de la entrega,
+diff, archivos publicables y revisión independiente; el resultado queda en
+[la revisión](reviews/2026-11-09-continuidad-founder.md).
 
-Rama `feat/bandeja-humana`; [spec](superpowers/specs/2026-10-29-bandeja-humana-design.md) y [revisión](reviews/2026-10-29-bandeja.md). Tomi pidió avanzar sin ronda de preguntas, así que lo marcado como «decisión de Claude» en la spec está pendiente de acuerdo entre los socios.
-
-- **Panel:** página Conversaciones con filtros (derivadas, sin responder, mías, con pedido, todas), y acciones para tomar el control, responder como persona y devolver al asistente.
-- **Agente:** si la conversación está tomada, no responde, ni siquiera cuando se la toman a mitad de un turno. Los mensajes de una persona no entran al historial del modelo.
-- **Comprador:** ve «Equipo de <negocio>» y el aviso «Te está atendiendo una persona del negocio».
-- **Migración 0010:** el panel lee conversaciones por columnas, sin `access_token_hash` ni `agent_state`. Además: `needs_human_reason` (`asked`/`quote`) y la toma de control.
-- **Revisión** `/code-review high` en contexto fresco: 10 hallazgos, todos corregidos con test.
-- **Evidencia (29/10):**
-  - backend **339 passed**;
-  - `e2e:bandeja` **11/11** (dos corridas), `e2e:comprobantes` **17/17**, `e2e` **36 PASS, 0 FAIL**.
-- **Fuera del corte:** sugerencias del agente al humano y notificaciones.
-
-**Entorno:** las corridas completas de pytest tardan a veces más de 10 minutos de reloj, aunque pytest mide 22–42 s; un volcado de `faulthandler` no mostró ningún test colgado. Además, un `python -m app.worker` que queda corriendo contra la base de pytest compite con los tests: frenarlo al terminar un e2e (`pkill -f app.worker`).
-
-## Entrega en curso: asistente paso a paso (roadmap etapa 6)
-
-Rama `feat/asistente-agente`; [spec](superpowers/specs/2026-10-29-asistente-agente-design.md) y [revisión](reviews/2026-10-29-asistente.md).
-
-- **Asistente en `#/asistente`:** 8 pasos con progreso. Un registro nuevo entra directo, y «Mi agente» queda como ajustes, con un botón para abrir el asistente.
-- **Borrador:** el perfil se guarda una sola vez, al publicar.
-- **Vista previa:** con el borrador, sin pedidos ni stock, y avisa cuando responde sin IA.
-- **Sin migraciones.**
-- **Revisión** en contexto fresco: 10 hallazgos, todos corregidos.
-- **Evidencia (29/10):** backend **344 passed**; `e2e:asistente` **15/15**, `e2e:bandeja` **11/11**, `e2e:comprobantes` **17/17**, `e2e` **36/0**.
-
-La bandeja (etapa 2) entró a `main` con el PR #19, y la nube tiene 0001–0010 desde el 29/10.
+La cifra **622 tests** fue reportada en el brief de Claude, no reproducida aquí. No se ejecuta
+la suite del producto ni se afirma funcionamiento con Meta/ElevenLabs reales por estos cambios.
+El [estado del 29/10](current-state-2026-10-29.md) conserva la evidencia histórica de entonces.
 
 ## Próximo paso
 
-Revisión de Mati de los PRs de comprobantes y de la bandeja. Después, según el [roadmap](roadmap.md): etapa 6 (asistente paso a paso, front) en paralelo, o etapa 3 (WhatsApp, que requiere cambiar el alcance en CLAUDE.md con ambos socios).
+Ambos socios revisan la orientación comercial y los pendientes del
+[progreso guardado](../founder/startup-design/PROGRESS.md). Preparar las primeras charlas con
+dueños y una segunda visita con su catálogo. En paralelo, comprobar y resolver el acceso de
+Meta para la demo oficial antes de prometer un piloto conectado.
 
-  
+Para retomar con el Claude de Tomi: [ONBOARDING](ONBOARDING.md), con un prompt listo.
 
-Historial: [estado previo](state-history-2026-10-28-before-comprobantes.md). Los conteos antiguos no validan este diff.
+## Codebase Memory
+
+Git y estos Markdown son la fuente de verdad. El grafo es un índice derivado del código,
+no una memoria de entrevistas o de la conversación. Comprobar su revisión en
+[artifact.json](../.codebase-memory/artifact.json) antes de consultarlo. El estado de la
+actualización de este cierre se registra en la revisión documental; no asumir que el índice
+incluye el commit que publica su propio manifiesto.
+
+**Regenerado el 09/11/2026**, modo `fast`, sobre `0ee50dee6ece2676957014a236aebb9b859e9c00`:
+4.231 nodos y 18.120 relaciones; grafo comprimido y manifiesto persistidos. El indexador excluye
+`docs/`, `.claude/` y migraciones SQL, entre otros directorios: leer esos archivos directamente.
+El commit que comparte este artefacto y esta nota es posterior a la revisión indexada.

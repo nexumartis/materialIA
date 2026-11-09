@@ -6,6 +6,10 @@ Después seguir el acuerdo compartido de [AGENTS.md](AGENTS.md) y, según la tar
 Para preparar el entorno del socio que sólo usa Claude Code, seguir [docs/ONBOARDING.md](docs/ONBOARDING.md).
 `docs/TAREA01_REPORTE.md` conserva evidencia histórica de TAREA 01; sus conteos y resultados no son validación actual.
 
+Para negocio, precio, clientes y lanzamiento, empezar por [founder/README.md](founder/README.md).
+Las 17 skills de negocio compartidas están en `.claude/skills/`; elegir sólo las de la fase
+necesaria según [docs/SKILLS.md](docs/SKILLS.md), conservando el progreso de investigación existente.
+
 ## Qué es
 Agente de ventas por chat de punta a punta: stock y precio reales, carrito, pedido, link de
 pago y confirmación verificada con el proveedor, con el CRM (oportunidades) actualizado.

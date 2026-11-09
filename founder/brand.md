@@ -1,5 +1,7 @@
 # Marca: materialIA (nombre de trabajo)
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > Brief: posicionamiento A de `marketing.md` (el ferretero de barrio que quiere vender fuera de horario; cotiza con su lista real y cobra verificado, sin tienda online). Los socios descartaron los nombres genéricos (Vendí, Mostrador, Dale…).
 
 ## 1. Diez candidatos

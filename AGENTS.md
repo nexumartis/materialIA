@@ -7,6 +7,7 @@
 - **Planificar, implementar, revisar o entregar:** seguí [AI-WORKFLOW](docs/AI-WORKFLOW.md), que define modalidades, ownership, revisión y cierre.
 - **Elegir skills:** consultá el [mapa de skills](docs/SKILLS.md) y leé sólo las instrucciones pertinentes a la fase.
 - **Incorporar el entorno de un socio:** seguí [ONBOARDING](docs/ONBOARDING.md), que incluye un arranque para Claude Code.
+- **Negocio, clientes, precio o lanzamiento:** leé [founder/README.md](founder/README.md) y retomá el progreso guardado; allí se distinguen las hipótesis actuales de los análisis históricos.
 
 ## Acuerdo vigente
 

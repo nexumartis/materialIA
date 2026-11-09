@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-11-09",
+  "license": "MIT",
+  "hash_method": "SHA-256 of bytes after CRLF-to-LF normalization; paths relative to each skill",
+  "skills": [
+    {
+      "name": "customer-research",
+      "source": "https://github.com/coreyhaines31/marketingskills",
+      "verified_revision": "96798cf38736ecdba015a1d2b0521b0c8f8f41dd",
+      "upstream_path": "skills/customer-research",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "evals/evals.json": "fc8a15d12e582b55fa52ad27925594ab796ebd6a8ea13fed13722f97e4c51f01",
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "references/interviews-and-surveys.md": "56adecdc40af1242464937100349fc1a161627394909551720494bc5ee537076",
+        "references/source-guides.md": "7490a8d04f209d4c8c987530e79d0883a6b42027b86a920fc751cf8ea9904892",
+        "SKILL.md": "22964b89315a6cf5524d3f627904843e7826d40e06689a07faa5df25fc730bc7"
+      }
+    },
+    {
+      "name": "founder-board",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-board",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "lenses.md": "75f2a0d0dc55675e6611940f511bb5e58244f2eefcdfac52ee4d1f42c668d096",
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "4e9868404b98ced245322d6c5d05ac6a3672960ecc0453338edc0d674b419a52"
+      }
+    },
+    {
+      "name": "founder-brand",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-brand",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "406520c627dec8bb43914a94ac7303ceb8d3ee8b0e998a33b1378161b0068335"
+      }
+    },
+    {
+      "name": "founder-cfo",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-cfo",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "example.json": "e0a44bdec2dde6c7929a7540f012bfa5e07d4b3357787ef9a33aa2d9cfcafc96",
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "38cc75b484758bff0fb333f7703d0658a0969349d10bd664539f7a06e96917ce",
+        "unit_economics.py": "2df2cf18e87c992859f04bfb671827e76c4695b780023b56e75019c24a395ffc"
+      }
+    },
+    {
+      "name": "founder-competitors",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-competitors",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "cdc71a965b2e66622a11516e58b8b55fc7cf13c9b0c38fc95d2667772a6accec"
+      }
+    },
+    {
+      "name": "founder-consumer",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-consumer",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "customer.example.json": "b99cd47234629536d5ca12cc0be2c2b2df8094d1a706930e0f8ebf501bcf5963",
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "panel.py": "fb765256dbf892c48e8622634dd45a37d12422cab510ee88351c43935e167eca",
+        "pitch.example.md": "5f3d4c3723843485c257abc27d3daba2f6bb4562379f5a0f5134daa1121739fc",
+        "SKILL.md": "2f13355139a47ba1079dd7b4a16f719a4dbbf684813bb8193e33bdf85b75e1d0"
+      }
+    },
+    {
+      "name": "founder-launch",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-launch",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "fa44e8ff5eb16a74f22cc58febb19ab0e5c962beab7bb138024eaa48a262b2b6"
+      }
+    },
+    {
+      "name": "founder-marketing",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-marketing",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "eb9d725dce17558fbd67d0a1a91a0e0560472fd4a2c43dba629401a02701931e"
+      }
+    },
+    {
+      "name": "founder-offer",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-offer",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "55630bf289684ba7ba27e62dfbff177c230bddab1a4d68412d6a1ae899a0b222"
+      }
+    },
+    {
+      "name": "founder-ops",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-ops",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "687a444046d60d35ac84414997623ce98a3e60d79404fd6d8e1e38ac3ae3db7b"
+      }
+    },
+    {
+      "name": "founder-plan",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-plan",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "compile.py": "1527c065d8258971cffd0dc9862aaf72fad18a64be69efc33b3ac817901098b7",
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "a1f31d0b0d3186f3628416639d9d3d7e4ba95b39fd956d667eaf7a3d5336abab"
+      }
+    },
+    {
+      "name": "founder-pricing",
+      "source": "https://github.com/Jakeschincariol/founder-skill",
+      "verified_revision": "fd9385b0cfe1b96bebce3898fbd506d73eff5a9d",
+      "upstream_path": "skills/founder-pricing",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "857c8d5276809c8196b3cd7cb3300324768bfc562b2b6281b06d6865058e186c",
+        "SKILL.md": "d3ed84d9141c4117820bd372a44148d9e483259a7cbe24b5849d026d333bd59b",
+        "van_westendorp.py": "5915a505a8e54c479eaba12009ba988e38926c14e00adbbf9f37b61e5b112870"
+      }
+    },
+    {
+      "name": "sales-enablement",
+      "source": "https://github.com/coreyhaines31/marketingskills",
+      "verified_revision": "96798cf38736ecdba015a1d2b0521b0c8f8f41dd",
+      "upstream_path": "skills/sales-enablement",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "evals/evals.json": "5a051cfa1225515da3176a93ddb907b8efd091f9c4a485ebcdb867eea1cb7bf0",
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "references/cold-call-scripts.md": "cc4e3248070804539f8c1de01fd63918d8e40a6ad858dea2a519d50a060e268f",
+        "references/deck-frameworks.md": "265eea6c1b358d10f2dd22fd987789a9d115c14d30bf77a9086734ac60659336",
+        "references/demo-scripts.md": "505616ebf73d30fe84a844540727ab8f3aeae29ebcda8c8ace28a18ada003da3",
+        "references/objection-library.md": "e0cdfeffc41afbdbe2c014bcd9b3c024318eac9bd23159e871ec796aba29e0b2",
+        "references/one-pager-templates.md": "2197326faff4ede03fb40e332e9c80a4e084d8efd48c74df8720d70817ac5ded",
+        "references/win-loss-analysis.md": "f6f34c503f4cc506a8f24bfea6e75b260e3eff661da206399e162960141f090a",
+        "SKILL.md": "d30008d34e6a314b422e0a35cacf38aea39d39d2c48683e1ef6edcbdfca30ebd"
+      }
+    },
+    {
+      "name": "startup-competitors",
+      "source": "https://github.com/ferdinandobons/startup-skill",
+      "verified_revision": "a5f97c317b93caedbb49d28f20e9ec283b2ec087",
+      "upstream_path": "startup-competitors",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "7d3ca7d693ecb335de6d4f61ba9a644d2f521ce44f918c6cb0730c46ab109416",
+        "references/honesty-protocol.md": "fe47fa66d838c3f5cd04f765460c43a73561dd57ade84e21f05d833aa2d46ea7",
+        "references/research-principles.md": "0d34a299967ff8049700a88456e09fc40671e1d7d73e315c4ba7555848e2524d",
+        "references/research-scaling.md": "83b5d5577a059c95f1c04dda139f11a051b8b5c552b2f63d7b489472928d3094",
+        "references/research-synthesis.md": "599944d0ed3da51bf77fd581ba5c67ea8eb4348a9adfcdf0bc73059a084281dc",
+        "references/research-wave-1-profiles-pricing.md": "fee1268fc08090c1c91ca71a2eb82d5fe96960de48c03b11572147e5851ff8ae",
+        "references/research-wave-2-sentiment-mining.md": "d577408e76e8918abf97571b0330f2ac12295d9690ed11c984149d5d0b8c67db",
+        "references/research-wave-3-gtm-signals.md": "91c71f37daf27c66a439b144562be9d91c300905c49c46cc9ef60ab839af2f63",
+        "references/verification-agent.md": "0718bbd720c3602adff9ef9740d57dd6db6570186fb444813cd9028b01727011",
+        "SKILL.md": "79701a39ce4234e2ca242d052385dedb85921412686d4bf31e063b7eb3926a6f"
+      }
+    },
+    {
+      "name": "startup-design",
+      "source": "https://github.com/ferdinandobons/startup-skill",
+      "verified_revision": "a5f97c317b93caedbb49d28f20e9ec283b2ec087",
+      "upstream_path": "startup-design",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "7d3ca7d693ecb335de6d4f61ba9a644d2f521ce44f918c6cb0730c46ab109416",
+        "references/customer-interview.md": "b418c10ea3f011c97dd9ca85e614bfe917a8b40b13c4df9e68551c1e48ce4151",
+        "references/frameworks.md": "2ed035d40ee756b1a7239bc455edaef5853742a2b08b745f2f7fb0c10598c15a",
+        "references/honesty-protocol.md": "0e400d569edc72baefbfd9c5defd54af18eddcf5de473c867a8b7d136a1f0577",
+        "references/industry-benchmarks.md": "260bf6b88d13be0f0ec9109ff20d0b5c296f8efcd44c2252135ef7148abcfa28",
+        "references/intake-questions.md": "6c06144d2fce9584c6ae05013edecb2b4a7119f919cb44495a4415973b6f1198",
+        "references/output-guidelines.md": "d7b8d375a7f66334eaf04b5f0c5c2fe608d3efcf4695cc4fd6536225d2e0761e",
+        "references/output-specs.md": "3791f8b0e9cd6d63fcfacabcc449e8916f4ff498c5e3c20a1657543b9061d71b",
+        "references/research-principles.md": "c5294bca284e13b334e43a8117705d6c17fc0986e4608abd0f73270e047d2dd0",
+        "references/research-scaling.md": "c940fcd3999a101df65969af8aa88ffe92394fc4fead04872ec3b2dd4cb2259e",
+        "references/research-synthesis.md": "9d2da0184136c1ad2a5f1f3d53602e1ca57803a06c5a55995ae8cfd935e22ac0",
+        "references/research-wave-1-market.md": "41b33b32c997da6824b4f534533275ed69e6aa51eb5e06aab3b65a92fa166024",
+        "references/research-wave-2-competitors.md": "86727139a26314f0cc3296aa694ab433cb82fa5d2572398c8c013793c7b9eb09",
+        "references/research-wave-3-customers.md": "23c651cddc3a0dc60df32345df0191bbf2fd105834a4844742cb36c09edd93dc",
+        "references/research-wave-4-distribution.md": "3f5ee585c2f880a574d51c64fd3416264fdf72df7c0538b70d6a558834b03d9a",
+        "references/verification-agent.md": "4a05fb2cb9147aa9a473011a791408b8e55a6414dbf5ecb2f05d0a93c76b6c5d",
+        "SKILL.md": "08f5ea98d6fc7b70329e635f52789b095941bd5842ad03bc6da434af1912b8a2"
+      }
+    },
+    {
+      "name": "startup-pitch",
+      "source": "https://github.com/ferdinandobons/startup-skill",
+      "verified_revision": "a5f97c317b93caedbb49d28f20e9ec283b2ec087",
+      "upstream_path": "startup-pitch",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "7d3ca7d693ecb335de6d4f61ba9a644d2f521ce44f918c6cb0730c46ab109416",
+        "references/honesty-protocol.md": "66f5032ecaaa1b2d1baf7fb95df49110c2f4bebe1db8f990ecf26fda8e348bfe",
+        "references/pitch-frameworks.md": "53daeacc7b6f2f268951c1503fad93c8ea50fd0ac1095904773b1cb478c7313a",
+        "references/research-principles.md": "5d7a76782de8113b4e19f4faef53665c93effe84afcabe7012d3ac4377b85134",
+        "references/research-scaling.md": "cd48d2f27799dc62a9b0df2709a859a87d9f6515fce2f18312f5baacdc4eff8f",
+        "references/research-synthesis.md": "7928b8d7d0e822cefbd100027203d0bbe9b16d9665298b484d84c0c31d1fb24b",
+        "references/research-wave-1-audience-narrative.md": "f2f6b405b75852967e156ff324c43b3489ec463c1492fc4c46e39e35f23dc2a6",
+        "references/research-wave-2-competitive-framing.md": "1de5bf9321bc051f7ad0841e88880bb10e7d6da69495bac81142d679f29f31d1",
+        "references/verification-agent.md": "638308492670083b1a013eebf06db08954a50a344766a54d65c79d61e1983122",
+        "SKILL.md": "77c89039971517db93294f775bcb9d3e216e3535b859fabc6274981a09de8b83"
+      }
+    },
+    {
+      "name": "startup-positioning",
+      "source": "https://github.com/ferdinandobons/startup-skill",
+      "verified_revision": "a5f97c317b93caedbb49d28f20e9ec283b2ec087",
+      "upstream_path": "startup-positioning",
+      "local_changes": "LICENSE added from verified upstream; skill/resources unchanged",
+      "files": {
+        "LICENSE": "7d3ca7d693ecb335de6d4f61ba9a644d2f521ce44f918c6cb0730c46ab109416",
+        "references/frameworks.md": "b5448ea85b4092cb993bd65cc274262ffd9c341e7d634481585c656158750e06",
+        "references/honesty-protocol.md": "2e5f460edef04978817c9d75073fe914057305ddc9dc16c272ffa449bd8b9932",
+        "references/research-principles.md": "8eca008de1624956cf0786880b22866e2145a2c9babae23650c23611cee7a578",
+        "references/research-scaling.md": "1828f34fef2ccd3e58fbea48a6d62c1740a3e9f6a8973c7e687a0a511c2add6c",
+        "references/research-synthesis.md": "c883834e9edc2d2fe998e0e47642e84ae88be489ecc25acffa11c26d3727b625",
+        "references/research-wave-1-alternatives.md": "e81bd46b92839b40e9f04ab312a8050fecf0c342db8d9345e0c200c77cc6ee10",
+        "references/research-wave-2-market-frame.md": "c1d52fe7e40342473c21351deffdb5fd63d8243221640ca139f2bacde7e5a028",
+        "references/verification-agent.md": "5bc5ae4f91801f7a17abd7979df015c47374447c0c507201e0214c79a1ae2ba1",
+        "SKILL.md": "a2eb3742688ef42ae368f41a86cbabc7782baf92675ca641fb7e410ba914ddb0"
+      }
+    }
+  ]
+}
