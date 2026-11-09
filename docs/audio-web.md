@@ -1,5 +1,7 @@
 # Audio web: contrato backend, 04/11/2026
 
+> **Actualización documental 09/11:** el código de audio web se integró en main con el PR #67 el 04/11. El contrato y los pendientes que siguen son el handoff histórico de esa entrega, no el estado técnico actual. Consultar [current-state.md](current-state.md). Esta actualización no acredita pruebas reales de ElevenLabs.
+
 Entrega coordinada sobre base `562a6383ba57e6e0b83769ff853c89b0335f45f9`.
 Owner del patch: Codex personal; revisor pendiente: Claude en contexto fresco.
 Este documento describe implementación propuesta, no evidencia de ejecución ni revisión independiente.

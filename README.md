@@ -9,7 +9,8 @@ ferretería. Diseño y etapas: [docs/superpowers/specs/2026-10-26-agente-ventas-
 
 > Estado: backend Python/FastAPI + Supabase Postgres, front React (`web/`), cuentas por
 > negocio con aislamiento por RLS, stock concurrente, pagos simulados o Mercado Pago de prueba.
-> **WhatsApp en diseño** ([docs/superpowers/specs/2026-11-08-whatsapp-design.md](docs/superpowers/specs/2026-11-08-whatsapp-design.md)); todavía sin campañas reales ni producción.
+> **WhatsApp etapa 1 implementada** (texto por API oficial; [guía de prueba](docs/whatsapp-pruebas.md)); la prueba real está pendiente por el bloqueo registrado en Meta. Todavía sin campañas reales ni producción.
+> Negocio y validación: [founder/README.md](founder/README.md). Skills compartidas: [docs/SKILLS.md](docs/SKILLS.md).
 
 ## Arquitectura (resumen)
 

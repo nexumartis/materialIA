@@ -1,5 +1,7 @@
 # CFO: materialIA
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > Nota: la herramienta dice «a day»; acá la unidad es **un comercio pagando un mes** y el volumen es **por mes**. No es consejo financiero, impositivo ni legal: un contador tiene que revisar la estructura, el IVA (los precios son antes de impuestos) y la facturación antes de cobrar.
 
 ## Nota del CFO (actualizada con los costos de operaciones: Resend, Ollama Cloud Pro, comisión 7,6%)

@@ -36,10 +36,7 @@ integración.
    sugiera respuestas al humano. ver todas las conversaciones, filtros (derivadas, con
    pedido, sin responder), **tomar el control** (el agente se pausa en esa conversación),
    responder, devolverla al agente. El agente sugiere respuestas al humano. Base para WhatsApp.
-3. **WhatsApp e Instagram** (requiere cambiar el alcance en CLAUDE.md con ambos socios y cuenta de
-   Meta Business): adaptador de canal sobre la misma conversación; identidad del cliente por
-   teléfono (ya preparada en `customer_identities`); ventana de 24 h y plantillas aprobadas;
-   mensajes interactivos (listas, botones) ya modelados en `messages.payload`.
+3. **WhatsApp etapa 1 implementada** (08/11/2026, PR #74, migración 0034): texto por la API oficial, conexión por negocio, firma, cola de salida, idempotencia y ventana de 24 h. El alcance se habilitó en `CLAUDE.md`; la [prueba real](whatsapp-pruebas.md) sigue pendiente por el bloqueo registrado de Meta. **Fuera de etapa 1:** Instagram, campañas/plantillas fuera de ventana, audio de WhatsApp y alta integrada de comercios. Diseño: [WhatsApp](superpowers/specs/2026-11-08-whatsapp-design.md).
 4. **Integraciones sin "muchos cerebros"**:
    - ~~**Eventos salientes**~~ **Hecho** (PR #47, migración 0021): webhooks firmados con outbox y reintentos.
      Antes: tabla *outbox* en Postgres + worker que entrega webhooks firmados con

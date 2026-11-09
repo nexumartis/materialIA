@@ -1,5 +1,7 @@
 # Competidores: el vendedor por chat de la ferretería sin tienda online
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 Segmento: dueño de ferretería, sanitarios o corralón en Argentina, sin tienda online, que hoy contesta chats a mano. Ítem comparable: un plan mensual de asistente de ventas por chat con IA, o lo que el dueño hace en su lugar. Fuentes públicas vistas el 05/11/2026; detalle y links en `competitors.csv`.
 
 ## Tabla (de más a menos directo)

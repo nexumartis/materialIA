@@ -1,5 +1,7 @@
 # Operaciones: materialIA
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > SaaS de 2 socios, no un local. Precios vistos el 05/11/2026; lo marcado **ESTIMACIÓN** no está verificado. No es consejo legal ni impositivo.
 
 ## 1. El ciclo de cada día (★ = lo ve el comercio o su cliente)

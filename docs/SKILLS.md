@@ -17,6 +17,22 @@ Seleccionar skills según la fase y leer sus instrucciones en el entorno que eje
 
 ## Referencia de instalación
 
+### Skills de negocio compartidas (09/11/2026)
+
+El proyecto incluye **17 skills completas** en [`.claude/skills/`](../.claude/skills/README.md), con recursos, scripts auxiliares y licencias MIT. [El manifiesto](../.claude/skills/manifest.json) registra origen, revisión contrastada y SHA-256 de cada archivo. Son copias de las que Mati usó con Claude el 09/11; su contenido coincide con los orígenes registrados, normalizando finales de línea.
+
+| Grupo | Skills | Cuándo leerlas |
+|---|---|---|
+| Founder (11) | `founder-board`, `founder-brand`, `founder-cfo`, `founder-competitors`, `founder-consumer`, `founder-launch`, `founder-marketing`, `founder-offer`, `founder-ops`, `founder-plan`, `founder-pricing` | Evaluación del negocio, propuesta, precio, escenarios, operación y lanzamiento. |
+| Startup (4) | `startup-design`, `startup-competitors`, `startup-pitch`, `startup-positioning` | Validación por fases, competencia, posicionamiento y presentación. |
+| Marketing (2) | `customer-research`, `sales-enablement` | Entrevistas e investigación de clientes; material comercial. |
+
+En Claude Code, abrir la raíz del repo y comprobar que aparecen las skills del proyecto; las personales homónimas pueden tener prioridad. Codex puede leer estas instrucciones por su ruta cuando la tarea lo requiera; esta ubicación no acredita su descubrimiento automático en Codex. Seguir [ONBOARDING](ONBOARDING.md).
+
+Para continuar el trabajo de negocio, leer primero [founder/README.md](../founder/README.md), [PROGRESS.md](../founder/startup-design/PROGRESS.md) y las correcciones enlazadas. Las simulaciones no reemplazan entrevistas. Respetar `AI-WORKFLOW.md`: brief acotado, presupuesto de contexto y revisión; no ejecutar todos los packs o paneles masivos automáticamente.
+
+### Referencia anterior de herramientas de ingeniería
+
 Verificado en el equipo de origen el **25/10/2026**; no es un requisito de versiones para todos los entornos:
 
 | Colección | Claude Code | Codex orquestador |

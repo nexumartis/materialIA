@@ -1,5 +1,7 @@
 # Price sensitivity
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 20 complete answers. Simulated buyers: use this to pick what to test, not as the final word.
 
 | point | price | what it means |

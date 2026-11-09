@@ -1,5 +1,7 @@
 # Lanzamiento: materialIA
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > Arranque: semana del **09/11/2026**. T = Tomás, M = Matías. Las líneas de éxito son **metas propuestas por nosotros**, no datos: el panel fue simulado (15% de compra, casi todos los «no» por WhatsApp). Si el piloto real da otra cosa, manda el piloto.
 
 ## 1. El test barato: 10 pilotos en zona sur del GBA

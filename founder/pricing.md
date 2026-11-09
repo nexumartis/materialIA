@@ -1,5 +1,7 @@
 # Precio: materialIA
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > Respuestas de compradores simulados: sirven para elegir qué probar, no son prueba.
 
 ## 1. El precio: $35.000 por mes (antes de IVA), para probar

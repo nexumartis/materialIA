@@ -1,5 +1,7 @@
 # Oferta: materialIA
 
+> **Antecedente del 05/11/2026.** Para alcance, precio y próximos pasos leer [README](README.md) y la investigación del 09/11. Cifras, garantías, marca y calendario de este análisis no son acuerdos vigentes ni validación con clientes.
+
 > Método: la lente de Ofertas del directorio (resumen del marco de *$100M Offers*). Las objeciones vienen del panel **simulado** (20 compradores, 15% compra); sirven para diseñar, no prueban demanda.
 
 ## 1. Problemas del comprador (en sus palabras)
