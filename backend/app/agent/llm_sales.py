@@ -39,6 +39,7 @@ Planner = Callable[[list[dict[str, Any]], list[dict[str, Any]]], dict[str, Any]]
 
 MAX_STEPS = 5
 HISTORY = 16
+MAX_QUOTE_ROWS = 30     # renglones por cotización (cada uno es una consulta al catálogo)
 
 _TOOLS: list[dict[str, Any]] = [
     {"name": "buscar_productos",
@@ -48,6 +49,15 @@ _TOOLS: list[dict[str, Any]] = [
          "consulta": {"type": "string", "description": "qué busca el cliente, con sus palabras: tipo de producto, color, talle, medida…"},
          "precio_maximo": {"type": "number", "description": "presupuesto máximo en pesos, si lo dijo"}},
          "required": ["consulta"]}},
+    {"name": "cotizar_lista",
+     "description": "Cotiza en UNA llamada una lista de varios productos con cantidades (lista de obra, "
+                    "por texto, foto o audio): por renglón el producto del catálogo, precio, subtotal y "
+                    "stock, y el total. Usala en vez de buscar producto por producto.",
+     "parameters": {"type": "object", "properties": {
+         "renglones": {"type": "array", "items": {"type": "object", "properties": {
+             "descripcion": {"type": "string", "description": "el producto con las palabras del cliente, con medida o color si los dijo"},
+             "cantidad": {"type": "integer", "minimum": 1}}, "required": ["descripcion", "cantidad"]}}},
+         "required": ["renglones"]}},
     {"name": "consultar_producto",
      "description": "Disponible y precio de UN producto: por número de la última lista o por descripción. "
                     "Con cantidad, cotiza esas unidades sin tocar el carrito.",
@@ -294,6 +304,15 @@ def _execute(turn: _Turn, name: str, args: dict[str, Any]) -> str:
         budget = float(budget) if isinstance(budget, (int, float)) and budget > 0 else None
         from ..domain.inventory import normalize
         return turn.search(normalize(consulta), budget)
+    if name == "cotizar_lista":
+        raw = args.get("renglones")
+        rows = [(str(r.get("descripcion") or "").strip()[:120], min(max(_int(r.get("cantidad")) or 1, 1), 9999))
+                for r in (raw if isinstance(raw, list) else []) if isinstance(r, dict)]
+        rows = [r for r in rows if r[0]][:MAX_QUOTE_ROWS]
+        if not rows:
+            turn.blocked = True
+            return "No llegó ningún renglón con descripción: pedile la lista al cliente."
+        return turn.quote_list(rows)
     if name in ("consultar_producto", *_CART_TOOLS):
         o = turn.pick(opcion, consulta)
         if o is None:
@@ -424,6 +443,11 @@ def _catalog(turn: _Turn) -> dict[str, tuple[set[int], set[int]]]:
             amounts, units = refs.setdefault(o["name"], (set(), set()))
             amounts.add(round(o["price"]))
             units.add(o["available"])
+    quote = turn.quote or {"rows": []}
+    for o, subtotal in quote["rows"]:     # cotización de lista: precio, subtotal y total del servidor
+        amounts, units = refs.setdefault(o["name"], (set(), set()))
+        amounts.update({round(o["price"]), round(subtotal), round(quote["total"])})
+        units.add(o["available"])
     cart = orders.get_cart(turn.tenant, turn.conv)
     for order in ([cart] if cart else []) + orders.conversation_orders(turn.tenant, turn.conv):
         for it in order["items"]:
@@ -508,6 +532,10 @@ def _fallback(turn: _Turn, message: str, outputs: list[str], cart_changed: bool)
     if not outputs or (_social(normalize(message)) and not cart_changed):
         turn.products = []
         return None
+    if turn.quote:      # una lista cotizada: el respaldo es la cotización, no la última búsqueda
+        turn.products = []
+        cart = turn.cart_text(orders.get_cart(turn.tenant, turn.conv)) if cart_changed else None
+        return "\n\n".join(t for t in (cart, turn.quote["text"]) if t)
     if turn.products:
         rendered = [turn._line(i, o) for i, o in enumerate(turn.products, 1)]
         start = next((i for i in range(len(outputs) - 1, -1, -1)
@@ -660,6 +688,13 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             refused = refused + 1 if blocked == len(calls) else 0
             if refused >= 2:
                 break
+        else:
+            # Agotó las vueltas sin redactar (p. ej. una lista de obra, una búsqueda por producto):
+            # una llamada más SIN herramientas para que responda con lo que ya encontró.
+            resp = planner(messages + [{"role": "system", "content": (
+                "Ya no quedan herramientas en este turno. Respondé al cliente sólo con lo que "
+                "devolvieron las herramientas que ya usaste.")}], [])
+            reply = _said(resp)
     except limits.AIBudgetExceeded:
         log.warning("tope de IA alcanzado a mitad del turno: sigue con reglas")
     except Exception:  # noqa: BLE001 - modelo caído o respuesta inválida

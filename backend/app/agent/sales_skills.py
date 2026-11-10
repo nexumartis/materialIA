@@ -23,6 +23,16 @@ GUIDES: dict[str, tuple[str, list[tuple[str, Optional[str]]], str]] = {
          ("Para comparar o recomendar entre opciones: comparar_productos.", "comparar_productos"),
          ("Precio de varias unidades sin pedido de agregar: consultar_producto con cantidad.", "consultar_producto")],
         "Sin rasgos, usos, marcas ni categorías que no salgan de las herramientas o de la ficha."),
+    "cotizar_lista": (
+        "manda una lista de varios productos con cantidades (lista de obra, por texto, foto o audio) "
+        "o pregunta cuánto sale esa lista.",
+        [("Llamá cotizar_lista UNA vez con todos los renglones (descripción con sus palabras y "
+          "cantidad); no busques producto por producto.", "cotizar_lista"),
+         ("Respondé con cada renglón y el total tal como los devuelve, uno por línea y sin numerar. "
+          "No multipliques ni sumes vos: subtotales y total salen de la herramienta.", "cotizar_lista"),
+         ("Si vuelve a preguntar el total o cambia la lista, cotizala de nuevo con los renglones "
+          "vigentes.", "cotizar_lista")],
+        "Lo no encontrado, a pedido o sin precio no tiene precio: decilo y ofrecé que lo vea una persona."),
     "gestionar_carrito": (
         "pide agregar, cambiar o quitar productos, o responde a tu propuesta de agregar.",
         [("Agregá lo que pide con una orden clara («quiero un flexible», «agregame la 2») o lo que acepta "

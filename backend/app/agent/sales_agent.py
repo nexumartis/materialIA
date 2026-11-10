@@ -305,6 +305,17 @@ para usar usarla usarlo""".split())
 _RE_NO_BUDGET = re.compile(r"\b(sin (limite|tope|presupuesto)( de precio)?|cualquier precio|no importa el precio)\b")
 
 
+# Renglón de una lista: «40cm» es la medida «40 cm»; «1/2» (pulgadas) también tiene que coincidir.
+_RE_GLUED_UNIT = re.compile(r"(\d)(cm|mm|m|g|kg|w)\b")
+_RE_FRACTION = re.compile(r"\b\d+/\d+\b")
+
+
+def _haystack(o: dict[str, Any]) -> str:
+    """Texto del producto donde tiene que estar cada palabra de un renglón (como la búsqueda)."""
+    return normalize(" ".join([o["name"], o.get("brand") or "", o["category"], o.get("variant_group") or "",
+                               o.get("variant_label") or "", json.dumps(o.get("specs") or {}, ensure_ascii=False)]))
+
+
 def _stems(text: str) -> set[str]:
     return {w[:5] for w in re.findall(r"[a-z0-9]+", normalize(text)) if len(w) >= 4}
 
@@ -460,6 +471,7 @@ class _Turn:
         self.no_cart = False    # "todavía no quiero carrito": no se propone agregar
         self.blocked = False    # la última herramienta del modelo fue rechazada por el servidor
         self.model_answered = False   # el modelo respondió al menos una vez (si no, el modo es mock)
+        self.quote: Optional[dict[str, Any]] = None   # última cotización de lista de este turno
         self._plan: Optional[tuple[dict[str, int], list[tuple[list[dict[str, Any]], Optional[int]]]]] = None
         self._edits: Optional[dict[str, int]] = None
         self._added: set[str] = set()
@@ -953,6 +965,64 @@ class _Turn:
             return text
         self.state["offer"] = {"ids": [o["id"]], "qty": qty}
         return text + (f" ¿Te agrego {qty}?" if qty > 1 else " ¿Te la agrego?")
+
+    def _quote_pick(self, desc: str, qty: int) -> Optional[dict[str, Any]]:
+        """Producto de un renglón: uno que tenga TODAS las palabras y medidas del renglón (nunca uno
+        «parecido»); entre esos, el más económico con precio y stock para la cantidad pedida."""
+        text = _RE_GLUED_UNIT.sub(r"\1 \2", normalize(desc))
+        f = self.filters(text)
+        words = f["keywords"] + [w for w in _RE_FRACTION.findall(text) if w not in f["keywords"]]
+        if not words:
+            return None
+        found = inventory.offers(self.tenant, keywords=words, color=f["color"], ambiente=f["ambiente"],
+                                 talle=f["talle"], limit=10)
+        found = [o for o in found if all(w in _haystack(o) for w in words)]
+        priced = [o for o in found if o["pricing_mode"] == "fixed" and o["price"] is not None]
+        return (next((o for o in priced if o["available"] >= qty), None)
+                or next((o for o in priced if o["available"] > 0), None)
+                or (found[0] if found else None))
+
+    def quote_list(self, rows: list[tuple[str, int]]) -> str:
+        """Cotiza una lista (descripción, cantidad) con precio, subtotal, stock y total del servidor.
+        Lo a pedido o sin precio va a una persona; lo que no está en el catálogo se dice."""
+        lines, priced, total, human, missing = [], [], 0.0, False, 0
+        for desc, qty in rows:
+            o = self._quote_pick(desc, qty)
+            head = f"• {qty} {'unidad' if qty == 1 else 'unidades'} de «{desc}»: "
+            if o is None:
+                lines.append(head + "no lo encontré en el catálogo.")
+                missing += 1
+                continue
+            head += f"{o['name']}{_detail(o)}" + (f" — {o['brand']}" if o.get("brand") else "") + " · "
+            if o["pricing_mode"] != "fixed":
+                human = True
+                lines.append(head + "a pedido: precio y plazo los confirma una persona.")
+            elif o["price"] is None:
+                human = True
+                lines.append(head + "sin precio vigente: lo confirma una persona.")
+            elif o["available"] == 0:
+                lines.append(head + f"{_money(o['price'])} c/u, SIN STOCK: no entra en el total.")
+            else:
+                n = min(qty, o["available"])
+                sub = o["price"] * n
+                total += sub
+                priced.append((o, sub))
+                lines.append(head + (f"{_money(o['price'])} c/u × {n} = {_money(sub)} · {o['available']} disponibles."
+                                     if n == qty else
+                                     f"{_money(o['price'])} c/u, sólo hay {o['available']} disponible"
+                                     f"{'s' if o['available'] > 1 else ''}: {n} salen {_money(sub)}; faltan {qty - n}."))
+        lines.append(f"Total de lo que hay en stock: {_money(total)}." if priced else
+                     "No hay renglones con precio y stock para sumar un total.")
+        if human:
+            self.requires_human = True
+            lines.append("Lo que está a pedido o sin precio: le paso tu consulta a una persona del negocio "
+                         "para que te confirme precio y plazo.")
+        if missing:
+            lines.append("Lo que no encontré: si me lo describís de otra forma (marca, medida, modelo), lo busco.")
+        text = "Cotización de tu lista (precios y stock de hoy):\n" + "\n".join(lines)
+        self.quote = {"rows": priced, "total": total, "text": text}
+        self.tool("cotizar_lista", f"{len(rows)} renglón(es), {len(priced)} con precio y stock, total {_money(total)}")
+        return text
 
     def add(self, text: str, tail: bool = True) -> Optional[str]:
         """Orden explícita de agregar ("quiero un flexible", "agregame 3 de la Aquaflux")."""

@@ -130,6 +130,87 @@ def test_raw_json_reply_is_never_sent(shop):
     assert "{" not in r.reply and "accion" not in r.reply
 
 
+def test_list_that_uses_every_step_still_gets_a_written_answer(shop):
+    # Una lista de obra: el modelo busca un producto por vuelta y agota las vueltas sin redactar.
+    # El servidor le pide la respuesta una vez más, SIN herramientas, en vez de volcar la última búsqueda.
+    from app.agent import llm_sales
+    queries = ["canilla negra cocina", "flexible", "canilla lavatorio cromo", "inodoro", "llave de paso"]
+    answer = "Te busqué toda la lista: arriba tenés cada opción con precio y stock. ¿Querés que te agregue alguna?"
+    llm = Scripted(*[tool("buscar_productos", consulta=q) for q in queries[:llm_sales.MAX_STEPS]], say(answer))
+    seen_tools = []
+
+    def planner(messages, tools):
+        seen_tools.append(tools)
+        return llm(messages, tools)
+
+    r = handle_sales_message(shop["tenant"], "te paso la lista de la obra: " + ", ".join(queries), planner=planner)
+    assert r.reply == answer
+    assert len(seen_tools) == llm_sales.MAX_STEPS + 1 and seen_tools[-1] == []
+
+
+# --- Lista de obra: una sola herramienta cotiza todo, con importes del servidor -------------------
+PLUMBER_LIST = ("soy plomero y te paso la lista de la obra: 2 inodoros largos, 2 depósitos de colgar, "
+                "4 flexibles de 40cm, 2 llaves de paso de 1/2, 1 grifería de cocina")
+
+
+def _rows(*pairs):
+    return [{"descripcion": d, "cantidad": q} for d, q in pairs]
+
+
+def _quote_text(llm):
+    """Lo que devolvió cotizar_lista (el modelo lo recibe como mensaje de herramienta)."""
+    import json
+    msg = next(m for m in llm.calls[1] if m.get("role") == "tool" and m.get("tool_name") == "cotizar_lista")
+    return json.loads(msg["content"])["texto"]
+
+
+def test_work_list_is_quoted_in_one_call_with_server_totals(shop):
+    answer = ("¡Buenísimo, te armé la lista!\n"
+              "4 flexibles de 40 cm: $6.800 c/u, $27.200\n"
+              "1 canilla de cocina dos llaves negra: $74.500\n"
+              "El inodoro largo es a pedido: precio y plazo te los confirma una persona del equipo.\n"
+              "Los depósitos y las llaves de paso de 1/2 no los encontré.\n"
+              "Total de lo que hay en stock: $101.700. ¿Te lo armo?")
+    llm = Scripted(tool("cotizar_lista", renglones=_rows(
+        ("inodoros largos", 2), ("depósitos de colgar", 2), ("flexibles de 40cm", 4),
+        ("llaves de paso de 1/2", 2), ("grifería de cocina", 1))), say(answer))
+    r = handle_sales_message(shop["tenant"], PLUMBER_LIST, planner=llm)
+
+    quote = _quote_text(llm)
+    assert "$6.800 c/u × 4 = $27.200" in quote
+    assert "Canilla de cocina dos llaves negra" in quote and "$74.500" in quote   # la más económica con stock
+    assert "Inodoro largo blanco (a pedido)" in quote and "a pedido" in quote
+    assert quote.count("no lo encontré") == 2          # depósitos y llave de paso: nada «parecido»
+    assert "Total de lo que hay en stock: $101.700" in quote
+    assert r.reply == answer and r.mode == "live"      # los importes salieron de la herramienta
+    assert r.requires_human                            # lo a pedido lo ve una persona
+    assert len(llm.calls) == 2 and r.trace[0]["name"] == "cotizar_lista"
+    assert "cotizar_lista" in llm.calls[0][0]["content"]          # guía en el prompt del sistema
+
+
+def test_quote_partial_stock_out_of_stock_and_other_business(shop):
+    llm = Scripted(tool("cotizar_lista", renglones=_rows(
+        ("canilla de cocina dos llaves negra", 3), ("canilla de lavatorio negra", 1),
+        ("flexible 60 cm", 2), ("sifón de pvc", 1))), say("Listo, ahí tenés la cotización."))
+    r = handle_sales_message(shop["tenant"], "cotizame: 3 canillas cocina dos llaves negras, "
+                             "1 canilla lavatorio negra, 2 flexibles de 60 cm y un sifón de pvc", planner=llm)
+    quote = _quote_text(llm)
+    assert "sólo hay 1 disponible" in quote and "faltan 2" in quote
+    assert "SIN STOCK" in quote                       # lavatorio negra: no entra en el total
+    assert quote.count("no lo encontré") == 2         # flexible de 60 cm (hay de 40) y el sifón de otro negocio
+    assert "Total de lo que hay en stock: $74.500" in quote
+    assert not r.requires_human
+
+
+def test_invented_total_falls_back_to_the_quote_not_a_search(shop):
+    llm = Scripted(tool("cotizar_lista", renglones=_rows(("flexibles de 40cm", 4))),
+                   say("Los 4 flexibles te salen $20.000 en total."),
+                   say("Te quedan $20.000."))
+    r = handle_sales_message(shop["tenant"], "4 flexibles de 40cm cuanto me sale?", planner=llm)
+    assert "$20.000" not in r.reply
+    assert "Total de lo que hay en stock: $27.200" in r.reply
+
+
 def test_wordless_reply_is_no_reply_and_falls_back(shop):
     # Visto con gpt-oss:120b-cloud: a «gracias, después te confirmo» respondió signos, espacios y «*/».
     llm = Scripted(say("¡  !  \n\n*/"))
