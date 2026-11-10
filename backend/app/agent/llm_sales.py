@@ -592,6 +592,13 @@ def _leaked_call(content: str, tools: list[dict[str, Any]]) -> Optional[dict[str
     return {"name": fits[0][1], "arguments": data}
 
 
+def _said(resp: dict[str, Any]) -> str:
+    """Texto del modelo para el cliente. Sin letras ni números (sólo signos, espacios o restos de
+    markup como «¡ ! */») no es una respuesta: vale "" y el turno sigue como «sin respuesta»."""
+    text = (resp.get("content") or "").strip().replace("**", "").replace("__", "")
+    return text if any(ch.isalnum() for ch in text) else ""
+
+
 def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Optional[str]:
     """Bucle de herramientas. Devuelve la respuesta, o None si el modelo no está disponible y
     todavía no ejecutó nada (entonces responde el planner por reglas)."""
@@ -628,7 +635,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
                     calls = [leaked]
                     resp = {"content": "", "tool_calls": calls}
             if not calls:
-                reply = (resp.get("content") or "").strip()
+                reply = _said(resp)
                 break
             messages.append({"role": "assistant", "content": resp.get("content") or "",
                              "tool_calls": [{"function": {"name": c["name"], "arguments": c.get("arguments") or {}}}
@@ -683,7 +690,6 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
             return "pide confirmar una compra sin el resumen del servidor"
         return _renumbered(low, turn) or _problem(text, turn, evidence, allowed)
 
-    reply = reply.replace("**", "").replace("__", "")
     asks_choice = bool(_RE_COMPARE.search(normalize(message)))      # con o sin presupuesto
 
     def free_choice(text: str) -> bool:
@@ -708,7 +714,7 @@ def run(turn: _Turn, message: str, conversation_id: str, planner: Planner) -> Op
         try:
             again = planner(messages + [{"role": "assistant", "content": reply},
                                         {"role": "system", "content": note}], [])
-            reply = (again.get("content") or "").strip().replace("**", "").replace("__", "")
+            reply = _said(again)
             if free_choice(reply):
                 return "\n\n".join(done) or None
             why = problem(reply) if reply else "sin respuesta"
