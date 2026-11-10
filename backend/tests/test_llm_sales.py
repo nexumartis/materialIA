@@ -128,3 +128,18 @@ def test_raw_json_reply_is_never_sent(shop):
     llm = Scripted(say('{"accion": "nada", "x": 1}'))
     r = handle_sales_message(shop["tenant"], "canilla negra cocina", planner=llm)
     assert "{" not in r.reply and "accion" not in r.reply
+
+
+def test_wordless_reply_is_no_reply_and_falls_back(shop):
+    # Visto con gpt-oss:120b-cloud: a «gracias, después te confirmo» respondió signos, espacios y «*/».
+    llm = Scripted(say("¡  !  \n\n*/"))
+    r = handle_sales_message(shop["tenant"], "gracias, después te confirmo", planner=llm)
+    assert "*/" not in r.reply and any(ch.isalpha() for ch in r.reply)
+    assert len(llm.calls) == 1        # sin palabras = sin respuesta: no se pide reescritura
+
+
+def test_wordless_rewrite_falls_back(shop):
+    llm = Scripted(tool("buscar_productos", consulta="canilla negra cocina"),
+                   say("Tengo una a $50.000, re barata."), say("¡ ! */"))
+    r = handle_sales_message(shop["tenant"], "canillas negras de cocina?", planner=llm)
+    assert "*/" not in r.reply and "$89.900" in r.reply
