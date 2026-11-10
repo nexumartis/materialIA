@@ -148,6 +148,13 @@ logística del negocio.
   (a evaluar: precio, cobertura, API pública) o recibir el estado por webhook/CSV. Para logística
   avanzada, el negocio usa su herramienta y se conecta por **webhooks** (`order.paid`, `order.shipped`).
 
+**Ideas de la competencia (Chatealo, 10/11/2026; ver `founder/competencia/chatealo.md`):**
+- **Responder preguntas de Mercado Libre** con el mismo agente (stock y precio reales). Muchos comercios venden ahí.
+- **«Qué anuncio trajo la venta»:** atribuir las ventas cobradas a los anuncios de Meta/Google (clic a WhatsApp).
+- **Importar el catálogo de Tiendanube** para quien ya tiene tienda (ellos muestran pedidos pero no sincronizan stock).
+- Extras por usuario y por número; tope de conversaciones IA por plan (`founder/pricing-v3.md`).
+- **No copiar:** bandeja con muchos canales (Telegram, LINE, llamadas), plan gratis.
+
 **Con WhatsApp (etapa 3):** recordatorio de pago y carritos abandonados reales (las campañas ya
 existen, cambia el canal), avisos de envío y vuelta de stock, asistente del dueño por WhatsApp,
 Instagram, factura (etapa 8).
