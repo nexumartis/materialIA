@@ -44,9 +44,9 @@ def test_free_slots_respect_capacity_and_lead(accounts, raw_conn):
         slots = booking.free_slots(cur, shop["tenant"], cfg, cfg["services"][0], now=monday)
         assert [s.strftime("%a %H:%M") for s in slots[:2]] == ["Mon 10:00", "Mon 11:00"]   # 9:00 queda < 2 h
     with booking.opportunities.tenant_tx(shop["tenant"]) as cur:
-        assert "id" in booking.book(cur, shop["tenant"], None, cfg, cfg["services"][0], slots[0])
+        assert "id" in booking.book(cur, shop["tenant"], None, cfg, cfg["services"][0], slots[0], now=monday)
     with booking.opportunities.tenant_tx(shop["tenant"]) as cur:
-        assert booking.book(cur, shop["tenant"], None, cfg, cfg["services"][0], slots[0]) == {"error": "full"}   # cupo 1
+        assert booking.book(cur, shop["tenant"], None, cfg, cfg["services"][0], slots[0], now=monday) == {"error": "full"}   # cupo 1
         again = booking.free_slots(cur, shop["tenant"], cfg, cfg["services"][0], now=monday)
         assert slots[0] not in again
 
