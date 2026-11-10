@@ -209,3 +209,18 @@ def test_invented_total_falls_back_to_the_quote_not_a_search(shop):
     r = handle_sales_message(shop["tenant"], "4 flexibles de 40cm cuanto me sale?", planner=llm)
     assert "$20.000" not in r.reply
     assert "Total de lo que hay en stock: $27.200" in r.reply
+
+
+def test_wordless_reply_is_no_reply_and_falls_back(shop):
+    # Visto con gpt-oss:120b-cloud: a «gracias, después te confirmo» respondió signos, espacios y «*/».
+    llm = Scripted(say("¡  !  \n\n*/"))
+    r = handle_sales_message(shop["tenant"], "gracias, después te confirmo", planner=llm)
+    assert "*/" not in r.reply and any(ch.isalpha() for ch in r.reply)
+    assert len(llm.calls) == 1        # sin palabras = sin respuesta: no se pide reescritura
+
+
+def test_wordless_rewrite_falls_back(shop):
+    llm = Scripted(tool("buscar_productos", consulta="canilla negra cocina"),
+                   say("Tengo una a $50.000, re barata."), say("¡ ! */"))
+    r = handle_sales_message(shop["tenant"], "canillas negras de cocina?", planner=llm)
+    assert "*/" not in r.reply and "$89.900" in r.reply
