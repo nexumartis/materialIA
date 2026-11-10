@@ -1,0 +1,13 @@
+{
+  "id": "P032",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Ya pagué sistemas que terminé sin usar, así que no pongo plata por algo que no vi andar con mis clientes. Los dos meses gratis capaz los pruebo, pero hoy no me comprometo a pagar $35.000 por mes más IVA.",
+  "objection": "A mí me mandan fotos de un cuerito, una canilla vieja o un pedazo de caño, y no creo que una IA me diga bien qué repuesto es; si le contesta mal a un cliente quedo yo como el que no sabe. Y lo de Meta no me cierra del todo: hoy dicen que no cobra y mañana me llega una factura.",
+  "would_change_my_mind": "Que en los meses gratis lo vea contestar bien las fotos de mis clientes con mi stock real, sin que yo tenga que andar corrigiéndolo, y que la factura de Meta me dé cero.",
+  "price_too_cheap": 8000,
+  "price_cheap": 18000,
+  "price_expensive": 30000,
+  "price_too_expensive": 50000
+}

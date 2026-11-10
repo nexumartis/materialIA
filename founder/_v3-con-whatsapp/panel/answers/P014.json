@@ -1,0 +1,13 @@
+{
+  "id": "P014",
+  "buys": true,
+  "purchases_first_month": 1,
+  "reason_code": "convenience",
+  "reason": "Me paso el día contestando precios entre cliente y cliente y de noche sigo con lo que quedó; si me lo dejan andando gratis dos meses, lo pruebo. Pero lo pruebo, no lo compro todavía: si al tercer mes no vi que vendió solo, lo corto.",
+  "objection": "Lo de Meta: dicen que contestar no cuesta, pero no me queda claro que no me aparezca un cargo en la tarjeta a fin de mes. Y que le conteste mal un precio a un cliente mío con mi número.",
+  "would_change_my_mind": "Si en la prueba veo un cargo de Meta que no esperaba, o que le inventa algo a un cliente, me bajo.",
+  "price_too_cheap": 8000,
+  "price_cheap": 18000,
+  "price_expensive": 35000,
+  "price_too_expensive": 60000
+}

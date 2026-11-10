@@ -1,0 +1,13 @@
+{
+  "id": "P007",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Ya pagué sistemas que quedaron juntando polvo, así que no pongo un peso hasta verlo andar con mis clientes. Capaz acepto los dos meses gratis para mirarlo, pero eso no es comprar: si en lo a medida le dice a un cliente un plazo o una medida que no puedo cumplir, el problema me lo como yo.",
+  "objection": "Que la IA le prometa al cliente plazos o medidas en lo que es a medida, o que conteste cualquier cosa con mi número, y yo me entere cuando el cliente ya está enojado.",
+  "would_change_my_mind": "Verlo funcionando con mi catálogo durante la prueba gratis y comprobar que en lo a medida no promete nada, sólo cobra la seña y me lo pasa a mí con el resumen.",
+  "price_too_cheap": 8000,
+  "price_cheap": 18000,
+  "price_expensive": 30000,
+  "price_too_expensive": 45000
+}

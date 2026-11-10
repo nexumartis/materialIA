@@ -1,0 +1,13 @@
+{
+  "id": "P047",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Yo de esto no decido solo: la tecnología la maneja mi hijo y si nadie que conozco me lo recomienda, no meto una IA a hablar con mis clientes por mi número. Además lo de la seña y lo a medida a mí no me sirve, vendo venta libre y perfumería.",
+  "objection": "Que la IA le conteste mal a un cliente de la farmacia, le diga algo que no corresponde o le confirme algo que no tengo, y el que queda mal soy yo con mi número de siempre.",
+  "would_change_my_mind": "Que otro farmacéutico o comercio conocido lo esté usando y me lo recomiende, y que mi hijo lo pruebe en los 2 meses gratis y me diga que anda bien.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 50000,
+  "price_too_expensive": 90000
+}

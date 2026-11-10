@@ -1,0 +1,13 @@
+{
+  "id": "P016",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Yo de esto no entiendo, el WhatsApp y el Instagram los maneja mi familia y si nadie que conozco me lo recomienda no lo pongo. Además mis precios y el stock de mil artículos chicos no están en ningún Excel prolijo, y no quiero que un robot le diga cualquier cosa a una mamá con la lista del cole.",
+  "objection": "Que conteste mal un precio o diga que hay algo que no tengo y después el que queda mal soy yo con el cliente del barrio; y encima pagar todos los meses por algo que no sé usar.",
+  "would_change_my_mind": "Que otro librero que conozco lo use y me diga que le sirvió en temporada escolar, y que ustedes me carguen el catálogo y mi hijo lo pueda manejar sin depender de mí.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

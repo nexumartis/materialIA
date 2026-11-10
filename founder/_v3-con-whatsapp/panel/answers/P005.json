@@ -1,0 +1,13 @@
+{
+  "id": "P005",
+  "buys": true,
+  "purchases_first_month": 1,
+  "reason_code": "need",
+  "reason": "Se viene Navidad y de noche me escriben preguntando si tengo tal juguete y a qué precio, y para cuando contesto ya compraron en otro lado. Con dos meses gratis y que me lo dejen andando, lo pruebo justo en la temporada fuerte.",
+  "objection": "Que mis clientas se den cuenta de que les contesta un robot y les parezca frío, o que pifie un precio o diga que hay algo que no tengo. Lo del número oficial me tranquiliza, pero quiero ver cómo responde antes de soltarlo.",
+  "would_change_my_mind": "Si en la prueba contesta raro o inventa stock, lo apago y no pago el tercer mes.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 50000,
+  "price_too_expensive": 80000
+}

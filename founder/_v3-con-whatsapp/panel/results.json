@@ -1,0 +1,247 @@
+{
+ "business": "materialIA: agente de ventas con IA dentro del WhatsApp del comercio (multi-rubro)",
+ "seed": 535679,
+ "dealt": 50,
+ "answered": 50,
+ "skipped": [],
+ "buys": 16,
+ "passes": 34,
+ "buy_rate": 0.32,
+ "by_segment": [
+  [
+   "Electro con entrega e instalación (reparto propio)",
+   5,
+   0.8
+  ],
+  [
+   "Bazar, deco y artículos para el hogar",
+   5,
+   0.6
+  ],
+  [
+   "Colchones y muebles estándar (entrega coordinada)",
+   5,
+   0.6
+  ],
+  [
+   "Ropa e indumentaria (local + Instagram, envía por correo)",
+   5,
+   0.4
+  ],
+  [
+   "Comida y rotisería (pedidos y delivery)",
+   5,
+   0.2
+  ],
+  [
+   "Juguetería y regalería",
+   5,
+   0.2
+  ],
+  [
+   "Librería, papelería y artículos escolares",
+   5,
+   0.2
+  ],
+  [
+   "Farmacia y perfumería (sólo venta libre y perfumería por chat)",
+   5,
+   0.2
+  ],
+  [
+   "Ferretería y sanitarios de barrio",
+   5,
+   0.0
+  ],
+  [
+   "Muebles a medida (seña o anticipo antes de fabricar)",
+   5,
+   0.0
+  ]
+ ],
+ "by_behaviour": [
+  [
+   "Quiere crecer y vender más",
+   8,
+   1.0
+  ],
+  [
+   "Contesta todo él mismo por WhatsApp",
+   13,
+   0.38461538461538464
+  ],
+  [
+   "Cuida cada peso",
+   10,
+   0.3
+  ],
+  [
+   "Desconfiado de la tecnología",
+   7,
+   0.0
+  ],
+  [
+   "Fiel a su sistema de gestión",
+   7,
+   0.0
+  ],
+  [
+   "Delega en un hijo o empleado",
+   5,
+   0.0
+  ]
+ ],
+ "by_income": [
+  [
+   "$23,034,000 and up",
+   17,
+   0.4117647058823529
+  ],
+  [
+   "$12,991,000 to $23,034,000",
+   17,
+   0.29411764705882354
+  ],
+  [
+   "under $12,991,000",
+   16,
+   0.25
+  ]
+ ],
+ "why_not": [
+  [
+   "trust",
+   18,
+   [
+    "Ya pagué sistemas que quedaron juntando polvo, y con las ventas como están no me cargo otro gasto fijo por algo que no vi andar con mis clientes. Si me lo dejan los dos meses gratis capaz lo pruebo, pero pagar, hoy no.",
+    "Mis clientes me conocen hace años y me mandan una foto de un cuerito o una canilla vieja; si les contesta una máquina que se equivoca de medida, el que queda mal soy yo. Aunque sea gratis dos meses, no le entrego mi número a algo que no vi andar."
+   ],
+   [
+    "P002",
+    "P003"
+   ]
+  ],
+  [
+   "price",
+   6,
+   [
+    "Con las ventas como están, no sumo otro gasto fijo mensual para algo que hoy hago yo misma desde el celular. Los dos meses gratis los probaría capaz, pero pagar $35.000 más IVA todos los meses después no lo veo.",
+    "A mí el WhatsApp me explota en Día del Niño, Navidad y vuelta a clases; el resto del año lo contesto yo sin drama. Pagar $35.000 más IVA todos los meses por algo que necesito tres o cuatro meses al año no me cierra, y lo de los 2 meses gratis lo pruebo capaz, pero no me comprometo a pagar después."
+   ],
+   [
+    "P001",
+    "P006"
+   ]
+  ],
+  [
+   "habit",
+   4,
+   [
+    "La plata no es el problema, pero mi stock y mis precios viven en mi sistema de gestión y no voy a mantener otra lista aparte. Además, en electro con instalación, si la IA le promete al cliente un día de entrega o que la heladera entra en un hueco, el que queda mal soy yo.",
+    "Ya tengo mi sistema de stock y facturación y no pienso cargar miles de artículos de librería otra vez en otro lado; dice 'desde tu sistema' pero no dice cuál, y si termino manteniendo dos catálogos me genera más trabajo del que me ahorra. Además mis clientes, sobre todo en temporada escolar, quieren hablar con una persona."
+   ],
+   [
+    "P023",
+    "P026"
+   ]
+  ],
+  [
+   "need",
+   4,
+   [
+    "Yo hago muebles a medida: casi todo lo que me consultan es a medida, así que este vendedor me lo va a pasar a mí igual y termino contestando yo. Ya pagué sistemas que quedaron juntando polvo, y no voy a meter otro para que me reenvíe mensajes.",
+    "Lo mío es casi todo a medida: cada mueble lo tengo que medir y presupuestar yo, así que el bot me pasaría la mayoría de las consultas igual. Y la tecnología no la manejo yo; si nadie de confianza me lo recomienda, no lo pruebo por un anuncio."
+   ],
+   [
+    "P027",
+    "P035"
+   ]
+  ],
+  [
+   "convenience",
+   2,
+   [
+    "Que me lo carguen la primera vez está bien, pero en ropa cada prenda tiene talles y colores que se agotan todos los días, y la mitad lo vendo en el local. No tengo tiempo de andar actualizando una planilla para que el bot no le venda a alguien un talle que ya no tengo.",
+    "Dice 'desde tu sistema', pero no me dice si es el mío; si termino cargando el menú y los precios otra vez en un Excel aparte, no lo quiero, ni gratis. Y $35.000 más IVA todos los meses para una rotisería es plata que tiene que volver en pedidos, no en promesas."
+   ],
+   [
+    "P025",
+    "P031"
+   ]
+  ]
+ ],
+ "why_yes": [
+  [
+   "convenience",
+   8,
+   [
+    "Contesto todo yo desde el celular entre cliente y cliente y de noche sigo respondiendo precios y stock; si me lo dejan andando con mi lista y los dos primeros meses son gratis, lo pruebo. Después de eso, $35.000 + IVA lo pago sólo si de verdad me saca las consultas repetidas de encima.",
+    "Me paso el día contestando precios entre cliente y cliente y de noche sigo con lo que quedó; si me lo dejan andando gratis dos meses, lo pruebo. Pero lo pruebo, no lo compro todavía: si al tercer mes no vi que vendió solo, lo corto."
+   ],
+   [
+    "P008",
+    "P014"
+   ]
+  ],
+  [
+   "need",
+   7,
+   [
+    "Se viene Navidad y de noche me escriben preguntando si tengo tal juguete y a qué precio, y para cuando contesto ya compraron en otro lado. Con dos meses gratis y que me lo dejen andando, lo pruebo justo en la temporada fuerte.",
+    "Me paso las noches contestando lo que quedó del día, y si me lo dejan andando con mi lista y dos meses gratis, lo pruebo; $35.000 al mes es menos de lo que pierdo en una heladera que se va a otro negocio porque contesté tarde. Pero lo pruebo con la mano en el freno, no lo largo solo."
+   ],
+   [
+    "P005",
+    "P009"
+   ]
+  ],
+  [
+   "price",
+   1,
+   [
+    "Si son dos meses gratis y me lo dejan andando con mi lista, lo pruebo; no pierdo nada y me saco de encima las consultas de precio y de cuándo llega la heladera. Pero lo pruebo con el dedo en el botón de dar de baja."
+   ],
+   [
+    "P019"
+   ]
+  ]
+ ],
+ "flip": [
+  "Que en los meses gratis me demuestre con números que entraron pedidos de noche que yo hoy pierdo, y que actualizar el menú del día me lleve un minuto desde el celular.",
+  "Verlo funcionando con mi propio catálogo y mis clientes reales en los meses gratis, sin dejar tarjeta, y que en temporada (Día del Niño, Navidad) me haga vender más de lo que cuesta.",
+  "Verlo andando en otra ferretería de barrio que conozca, y poder seguir contestando yo desde mi celular cuando quiera, con el robot sólo de noche.",
+  "Probarlo con mi menú real un fin de semana de mucho movimiento y ver que nunca promete un horario de entrega ni toma un pedido especial sin pasármelo a mí y sin seña.",
+  "Poder pagarlo sólo los meses de temporada (activarlo y pausarlo sin penalidad) y ver en la prueba gratis que me cerró ventas que yo no hubiera llegado a contestar.",
+  "Verlo funcionando con mi catálogo durante la prueba gratis y comprobar que en lo a medida no promete nada, sólo cobra la seña y me lo pasa a mí con el resumen.",
+  "Un precio cerrado en pesos sin nada por consumo, que pueda pagar sólo en los meses de temporada escolar (febrero-marzo), y verlo armar bien un pedido a partir de la foto de una lista de útiles.",
+  "Que me muestren funcionando con mi propio sistema de gestión, leyendo el stock de ahí sin cargar nada a mano, y poder ver conversaciones reales de otro comercio donde el cliente no note que es un robot.",
+  "Verlo andando en otra farmacia conocida, con la opción de que sólo conteste precio, stock y envíos y que todo lo que sea consulta de salud me lo pase a mí sin responder nada.",
+  "Ver funcionando a otra tienda de ropa como la mía, con su número, y que yo pueda probarlo primero sólo de noche con las consultas que quedan sin contestar, apagándolo cuando quiera.",
+  "Que otro librero que conozco lo use y me diga que le sirvió en temporada escolar, y que ustedes me carguen el catálogo y mi hijo lo pueda manejar sin depender de mí.",
+  "Verlo andar una semana con mi catálogo real, en mis consultas de verdad, y que me muestren lado a lado qué hace que el asistente gratis de Meta no hace, sin que se equivoque en precios.",
+  "Ver en mi propio WhatsApp, con mi lista de precios, que me cerró ventas que yo hubiera perdido de noche o el fin de semana, y que el gratis de Meta no hace lo de stock real, cobro y coordinar entrega.",
+  "Ver funcionando a otra mueblería o colchonería de acá con sus clientes reales, y que los dos meses gratis sean sin tarjeta y lo pueda cortar cuando quiera.",
+  "Verlo funcionando enganchado directo a mi sistema de gestión, sin cargar nada a mano, y que toda pregunta de fecha de instalación o medida me la pase a mí en vez de contestarla.",
+  "Que el stock se descuente solo cuando vendo en el local, sin que yo tenga que tocar ninguna planilla.",
+  "Que me muestren funcionando conectado directo a mi sistema de gestión, leyendo precio y stock solo sin que yo cargue nada dos veces, con mi propio catálogo durante los 2 meses gratis.",
+  "Verlo andar en otra carpintería o mueblería a medida, cobrando señas de verdad y con un presupuesto que salga bien, antes de poner un peso.",
+  "Verlo funcionando en otro bazar o local chico de verdad, con sus clientas, y que en los meses gratis me demuestre ventas que yo no hubiera hecho, sin que yo tenga que andar cargando todo.",
+  "Que me muestren funcionando con mi propio sistema, leyendo el stock y los precios de ahí sin que yo cargue nada dos veces.",
+  "Que en los meses gratis lo vea contestar bien las fotos de mis clientes con mi stock real, sin que yo tenga que andar corrigiéndolo, y que la factura de Meta me dé cero.",
+  "Que me muestren con números de mi propio WhatsApp, en los meses gratis, que vendí más de lo que me cuesta, y poder darlo de baja sin vueltas.",
+  "Que otro carpintero o mueblero que conozco me diga que lo usa y que le sirvió para filtrar consultas y cobrar la seña sin que yo esté encima, y que mi hijo se encargue de configurarlo.",
+  "Verlo conectado a mi sistema de verdad, leyendo lo que hay y bajando el pedido ya cargado, funcionando en mi local durante los dos meses gratis sin que yo toque nada dos veces.",
+  "Ver que se conecta directo a mi sistema de gestión y que puedo dejarle sólo venta libre y perfumería, con todo lo que pide receta bloqueado y derivado a mí, probado en la demo con mis productos.",
+  "Verlo andando con consultas reales de mi negocio durante los meses gratis, cobrando señas de verdad y ahorrándome tiempo, antes de pagar un peso.",
+  "Poder pagarlo sólo en los meses fuertes (temporada escolar, febrero-marzo) o un precio atado a lo que vende, y que los meses gratis caigan justo en esa temporada para ver si de verdad me saca trabajo y suma pedidos.",
+  "Que en la prueba gratis me arme solo presupuestos de los modelos que repito (medidas estándar, precio por metro) y cobre la seña, y que vea al final del mes señas cobradas que sin el bot se me hubieran enfriado.",
+  "Verlo funcionando en otra farmacia o perfumería del barrio, con clientas reales, y que me lo prueben primero con un número aparte antes de tocar el mío.",
+  "Que me muestren que se conecta directo a mi sistema de gestión y toma precio y stock solo, sin que yo cargue nada dos veces, y que si no está seguro de una medida me lo pase a mí en vez de contestar.",
+  "Que otro ferretero conocido me muestre que lo usa con su número hace meses sin problemas y que mi hijo lo revise y me diga que se puede apagar cuando quiero.",
+  "Que otro farmacéutico o comercio conocido lo esté usando y me lo recomiende, y que mi hijo lo pruebe en los 2 meses gratis y me diga que anda bien.",
+  "Que un colega carpintero o alguien de confianza me diga que lo usa y que el bot nunca promete plazos ni medidas, sólo toma los datos y cobra la seña, y que mi hijo o mi empleado pueda probarlo los 2 meses gratis sin que yo tenga que tocar nada.",
+  "Ver durante los meses gratis, con mi propio catálogo, que cuando no está seguro del precio o del stock me lo pasa a mí en vez de contestar, y poder revisar las respuestas antes de que lo use solo."
+ ],
+ "purchases_first_month_per_buyer": 1.0,
+ "price_answers": 50
+}

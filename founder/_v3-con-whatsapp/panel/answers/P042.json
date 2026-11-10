@@ -1,0 +1,13 @@
+{
+  "id": "P042",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Yo hago muebles a medida: casi todas las consultas son medidas, maderas y presupuestos que igual me las vas a pasar a mí. Pagar $35.000 por mes para que un bot me diga 'esto lo ve Nadia' no me cierra; capaz pruebo los dos meses gratis, pero pagar, no.",
+  "objection": "Que en lo mío casi todo es a medida, así que el bot me termina pasando el 90% de las charlas y encima tengo que revisar sus resúmenes. Y no me queda claro qué mensajes de Meta se cobran y cuáles no, en temporada me escriben un montón.",
+  "would_change_my_mind": "Que en la prueba gratis me arme solo presupuestos de los modelos que repito (medidas estándar, precio por metro) y cobre la seña, y que vea al final del mes señas cobradas que sin el bot se me hubieran enfriado.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 45000
+}

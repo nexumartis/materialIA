@@ -1,0 +1,13 @@
+{
+  "id": "P049",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Lo mío es casi todo a medida, no tengo una lista de precios ni stock que un bot pueda leer; si igual me lo pasa todo a mí, me ahorra poco, y no quiero que le diga a un cliente un plazo o una medida que después no cumplo. Además de esto no me ocupo yo, y nadie de confianza me lo recomendó.",
+  "objection": "Que la IA le prometa a un cliente un plazo de entrega, una medida o un precio de un mueble a medida, y después el problema es mío con un cliente que ya pagó la seña.",
+  "would_change_my_mind": "Que un colega carpintero o alguien de confianza me diga que lo usa y que el bot nunca promete plazos ni medidas, sólo toma los datos y cobra la seña, y que mi hijo o mi empleado pueda probarlo los 2 meses gratis sin que yo tenga que tocar nada.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 45000,
+  "price_too_expensive": 70000
+}

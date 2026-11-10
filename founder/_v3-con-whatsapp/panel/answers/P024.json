@@ -1,0 +1,13 @@
+{
+  "id": "P024",
+  "buys": true,
+  "purchases_first_month": 1,
+  "reason_code": "convenience",
+  "reason": "En la hora pico del mediodía y la noche no doy abasto contestando el WhatsApp, y si los dos primeros meses son gratis y me lo dejan andando, lo pruebo. Pero que quede claro: entro por la prueba, no por el precio.",
+  "objection": "Que con $35.000 más IVA todos los meses, en una rotisería con márgenes finitos, no me cambie lo suficiente las ventas, y que la IA le prometa a un cliente un horario de entrega o algo que no tengo y después me lo reclame a mí.",
+  "would_change_my_mind": "Si en los dos meses gratis no veo que me cierra pedidos solos y bien cobrados, lo doy de baja; si veo que sí, pago.",
+  "price_too_cheap": 5000,
+  "price_cheap": 15000,
+  "price_expensive": 30000,
+  "price_too_expensive": 50000
+}

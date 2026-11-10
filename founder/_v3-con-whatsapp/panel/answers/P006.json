@@ -1,0 +1,13 @@
+{
+  "id": "P006",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "price",
+  "reason": "A mí el WhatsApp me explota en Día del Niño, Navidad y vuelta a clases; el resto del año lo contesto yo sin drama. Pagar $35.000 más IVA todos los meses por algo que necesito tres o cuatro meses al año no me cierra, y lo de los 2 meses gratis lo pruebo capaz, pero no me comprometo a pagar después.",
+  "objection": "Que lo termine pagando todo el año para usarlo en temporada, y que entre el IVA, los aumentos y las campañas de Meta que se cobran aparte la cuenta crezca sin que me dé cuenta. Tampoco sé si la IA va a saber explicar bien un juguete por edad o si me va a confundir pedidos justo cuando más vendo.",
+  "would_change_my_mind": "Poder pagarlo sólo los meses de temporada (activarlo y pausarlo sin penalidad) y ver en la prueba gratis que me cerró ventas que yo no hubiera llegado a contestar.",
+  "price_too_cheap": 8000,
+  "price_cheap": 15000,
+  "price_expensive": 30000,
+  "price_too_expensive": 50000
+}

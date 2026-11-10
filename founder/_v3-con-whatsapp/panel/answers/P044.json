@@ -1,0 +1,13 @@
+{
+  "id": "P044",
+  "buys": true,
+  "purchases_first_month": 1,
+  "reason_code": "need",
+  "reason": "Me escriben de noche y los domingos preguntando talle, color y si hay stock, y a la mañana ya se fueron a otra cuenta. Con dos meses gratis y que me lo dejen andando, lo pruebo; si en esos dos meses no me cierra ventas fuera de horario, lo corto.",
+  "objection": "Que le conteste mal a una clienta sobre un talle o una medida, o que atienda un reclamo como un robot, y la clienta se enoje. En ropa la gente quiere hablar con alguien para cambios y reclamos, y no quiero que se note que es una máquina.",
+  "would_change_my_mind": "Si en la prueba veo que inventa talles o stock, o que le contesta a un reclamo sin pasármelo a mí, lo dejo.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 45000,
+  "price_too_expensive": 70000
+}

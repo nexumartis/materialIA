@@ -1,0 +1,13 @@
+{
+  "id": "P041",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "price",
+  "reason": "Ahora vendo poco y no quiero sumar otro gasto fijo de $35.000 más IVA todos los meses; las consultas por WhatsApp las contesto yo entre cliente y cliente. Lo de los dos meses gratis está bien, pero después queda el débito y en marzo no sé cómo voy a estar.",
+  "objection": "Es un gasto fijo mensual que pago aunque el mes esté muerto, y no tengo claro que me traiga ventas que hoy no hago; encima en temporada escolar tengo cientos de artículos con precios que cambian seguido y no confío en que la lista esté siempre al día.",
+  "would_change_my_mind": "Poder pagarlo sólo en los meses fuertes (temporada escolar, febrero-marzo) o un precio atado a lo que vende, y que los meses gratis caigan justo en esa temporada para ver si de verdad me saca trabajo y suma pedidos.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 22000,
+  "price_too_expensive": 35000
+}
