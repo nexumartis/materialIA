@@ -149,12 +149,12 @@ def free_slots(cur: Any, tenant_id: str, cfg: dict[str, Any], service: dict[str,
 
 
 def book(cur: Any, tenant_id: str, conversation_id: str, cfg: dict[str, Any], service: dict[str, Any],
-         start: datetime) -> dict[str, Any]:
+         start: datetime, now: Optional[datetime] = None) -> dict[str, Any]:
     """Reserva si el horario sigue con anticipación suficiente y con lugar (bloqueo por negocio).
     Si no, {"error": "too_soon"} (quedó muy cerca) o {"error": "full"} (se ocupó)."""
     cur.execute("select pg_advisory_xact_lock(hashtext('booking:' || %s))", (tenant_id,))
     end = start + timedelta(minutes=service["minutes"])
-    if start < datetime.now(TZ) + LEAD - timedelta(minutes=1):
+    if start < (now or datetime.now(TZ)) + LEAD - timedelta(minutes=1):
         return {"error": "too_soon"}
     if len(_booked(cur, tenant_id, start, end)) >= cfg["capacity"]:
         return {"error": "full"}
