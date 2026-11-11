@@ -29,6 +29,10 @@ class PaymentProviderError(Exception):
     """El proveedor no respondió o rechazó la operación (reintentable)."""
 
 
+class PaymentAccountMissing(PaymentProviderError):
+    """El negocio no conectó su cuenta de Mercado Pago (o venció): reintentar no lo arregla."""
+
+
 @dataclass
 class Checkout:
     preference_id: str
@@ -145,7 +149,7 @@ class MercadoPagoProvider:
     @property
     def _auth(self) -> dict[str, str]:
         if not self._token:
-            raise PaymentProviderError("El negocio todavía no conectó su cuenta de Mercado Pago.")
+            raise PaymentAccountMissing("El negocio todavía no conectó su cuenta de Mercado Pago.")
         return {"Authorization": f"Bearer {self._token}"}
 
     def create_checkout(self, order: dict[str, Any]) -> Checkout:
