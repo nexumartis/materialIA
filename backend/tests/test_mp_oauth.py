@@ -254,3 +254,16 @@ def test_expired_token_is_not_used(client, accounts, raw_conn):
     assert mp_oauth.token_for(shop["tenant"]) is None
     st = client.get("/app/payments/mercadopago", headers=bearer(shop["uid"])).json()
     assert st["connected"] is False and "venció" in st["last_error"]
+
+
+def test_agent_hands_off_when_the_business_has_no_mp_account(client, accounts, raw_conn, monkeypatch):
+    from app.agent.sales_agent import handle_sales_message
+    shop = _shop(client, accounts, raw_conn, "MP Sin Conectar")
+    monkeypatch.setattr(settings, "payment_provider", "mercadopago")
+    monkeypatch.setattr(settings, "app_env", "production")          # sin cuenta de la plataforma
+    conv = new_conversation(shop["tenant"])
+    orders.add_item(shop["tenant"], conv, shop["item"], 1)
+    handle_sales_message(shop["tenant"], "lo compro", conv)
+    r = handle_sales_message(shop["tenant"], "si", conv)
+    assert r.requires_human and "no está disponible" in r.reply and "reintento" not in r.reply
+    assert orders.conversation_orders(shop["tenant"], conv)[0]["status"] == "PENDING_PAYMENT"      # stock apartado

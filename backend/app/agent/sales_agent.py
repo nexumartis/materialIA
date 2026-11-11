@@ -26,7 +26,7 @@ from ..db import tenant_tx
 from ..domain import agent_profile, ai_usage, booking, campaigns, reparto, shipping, customer_memory, delivery, georef, inventory, knowledge, limits, opportunities, orders, privacy, webhooks
 from ..domain.inventory import normalize
 from ..payments import service as payments
-from ..payments.providers import PaymentProviderError
+from ..payments.providers import PaymentAccountMissing, PaymentProviderError
 from ..schemas import OpportunityInput
 from .tools import ToolContext
 
@@ -1438,6 +1438,14 @@ class _Turn:
     def pay_link(self, order: dict[str, Any], intro: str) -> str:
         try:
             pay = payments.start_payment(self.tenant, order["id"])
+        except PaymentAccountMissing:
+            # El negocio no tiene su Mercado Pago conectado: no se promete un link que no va a llegar.
+            # Lo resuelve una persona (aparece en derivadas), y el pedido sigue apartado.
+            self.tool("comprar", "sin cuenta de Mercado Pago conectada")
+            self.requires_human = True
+            return (intro + " El pago con Mercado Pago no está disponible en este momento: ya le aviso a una "
+                    "persona del equipo para que te pase cómo pagar (por ejemplo, transferencia). "
+                    "El stock sigue apartado.")
         except PaymentProviderError:
             self.tool("comprar", "proveedor de pago no disponible")
             return (intro + " No pude generar el link de pago ahora (el proveedor no respondió). "
