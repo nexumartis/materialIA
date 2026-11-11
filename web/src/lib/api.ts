@@ -576,7 +576,14 @@ export interface Policies {
 export interface Appointment { id: string; conversation_id: string | null; service: string; starts_at: string;
   ends_at: string; label: string }
 
+/** Plan del negocio y su cupo mensual de respuestas con IA (pasado el cupo, atiende sin IA). */
+export interface AiPlan {
+  plan: "mostrador" | "vendedor" | "entrega"; label: string; ai_calls_month: number;
+  used_month: number; percent: number; over: boolean; renews_on: string;
+}
+
 export interface AiUsage {
+  plan: AiPlan;
   days: number;
   calls: number;
   prompt_tokens: number;

@@ -152,9 +152,18 @@ def ai_allowed(tenant_id: Optional[str]) -> bool:
     if tenant_id:
         over += [(settings.ai_daily_calls_per_tenant, u["t_calls"]),
                  (settings.ai_daily_tokens_per_tenant, u["t_tokens"])]
+        # Cupo mensual del plan del negocio: cada uno gasta lo suyo y nadie deja sin IA a los demás.
+        try:
+            from . import plans
+            with system_tx() as cur:
+                cap = plans.PLANS[plans.plan_of(cur, tenant_id)]["ai_calls_month"]
+                over.append((cap, plans.month_calls(cur, tenant_id)))
+        except Exception:  # noqa: BLE001
+            log.exception("no pude leer el cupo mensual de IA: la apago por las dudas")
+            return False
     allowed = not any(limit > 0 and used >= limit for limit, used in over)
     if not allowed:
-        log.warning("tope diario de IA alcanzado (negocio %s): sigue sin IA", tenant_id)
+        log.warning("tope de IA alcanzado (negocio %s): sigue sin IA", tenant_id)
     if len(_allowed_cache) > 5000:
         _allowed_cache.clear()
     _allowed_cache[tenant_id] = (now, allowed)

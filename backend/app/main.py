@@ -26,7 +26,7 @@ from .auth import current_uid
 from .config import Settings, settings
 from .db import NoMembership, db_healthcheck, system_tx, tenant_tx, user_tx
 from .documents import ocr, store as documents
-from .domain import (agent_profile, campaigns, modules, reparto, shipping, vision, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
+from .domain import (agent_profile, campaigns, modules, plans, reparto, shipping, vision, widget, agent_suggest, ai_usage, alerts, booking, insights, limits, privacy, quick_replies, ratings, webhooks, team, backoffice, catalog, catalog_sheet, customer_memory, evals, inbox, knowledge,
                      opportunities, orders, receipts)
 from .payments import service as payments
 from .payments.providers import PaymentProviderError, SimulatedProvider
@@ -443,7 +443,7 @@ def app_insights(days: int = Query(30, ge=1, le=365), uid: str = Depends(owner_u
 def app_ai_usage(days: int = Query(30, ge=1, le=365), uid: str = Depends(owner_uid)) -> dict:
     """Llamadas y tokens de IA del negocio; costo sólo con precio configurado."""
     with user_tx(uid) as (cur, tenant):
-        return ai_usage.summary(cur, tenant, days)
+        return {**ai_usage.summary(cur, tenant, days), "plan": plans.usage(cur, tenant)}
 
 
 # --- Panel: armar el agente desde la web o un PDF del negocio (sólo propuesta) ---------
