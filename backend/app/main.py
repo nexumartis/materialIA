@@ -940,6 +940,50 @@ def app_route_message(job_id: UUID, body: dict = Body(...), uid: str = Depends(c
     return {"sent": True}
 
 
+# --- Mercado Pago por negocio (OAuth) ------------------------------------------------------
+@app.get("/app/payments/mercadopago")
+def app_mp_status(uid: str = Depends(owner_uid)) -> dict:
+    from .payments import mp_oauth
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {**mp_oauth.status(cur, tenant), "provider": settings.payment_provider}
+
+
+@app.post("/app/payments/mercadopago/connect")
+def app_mp_connect(uid: str = Depends(owner_uid)) -> dict:
+    """Link para autorizar en Mercado Pago. El negocio viaja cifrado y firmado en el state."""
+    from .payments import mp_oauth
+    tenant = _team_tx(uid)
+    try:
+        return {"url": mp_oauth.authorize_url(tenant, uid)}
+    except mp_oauth.OAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/app/payments/mercadopago")
+def app_mp_disconnect(uid: str = Depends(owner_uid)) -> dict:
+    from .payments import mp_oauth
+    tenant = _team_tx(uid)
+    with tenant_tx(tenant) as cur:
+        return {"disconnected": mp_oauth.disconnect(cur, tenant, uid)}
+
+
+@app.get("/mp/oauth/callback")
+def mp_oauth_callback(code: str = "", state: str = "", error: str = "") -> Response:
+    """Vuelta de Mercado Pago: guarda los tokens y manda al dueño de nuevo al panel."""
+    from fastapi.responses import RedirectResponse
+    from .payments import mp_oauth
+    back = f"{settings.public_web_url.rstrip('/')}/#/integraciones"
+    if error:
+        return RedirectResponse(back + "?mp=cancelado", status_code=303)
+    try:
+        mp_oauth.complete(code, state)
+    except mp_oauth.OAuthError as exc:
+        logging.getLogger(__name__).warning("alta de Mercado Pago fallida: %s", exc)
+        return RedirectResponse(back + "?mp=error", status_code=303)
+    return RedirectResponse(back + "?mp=ok", status_code=303)
+
+
 # --- Panel: chat en la web del negocio (sólo el dueño) --------------------------------------
 @app.get("/app/widget")
 def app_widget(uid: str = Depends(owner_uid)) -> dict:

@@ -46,7 +46,7 @@ def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
     El pedido queda bloqueado mientras se crea la preferencia: dos confirmaciones simultáneas
     no generan dos links. Si el proveedor falla, no queda nada a medias (se puede reintentar).
     """
-    provider = get_provider()
+    provider = get_provider(tenant_id=tenant_id)
     with tenant_tx(tenant_id) as cur:
         row = orders._fetch(cur, tenant_id, order_id, lock=True)
         if row is None or row["status"] not in orders.AWAITING_PAYMENT:
@@ -57,8 +57,8 @@ def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
         cur.execute(
             "select provider, checkout_url from payments where tenant_id = %s and order_id = %s "
             "and provider = %s and checkout_url is not null and coalesce(charge, 'total') = %s "
-            "order by created_at limit 1",
-            (tenant_id, order_id, provider.name, kind),
+            "and mp_user_id is not distinct from %s order by created_at limit 1",
+            (tenant_id, order_id, provider.name, kind, getattr(provider, "mp_user_id", None)),
         )
         existing = cur.fetchone()
         if existing:
@@ -67,9 +67,9 @@ def start_payment(tenant_id: str, order_id: str) -> dict[str, Any]:
         checkout = provider.create_checkout(view)   # PaymentProviderError => rollback
         cur.execute(
             "insert into payments (tenant_id, order_id, provider, preference_id, checkout_url, amount, currency, "
-            "charge) values (%s, %s, %s, %s, %s, %s, %s, %s)",
+            "charge, mp_user_id) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (tenant_id, order_id, provider.name, checkout.preference_id, checkout.url,
-             due, view["currency"], None if kind == "total" else kind),
+             due, view["currency"], None if kind == "total" else kind, getattr(provider, "mp_user_id", None)),
         )
     return {"provider": provider.name, "checkout_url": checkout.url}
 
@@ -98,6 +98,19 @@ def receive_notification(provider_name: str, headers: dict[str, str], query: dic
         if kind != "payment":
             outcome = f"ignorado ({kind or 'sin tipo'})"
             return 200, outcome
+        # Mercado Pago por negocio: el aviso trae el negocio (?t=) sólo para saber con qué cuenta
+        # consultar el pago. El resultado se acepta únicamente si el pedido es de ese mismo negocio.
+        # Sin `?t=` (links anteriores o el webhook de la aplicación), la cuenta sale del `user_id` que
+        # manda Mercado Pago. Sin ninguno, fuera de producción se usa la cuenta de prueba de la plataforma.
+        hinted = _uuid_or_none(query.get("t"))
+        if hinted is None and provider_name == "mercadopago":
+            from .mp_oauth import tenant_for_mp_user
+            hinted = tenant_for_mp_user(body.get("user_id"))
+        try:
+            provider = get_provider(provider_name, tenant_id=hinted)
+        except PaymentProviderError:
+            outcome = "proveedor no disponible"
+            return 503, outcome
         try:
             payment = provider.fetch_payment(data_id)
         except PaymentProviderError:
@@ -105,6 +118,10 @@ def receive_notification(provider_name: str, headers: dict[str, str], query: dic
             return 503, outcome
         if payment is None:
             outcome = "pago inexistente en el proveedor"
+            return 200, outcome
+        if hinted and _order_tenant(payment.external_reference) != hinted:
+            outcome = "pago de otro negocio: ignorado"
+            log.warning("aviso de %s con negocio que no coincide con el pedido", provider_name)
             return 200, outcome
         outcome = apply_payment(provider.name, payment)
         return 200, outcome
@@ -115,6 +132,13 @@ def receive_notification(provider_name: str, headers: dict[str, str], query: dic
                 "values (%s, %s, %s, true, %s)",
                 (provider_name, request_id, data_id or None, outcome),
             )
+
+
+def _uuid_or_none(value: Any) -> Optional[str]:
+    try:
+        return str(uuid.UUID(str(value))) if value else None
+    except ValueError:
+        return None
 
 
 def _order_tenant(order_id: str) -> Optional[str]:

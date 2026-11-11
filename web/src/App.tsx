@@ -47,7 +47,7 @@ function sectionFor(hash: string): Section {
   if (hash === "#/conversaciones" || hash.startsWith("#/conversaciones/")) return "conversaciones";
   if (hash === "#/equipo") return "equipo";
   if (hash === "#/resultados") return "resultados";
-  if (hash === "#/integraciones") return "integraciones";
+  if (hash === "#/integraciones" || hash.startsWith("#/integraciones?")) return "integraciones";
   if (hash === "#/inicio" || hash === "" || hash === "#/") return "inicio";
   if (hash === "#/login") return "login";
   if (hash === "#/signup" || hash === "#/signup/equipo") return "signup";

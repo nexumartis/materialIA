@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     mp_access_token: str | None = None
     mp_webhook_secret: str | None = None
     mp_api_base: str = "https://api.mercadopago.com"
+    # Mercado Pago por negocio (OAuth): credenciales de NUESTRA aplicación y clave Fernet de los tokens.
+    mp_client_id: str | None = None
+    mp_client_secret: str | None = Field(default=None, repr=False)
+    mp_token_key: str = Field(default="", repr=False)
     # URL pública del backend: links del checkout simulado y notification_url del proveedor.
     public_base_url: str = "http://127.0.0.1:8077"
     # URL pública del panel/tienda: links que van en los mensajes de campañas.
@@ -145,6 +149,9 @@ class Settings(BaseSettings):
             problems.append("CORS abierto a cualquier origen (definí CORS_ORIGINS)")
         if self.sandbox_admin:
             problems.append("SANDBOX_ADMIN activo")
+        if self.payment_provider == "mercadopago" and not (self.mp_client_id and self.mp_client_secret and self.mp_token_key):
+            problems.append("Mercado Pago sin OAuth por negocio (MP_CLIENT_ID/MP_CLIENT_SECRET/MP_TOKEN_KEY): "
+                            "los cobros irían a una sola cuenta")
         return problems
 
     @property

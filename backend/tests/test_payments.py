@@ -159,7 +159,8 @@ def test_mercadopago_adapter_end_to_end_with_fake_transport(shop, raw_conn, monk
     monkeypatch.setattr(settings, "mp_webhook_secret", "mp-secret")
     store: dict = {}
     client = _mp_client(store)
-    monkeypatch.setattr(service, "get_provider", lambda name=None: MercadoPagoProvider(client=client))
+    monkeypatch.setattr(service, "get_provider", lambda name=None, tenant_id=None: MercadoPagoProvider(
+        client=client, access_token="TEST-token", tenant_id=tenant_id))
 
     conv = new_conversation(shop["tenant"])
     orders.add_item(shop["tenant"], conv, shop["mono_aq"], 2)
@@ -169,7 +170,7 @@ def test_mercadopago_adapter_end_to_end_with_fake_transport(shop, raw_conn, monk
     pref = store["preference"]
     assert pref["external_reference"] == order["id"]
     assert pref["items"][0]["quantity"] == 2 and pref["items"][0]["unit_price"] == 89900
-    assert pref["notification_url"].endswith("/webhooks/mercadopago")
+    assert pref["notification_url"].endswith(f"/webhooks/mercadopago?t={shop['tenant']}")
     assert store["idempotency"] == f"order-{order['id']}"
 
     store.update(order_id=order["id"], amount=179800)
@@ -189,14 +190,14 @@ def test_mercadopago_signature_verification():
     assert not providers.verify_signature("s3cret", {"x-request-id": "req-9"}, "ABC123")
 
 
-def test_mercadopago_requires_test_credentials(monkeypatch):
-    monkeypatch.setattr(settings, "mp_access_token", None)
+def test_mercadopago_requires_the_business_account():
+    # Sin token del negocio no se crea un cobro (nunca cae en una cuenta ajena).
     try:
-        MercadoPagoProvider()
+        MercadoPagoProvider().create_checkout({"items": [], "id": "x", "currency": "ARS"})
     except providers.PaymentProviderError as exc:
-        assert "MP_ACCESS_TOKEN" in str(exc)
+        assert "no conectó su cuenta de Mercado Pago" in str(exc)
     else:
-        raise AssertionError("debería exigir credenciales")
+        raise AssertionError("debería exigir la cuenta del negocio")
 
 
 def test_second_approved_payment_is_flagged_for_refund(shop):

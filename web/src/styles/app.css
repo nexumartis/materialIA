@@ -1380,3 +1380,7 @@ table.orders .pedido small { max-width:400px; }
 .photo-note .small { padding:0 4px 2px; }
 .photo-error { margin:6px 0 0; }
 .composer:has(.photo-btn) input, .composer:has(.photo-btn) > .btn { height:44px; } /* misma altura que la cámara */
+/* Mercado Pago por negocio */
+.state.ok { color:var(--positive, #15803d); background:#eaf7ef; border-radius:var(--radius-card); padding:10px 12px; text-align:left; margin-bottom:12px; }
+.mp-connect { display:grid; gap:10px; }
+.mp-connect .actions { display:flex; gap:8px; flex-wrap:wrap; }

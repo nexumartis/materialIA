@@ -118,6 +118,12 @@ async function request<T>(path: string, init?: RequestInit, as: "json" | "blob" 
   return (as === "blob" ? await res.blob() : await res.json()) as T;
 }
 
+/** Cuenta de Mercado Pago del negocio (OAuth). El panel nunca ve los tokens. */
+export interface MpStatus {
+  available: boolean; connected: boolean; mp_user_id: string | null; live_mode: boolean | null;
+  expires_at: string | null; connected_at: string | null; last_error: string | null; provider: string;
+}
+
 /** Llamada al panel autenticado. Sin token o con 401 => se cierra la sesión. */
 async function authed<T>(path: string, init: RequestInit = {}, as: "json" | "blob" = "json"): Promise<T> {
   const token = getToken();
@@ -232,6 +238,9 @@ export const api = {
     authed<WebhookEndpoint & { secret: string }>("/app/webhooks", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, events }),
     }),
+  mpStatus: () => authed<MpStatus>("/app/payments/mercadopago"),
+  mpConnect: () => authed<{ url: string }>("/app/payments/mercadopago/connect", { method: "POST" }),
+  mpDisconnect: () => authed<{ disconnected: boolean }>("/app/payments/mercadopago", { method: "DELETE" }),
   deleteWebhook: (id: string) => authed<{ deleted: boolean }>(`/app/webhooks/${id}`, { method: "DELETE" }),
   testWebhook: (id: string) =>
     authed<{ ok: boolean; status_code: number | null; error: string | null }>(`/app/webhooks/${id}/test`, { method: "POST" }),

@@ -12,7 +12,10 @@ def test_unsafe_production_config_is_detected():
     s = Settings(app_env="production", payment_provider="simulated", cors_origins="", sandbox_admin=True)
     problems = " ".join(s.unsafe_for_production())
     assert "simulated" in problems and "CORS" in problems and "SANDBOX" in problems
-    ok = Settings(app_env="production", payment_provider="mercadopago", cors_origins="https://panel.ejemplo.com")
+    shared = Settings(app_env="production", payment_provider="mercadopago", cors_origins="https://panel.ejemplo.com")
+    assert "OAuth por negocio" in " ".join(shared.unsafe_for_production())      # una sola cuenta para todos
+    ok = Settings(app_env="production", payment_provider="mercadopago", cors_origins="https://panel.ejemplo.com",
+                  mp_client_id="app", mp_client_secret="secreto", mp_token_key="k")
     assert ok.unsafe_for_production() == [] and ok.cors_list == ["https://panel.ejemplo.com"]
     assert Settings(app_env="local").cors_list == ["*"]
 
