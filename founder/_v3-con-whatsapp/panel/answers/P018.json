@@ -1,0 +1,13 @@
+{
+  "id": "P018",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Mi Excel nunca está al día con lo que hay en el estante, y si la máquina le confirma a un vecino un precio viejo o un flexible que no tengo, el que queda mal soy yo. Además Meta ya me da un asistente gratis; no veo por qué pagar otro.",
+  "objection": "Que le pase un precio o un stock equivocado a un cliente del barrio que me conoce hace años, y encima en una ferretería donde la mitad de las consultas son 'tenés esta pieza?' con una foto borrosa.",
+  "would_change_my_mind": "Verlo andar una semana con mi catálogo real, en mis consultas de verdad, y que me muestren lado a lado qué hace que el asistente gratis de Meta no hace, sin que se equivoque en precios.",
+  "price_too_cheap": 8000,
+  "price_cheap": 18000,
+  "price_expensive": 35000,
+  "price_too_expensive": 60000
+}

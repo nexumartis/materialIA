@@ -1,0 +1,13 @@
+{
+  "id": "P043",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Ya pagué sistemas que terminaron juntando polvo, y esto lo meten en mi propio WhatsApp, que es con lo que atiendo a mis clientas de toda la vida. Los dos meses gratis suenan bien, pero no le entrego mi número a algo que nunca vi andar.",
+  "objection": "Que me bloqueen el número o que mis clientas se den cuenta de que les contesta un robot, se ofendan y dejen de escribirme. Además me mandan fotos de cajitas y frascos, y no creo que reconozca bien qué perfume o qué producto es.",
+  "would_change_my_mind": "Verlo funcionando en otra farmacia o perfumería del barrio, con clientas reales, y que me lo prueben primero con un número aparte antes de tocar el mío.",
+  "price_too_cheap": 8000,
+  "price_cheap": 20000,
+  "price_expensive": 35000,
+  "price_too_expensive": 55000
+}

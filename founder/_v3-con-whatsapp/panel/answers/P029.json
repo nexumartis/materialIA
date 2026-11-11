@@ -1,0 +1,13 @@
+{
+  "id": "P029",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "Ya pagué sistemas que quedaron sin usar, y mi stock de bazar y deco son mil cositas sueltas que no tengo prolijas en ningún Excel. $35.000 por mes para mí es mucha plata para algo que no vi andar con un negocio como el mío.",
+  "objection": "Que el bot le diga a una clienta que tengo algo que ya vendí o le pase mal un precio, y después el lío lo arreglo yo. Además, lo gratis dura dos meses y después me queda una cuota fija que me pesa.",
+  "would_change_my_mind": "Verlo funcionando en otro bazar o local chico de verdad, con sus clientas, y que en los meses gratis me demuestre ventas que yo no hubiera hecho, sin que yo tenga que andar cargando todo.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 20000,
+  "price_too_expensive": 35000
+}

@@ -1,0 +1,13 @@
+{
+  "id": "P001",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "price",
+  "reason": "Con las ventas como están, no sumo otro gasto fijo mensual para algo que hoy hago yo misma desde el celular. Los dos meses gratis los probaría capaz, pero pagar $35.000 más IVA todos los meses después no lo veo.",
+  "objection": "Es otro gasto fijo en una época floja, y en la rotisería el menú y lo que queda cambia todos los días; no tengo un Excel con stock, así que no sé si el bot va a saber qué hay hoy sin que yo pierda tiempo cargándolo.",
+  "would_change_my_mind": "Que en los meses gratis me demuestre con números que entraron pedidos de noche que yo hoy pierdo, y que actualizar el menú del día me lleve un minuto desde el celular.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}

@@ -1,0 +1,13 @@
+{
+  "id": "P038",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "trust",
+  "reason": "La plata no es el problema, y que me escriban de noche y los domingos es real. Pero soy farmacia: si el bot le ofrece a alguien un medicamento con receta o le recomienda qué tomar, el problema lo tengo yo con la habilitación, y no veo en la oferta nada que me diga que eso no puede pasar.",
+  "objection": "Que la IA venda o aconseje algo que no puedo vender por chat, porque mi sistema de stock tiene todo junto, con receta y venta libre. Y que diga 'desde tu sistema' no me asegura que lea el mío; no pienso cargar el catálogo dos veces.",
+  "would_change_my_mind": "Ver que se conecta directo a mi sistema de gestión y que puedo dejarle sólo venta libre y perfumería, con todo lo que pide receta bloqueado y derivado a mí, probado en la demo con mis productos.",
+  "price_too_cheap": 10000,
+  "price_cheap": 25000,
+  "price_expensive": 60000,
+  "price_too_expensive": 100000
+}

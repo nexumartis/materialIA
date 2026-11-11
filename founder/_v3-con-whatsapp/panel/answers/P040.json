@@ -1,0 +1,13 @@
+{
+  "id": "P040",
+  "buys": false,
+  "purchases_first_month": 0,
+  "reason_code": "need",
+  "reason": "Yo hago muebles a medida: casi todo lo que me consultan es justo lo que el sistema dice que me pasa a mí, así que no veo qué me resuelve que no haga yo hoy. Ya pagué sistemas que quedaron sin usar y Meta ya me ofrece un asistente gratis.",
+  "objection": "Que sea otro sistema más que pago y no uso, cuando lo mío es todo a medida y las consultas igual terminan en mí; encima Meta ya trae algo gratis.",
+  "would_change_my_mind": "Verlo andando con consultas reales de mi negocio durante los meses gratis, cobrando señas de verdad y ahorrándome tiempo, antes de pagar un peso.",
+  "price_too_cheap": 5000,
+  "price_cheap": 12000,
+  "price_expensive": 25000,
+  "price_too_expensive": 40000
+}
