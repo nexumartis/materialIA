@@ -133,11 +133,20 @@ class SimulatedProvider:
 class MercadoPagoProvider:
     name = "mercadopago"
 
-    def __init__(self, client: Optional[httpx.Client] = None):
-        if not settings.mp_access_token:
-            raise PaymentProviderError("Falta MP_ACCESS_TOKEN (usar credenciales de PRUEBA).")
+    def __init__(self, client: Optional[httpx.Client] = None, access_token: Optional[str] = None,
+                 tenant_id: Optional[str] = None, mp_user_id: Optional[str] = None):
+        """`access_token`: el del negocio (su cuenta conectada). Sin él, sólo sirve para verificar firmas.
+        `mp_user_id`: la cuenta con la que se cobra (para no reusar links de otra cuenta)."""
         self._client = client or httpx.Client(base_url=settings.mp_api_base, timeout=15.0)
-        self._auth = {"Authorization": f"Bearer {settings.mp_access_token}"}
+        self._token = access_token
+        self._tenant = tenant_id
+        self.mp_user_id = mp_user_id
+
+    @property
+    def _auth(self) -> dict[str, str]:
+        if not self._token:
+            raise PaymentProviderError("El negocio todavía no conectó su cuenta de Mercado Pago.")
+        return {"Authorization": f"Bearer {self._token}"}
 
     def create_checkout(self, order: dict[str, Any]) -> Checkout:
         base = settings.public_base_url.rstrip("/")
@@ -146,7 +155,9 @@ class MercadoPagoProvider:
                        "unit_price": it["unit_price"], "currency_id": order["currency"]}
                       for it in order["items"]],
             "external_reference": order["id"],
-            "notification_url": f"{base}/webhooks/mercadopago",
+            # El negocio viaja en la URL sólo para elegir con qué cuenta consultar el pago; el pedido
+            # se valida igual contra la base (un aviso con otro negocio no acredita nada).
+            "notification_url": f"{base}/webhooks/mercadopago" + (f"?t={self._tenant}" if self._tenant else ""),
             "expires": bool(order.get("reserved_until")),
             "expiration_date_to": order.get("reserved_until"),
         }
@@ -176,7 +187,10 @@ class MercadoPagoProvider:
         return verify_signature(settings.mp_webhook_secret, headers, data_id)
 
 
-def get_provider(name: Optional[str] = None) -> PaymentProvider:
+def get_provider(name: Optional[str] = None, tenant_id: Optional[str] = None) -> PaymentProvider:
+    """Proveedor para cobrar o consultar. Con Mercado Pago, `tenant_id` elige la cuenta del negocio
+    (OAuth); la cuenta de la plataforma (`MP_ACCESS_TOKEN`) sólo se usa fuera de producción y si el
+    negocio no conectó la suya. Sin `tenant_id` sólo sirve para verificar la firma de un aviso."""
     name = name or settings.payment_provider
     if name == "simulated":
         # El simulado (clave de firma pública, checkout sin cobro) sólo existe si es el proveedor
@@ -185,5 +199,11 @@ def get_provider(name: Optional[str] = None) -> PaymentProvider:
             raise PaymentProviderError("el proveedor simulado está deshabilitado")
         return SimulatedProvider()
     if name == "mercadopago":
-        return MercadoPagoProvider()
+        from .mp_oauth import account_for
+        account = account_for(tenant_id) if tenant_id else None
+        if account:
+            return MercadoPagoProvider(access_token=account[0], tenant_id=tenant_id, mp_user_id=account[1])
+        # Desarrollo: cuenta de prueba de la plataforma (nunca en producción).
+        platform = settings.mp_access_token if not settings.production_like else None
+        return MercadoPagoProvider(access_token=platform, tenant_id=tenant_id)
     raise PaymentProviderError(f"proveedor de pago desconocido: {name}")

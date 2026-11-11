@@ -22,6 +22,7 @@ import time
 from . import whatsapp
 from .agent import compaction
 from .documents import store as documents
+from .payments import mp_oauth
 from .domain import campaigns, catalog_sheet, customer_memory, evals, handoff, limits, orders, webhooks
 
 log = logging.getLogger("app.worker")
@@ -37,6 +38,7 @@ def run_once() -> dict[str, int]:
             "rate_limit_windows_cleaned": limits.cleanup(),
             "webhooks_delivered": webhooks.deliver_due(),
             "campaign_messages": campaigns.dispatch_due(),
+            "mp_tokens_refreshed": mp_oauth.refresh_due(),
             "handoff_summaries": handoff.summarize_due(),
             "whatsapp_messages": whatsapp.deliver_due(),
             "whatsapp_inbound_retried": whatsapp.retry_unprocessed()}

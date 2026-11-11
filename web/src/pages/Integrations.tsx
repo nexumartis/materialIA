@@ -4,7 +4,7 @@ import { siGooglecalendar, siGooglesheets, siInstagram, siMake, siMercadopago, s
   siZapier, type SimpleIcon } from "simple-icons";
 import { SheetSync } from "../components/SheetSync";
 import { Badge, EmptyState, PageHeader } from "../components/ui";
-import { api, type Health, type Webhooks } from "../lib/api";
+import { api, type Health, type MpStatus, type Webhooks } from "../lib/api";
 
 const EVENT_LABEL: Record<string, string> = {
   "order.paid": "Pedido pagado",
@@ -163,7 +163,7 @@ interface Item {
   status: (s: Ctx) => Status; statusText?: (s: Ctx) => string;
   detail?: (s: Ctx) => React.ReactNode;
 }
-interface Ctx { health: Health | null; sheet: boolean; webhooks: number; reload: () => void }
+interface Ctx { health: Health | null; sheet: boolean; webhooks: number; mp: MpStatus | null | undefined; reload: () => void }
 
 const CATEGORIES: { key: Category | "todas"; label: string }[] = [
   { key: "todas", label: "Todas" }, { key: "pagos", label: "Pagos" }, { key: "catalogo", label: "Catálogo" },
@@ -174,12 +174,10 @@ const steps = (lines: string[]) => <ol className="intg-steps">{lines.map((l) => 
 
 const ITEMS: Item[] = [
   { key: "mercadopago", name: "Mercado Pago", category: "pagos", logo: siMercadopago,
-    blurb: "Link de pago en el chat. El pedido figura pagado sólo con el aviso verificado de Mercado Pago.",
-    status: (c) => (c.health?.payments?.provider === "mercadopago" ? "on" : "available"),
-    statusText: (c) => (c.health?.payments?.provider === "mercadopago" ? "Conectada" : "Modo prueba"),
-    detail: (c) => (c.health?.payments?.provider === "mercadopago"
-      ? <p>Cobros reales activos. Cada pago se consulta a Mercado Pago antes de marcar el pedido como pagado.</p>
-      : <p>Hoy los pagos son <b>simulados</b> (no se cobra nada). Para cobrar de verdad, el equipo técnico carga las credenciales de Mercado Pago del negocio.</p>) },
+    blurb: "Cobrás en TU cuenta de Mercado Pago. El pedido figura pagado sólo con el aviso verificado.",
+    status: (c) => (c.mp?.connected ? "on" : "available"),
+    statusText: (c) => (c.mp?.connected ? "Conectada" : c.health?.payments?.provider === "mercadopago" ? "Sin conectar" : "Modo prueba"),
+    detail: (c) => <MpConnect mp={c.mp} onChange={c.reload} /> },
   { key: "transfer", name: "Transferencia bancaria", category: "pagos", logo: Landmark,
     blurb: "El cliente adjunta el comprobante; vos lo cotejás en tu banco y acreditás el pedido.",
     status: () => "on", detail: () => <p>Activa. Un comprobante nunca acredita solo: el pedido pasa a pagado cuando confirmás la transferencia en <a href="#/pedidos">Pedidos</a>.</p> },
@@ -236,6 +234,58 @@ function Logo({ logo }: { logo: Item["logo"] }) {
   );
 }
 
+/** Conectar la cuenta de Mercado Pago del negocio (OAuth oficial): cada comercio cobra en la suya. */
+function MpConnect({ mp, onChange }: { mp: MpStatus | null | undefined; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Resultado de la vuelta de Mercado Pago: se muestra una vez y se limpia de la URL.
+  const [back] = useState(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("mp"));
+  useEffect(() => {
+    if (back) window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/integraciones");
+  }, [back]);
+  if (mp === undefined) return <p className="muted small">Cargando…</p>;
+  if (mp === null) return <p className="state err" role="alert">No pude ver el estado de tu Mercado Pago. Recargá la página.</p>;
+  if (!mp.available) {
+    return <p>Para cobrar en la cuenta de cada negocio falta configurar la aplicación de Mercado Pago de la plataforma (lo hace el equipo técnico). Mientras tanto los pagos son <b>simulados</b>.</p>;
+  }
+  async function connect() {
+    setBusy(true); setError(null);
+    try { window.location.href = (await api.mpConnect()).url; }
+    catch (e) { setError(e instanceof Error ? e.message : "No pude iniciar la conexión."); setBusy(false); }
+  }
+  async function disconnect() {
+    if (!window.confirm("¿Desconectar tu Mercado Pago? El agente no va a poder mandar links de pago hasta que la conectes de nuevo.")) return;
+    setBusy(true); setError(null);
+    try { await api.mpDisconnect(); onChange(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No pude desconectarla. Probá de nuevo."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="mp-connect">
+      {back === "ok" && <p className="state ok" role="status">Listo: tu cuenta de Mercado Pago quedó conectada.</p>}
+      {back === "error" && <p className="state err" role="alert">No se pudo conectar. Probá de nuevo; si sigue, avisanos.</p>}
+      {back === "cancelado" && <p className="muted small">Cancelaste la conexión en Mercado Pago.</p>}
+      {mp.connected ? (
+        <>
+          <p>Cobrás en tu cuenta de Mercado Pago{mp.mp_user_id ? <> (usuario <b>{mp.mp_user_id}</b>)</> : null}
+            {mp.live_mode === false ? <> · <b>modo prueba</b></> : null}. Cada pago se consulta a Mercado Pago antes de marcar el pedido como pagado.</p>
+          {mp.last_error && <p className="state err" role="alert">No pudimos renovar el acceso: {mp.last_error}. Conectala de nuevo para no cortar los cobros.</p>}
+          <div className="actions">
+            {mp.last_error && <button className="btn sm primary" type="button" disabled={busy} onClick={() => void connect()}>Conectar de nuevo</button>}
+            <button className="btn sm" type="button" disabled={busy} onClick={() => void disconnect()}>Desconectar</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>Conectá tu cuenta y el agente manda links de pago que se cobran en <b>tu</b> Mercado Pago. Te lleva a Mercado Pago a autorizar y volvés acá.</p>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => void connect()}>{busy ? "Abriendo Mercado Pago…" : "Conectar mi Mercado Pago"}</button>
+        </>
+      )}
+      {error && <p className="state err" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 const STATUS_LABEL: Record<Status, string> = { on: "Conectada", available: "Disponible", soon: "Próximamente" };
 
 /** Integraciones como catálogo: logo, estado y configuración en el lugar. */
@@ -243,17 +293,20 @@ export function Integrations() {
   const [health, setHealth] = useState<Health | null>(null);
   const [sheet, setSheet] = useState(false);
   const [webhooks, setWebhooks] = useState(0);
+  const [mp, setMp] = useState<MpStatus | null | undefined>(undefined);
   const [cat, setCat] = useState<Category | "todas">("todas");
-  const [open, setOpen] = useState<string | null>(null);
+  // Vuelta del alta de Mercado Pago (#/integraciones?mp=ok): abre su tarjeta para mostrar el resultado.
+  const [open, setOpen] = useState<string | null>(window.location.hash.includes("mp=") ? "mercadopago" : null);
 
   const reload = useCallback(() => {
     api.health().then(setHealth, () => setHealth(null));
     api.catalogSheet().then((r) => setSheet(Boolean(r.sheet)), () => setSheet(false));
     api.webhooks().then((w) => setWebhooks(w.endpoints.length), () => setWebhooks(0));
+    api.mpStatus().then(setMp, () => setMp(null));
   }, []);
   useEffect(reload, [reload]);
 
-  const ctx: Ctx = { health, sheet, webhooks, reload };
+  const ctx: Ctx = { health, sheet, webhooks, mp, reload };
   const list = ITEMS.filter((i) => cat === "todas" || i.category === cat);
   const order: Record<Status, number> = { on: 0, available: 1, soon: 2 };
   list.sort((a, b) => order[a.status(ctx)] - order[b.status(ctx)]);
