@@ -1384,3 +1384,12 @@ table.orders .pedido small { max-width:400px; }
 .state.ok { color:var(--positive, #15803d); background:#eaf7ef; border-radius:var(--radius-card); padding:10px 12px; text-align:left; margin-bottom:12px; }
 .mp-connect { display:grid; gap:10px; }
 .mp-connect .actions { display:flex; gap:8px; flex-wrap:wrap; }
+/* Cupo de IA del plan */
+.plan-quota { display:grid; gap:8px; margin-bottom:14px; }
+.plan-quota-head { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:var(--fs-body); }
+.plan-quota-head .num { font-variant-numeric:tabular-nums; }
+.plan-quota-bar { height:8px; border-radius:999px; background:var(--ground); overflow:hidden; }
+.plan-quota-bar i { display:block; height:100%; background:var(--accent); border-radius:999px; }
+.plan-quota-bar i.warn { background:#d97706; }
+.plan-quota-bar i.over { background:var(--negative); }
+.plan-quota .note, .plan-quota .state { margin:0; }

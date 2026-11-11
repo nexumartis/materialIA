@@ -3,7 +3,7 @@ import {
   ApiError,
   api,
   type AgentProfile,
-  type AiUsage,
+  type AiPlan, type AiUsage,
   type EvalCase,
   type EvalRun,
   type KnowledgeDoc,
@@ -367,6 +367,25 @@ export function VersionsSection({ current, onRestored }: { current: number; onRe
 
 const KIND_LABEL: Record<string, string> = { venta: "Atención a clientes", resumen: "Resúmenes", memoria: "Memoria de clientes", otro: "Otros" };
 
+/** Cupo del mes del plan. Pasado el cupo el agente sigue vendiendo, pero sin IA (por reglas). */
+function PlanQuota({ p }: { p: AiPlan }) {
+  const n = (x: number) => x.toLocaleString("es-AR");
+  const renews = new Date(`${p.renews_on}T12:00:00`).toLocaleDateString("es-AR", { day: "numeric", month: "long" });
+  return (
+    <div className="plan-quota">
+      <div className="plan-quota-head">
+        <span>Plan <b>{p.label}</b> · respuestas con IA este mes</span>
+        <span className="num"><b>{n(p.used_month)}</b> de {n(p.ai_calls_month)}</span>
+      </div>
+      <div className="plan-quota-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent}
+        aria-label="Cupo de IA usado este mes"><i style={{ width: `${p.percent}%` }} className={p.over ? "over" : p.percent >= 80 ? "warn" : ""} /></div>
+      {p.over ? <p className="state err" role="status">Llegaste al cupo del mes: tu agente sigue atendiendo y vendiendo, pero sin IA (respuestas por reglas) hasta el {renews}. Si necesitás más, escribinos.</p>
+        : p.percent >= 80 ? <p className="note">Te queda poco cupo este mes. Se renueva el {renews}.</p>
+        : <p className="note">Se renueva el {renews}.</p>}
+    </div>
+  );
+}
+
 /** Llamadas y tokens de IA del negocio en los últimos 30 días (costo sólo si está configurado). */
 export function AiUsageSection() {
   const [u, setU] = useState<AiUsage | null>(null);
@@ -377,7 +396,8 @@ export function AiUsageSection() {
   const n = (x: number) => x.toLocaleString("es-AR");
   return (
     <section className="setup-card">
-      <h2 className="panel-title">Uso de IA (últimos 30 días)</h2>
+      <h2 className="panel-title">Uso de IA</h2>
+      {u?.plan && <PlanQuota p={u.plan} />}
       {failed ? <p className="muted">No pude cargar el uso.</p> : !u ? <p className="muted">Cargando…</p> : u.calls === 0 ? (
         <p className="muted">Todavía no hubo llamadas al modelo (o el agente responde por reglas, sin IA).</p>
       ) : (

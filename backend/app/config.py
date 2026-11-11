@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     rate_user_ai_per_minute: int = 20       # panel: vista previa, evaluaciones, propuestas
     ai_daily_calls_per_tenant: int = 1500   # pasado el tope: sin IA hasta mañana (sigue con reglas)
     ai_daily_tokens_per_tenant: int = 3_000_000
-    ai_daily_calls_global: int = 20_000
-    ai_daily_tokens_global: int = 40_000_000
+    # Global: sólo freno de emergencia de gasto (el reparto entre negocios lo hace el cupo mensual de
+    # cada plan, domain/plans.py). El freno duro sigue siendo el tope de la consola del proveedor.
+    ai_daily_calls_global: int = 300_000
+    ai_daily_tokens_global: int = 600_000_000
     # Proxies de confianza que agregan X-Forwarded-For (Cloud Run directo: 1; con balanceador de
     # Google: 2). 0 = IP del socket. Mal contado, todos los clientes comparten el límite.
     trusted_proxy_hops: int = 0
